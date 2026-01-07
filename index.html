@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Games</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div>
+        <div class="title">Mini Games</div>
+        <div id="user" class="sub">Загрузка...</div>
+      </div>
+    </header>
+
+    <main id="screen"></main>
+
+    <nav class="nav">
+      <button data-screen="menu">Меню</button>
+      <button data-screen="coin">Coin Flip</button>
+      <button data-screen="dice">Dice</button>
+      <button data-screen="mines">Mines</button>
+      <button data-screen="bj">Black Jack</button>
+      <button data-screen="crash">Lucky Jet</button>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
