@@ -297,26 +297,290 @@ function renderCoin() {
   };
 }
 
-/* =========================
-   DICE
-   ========================= */
+// --- Dice PRO (bet + animation) ---
 function renderDice() {
-  screenEl.innerHTML = `
-    <div class="card">
-      <div style="font-weight:800; font-size:16px;">Dice</div>
-      <div id="diceResult" style="margin:12px 0; font-size:28px;">🎲</div>
-      <div class="row">
-        <button class="btn" id="d6">D6</button>
-        <button class="btn" id="d20">D20</button>
-        <button class="btn" id="d100">D100</button>
+  // one-time styles
+  if (!document.getElementById("dicepro-style")) {
+    const st = document.createElement("style");
+    st.id = "dicepro-style";
+    st.textContent = `
+      .diceBox{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;}
+      .diceFace{
+        width:96px;height:96px;border-radius:18px;
+        display:flex;align-items:center;justify-content:center;
+        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.18), rgba(255,255,255,.06));
+        border:1px solid rgba(255,255,255,.10);
+        box-shadow: 0 10px 25px rgba(0,0,0,.35);
+        font-size:34px;font-weight:900;
+        user-select:none;
+      }
+      .diceFace.spin{ animation: dicespin .9s ease-in-out both; }
+      @keyframes dicespin{
+        0%{ transform: rotate(0deg) scale(1); filter: blur(0px);}
+        30%{ transform: rotate(140deg) scale(1.06); filter: blur(.3px);}
+        60%{ transform: rotate(320deg) scale(1.08); filter: blur(.7px);}
+        100%{ transform: rotate(720deg) scale(1); filter: blur(0px);}
+      }
+      .pillRow{display:flex;gap:8px;flex-wrap:wrap;}
+      .pill{
+        padding:8px 10px;border-radius:999px;
+        background:rgba(255,255,255,.06);
+        border:1px solid rgba(255,255,255,.10);
+        color:#e8eefc;cursor:pointer;font-weight:800;font-size:12px;
+      }
+      .pill.active{outline:2px solid rgba(76,133,255,.85);}
+      .small2{opacity:.8;font-size:12px;line-height:1.25;}
+      .msg2{min-height:22px;font-weight:900;margin-top:8px;}
+      .kv{display:flex;justify-content:space-between;gap:10px;margin-top:10px;}
+      .kv .badge{white-space:nowrap;}
+      .range2{width:100%; margin-top:8px; accent-color:#4c7dff;}
+      .input2{
+        width:100%;padding:10px;border-radius:12px;
+        border:1px solid rgba(255,255,255,.10);
+        background:rgba(255,255,255,.06);
+        color:#e8eefc;outline:none;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // state inside renderDice
+  let sides = 6;         // D6/D20/D100
+  let mode = "under";    // under/over
+  let bet = 50;
+  let target = 50;       // threshold for 1..100 (we scale per sides)
+  let rolling = false;
+  let animTimer = null;
+
+  const presets = [10, 50, 100, 250, 500];
+
+  const getWinChance = () => {
+    // for "under": win if roll <= threshold
+    // for "over":  win if roll >= threshold
+    // clamp threshold to valid
+    const t = Math.max(1, Math.min(sides, Math.floor(target)));
+    const winCount = mode === "under" ? t : (sides - t + 1);
+    return winCount / sides;
+  };
+
+  const getPayoutMult = () => {
+    // simple fair-ish: 0.95 house edge
+    const p = Math.max(0.0001, getWinChance());
+    const mult = 0.95 / p;
+    return Math.max(1.02, mult);
+  };
+
+  const clampBet = () => {
+    bet = Math.floor(Number(bet) || 0);
+    if (bet < 1) bet = 1;
+    if (bet > wallet.coins) bet = wallet.coins;
+  };
+
+  const clampTarget = () => {
+    target = Math.floor(Number(target) || 1);
+    if (target < 1) target = 1;
+    if (target > sides) target = sides;
+  };
+
+  const stopAnim = () => {
+    if (animTimer) clearInterval(animTimer);
+    animTimer = null;
+  };
+
+  const draw = () => {
+    clampBet();
+    clampTarget();
+    const chance = getWinChance();
+    const mult = getPayoutMult();
+    const potential = Math.floor(bet * mult);
+
+    screenEl.innerHTML = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+          <div>
+            <div style="font-weight:900; font-size:16px;">Dice</div>
+            <div class="small2" style="margin-top:4px;">
+              Ставка 🪙 + режим <b>${mode === "under" ? "Below" : "Above"}</b>.
+              Выплата зависит от шанса.
+            </div>
+          </div>
+          <div class="badge">Баланс: <b>🪙 ${wallet.coins}</b></div>
+        </div>
+
+        <div class="diceBox">
+          <div class="diceFace" id="diceFace">🎲</div>
+          <div style="flex:1;">
+            <div class="pillRow">
+              <button class="pill ${sides===6?"active":""}" data-sides="6">D6</button>
+              <button class="pill ${sides===20?"active":""}" data-sides="20">D20</button>
+              <button class="pill ${sides===100?"active":""}" data-sides="100">D100</button>
+            </div>
+
+            <div class="pillRow" style="margin-top:10px;">
+              <button class="pill ${mode==="under"?"active":""}" data-mode="under">Below</button>
+              <button class="pill ${mode==="over"?"active":""}" data-mode="over">Above</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kv">
+          <div class="small2">Порог: <b id="tShow">${target}</b> из <b>${sides}</b></div>
+          <div class="badge">Шанс: <b>${(chance*100).toFixed(1)}%</b> · x<b>${mult.toFixed(2)}</b></div>
+        </div>
+
+        <input class="range2" id="tRange" type="range" min="1" max="${sides}" value="${target}">
+        <div class="small2" style="margin-top:6px;">
+          ${mode==="under"
+            ? `Выигрыш если выпало <b>≤ ${target}</b>.`
+            : `Выигрыш если выпало <b>≥ ${target}</b>.`
+          }
+        </div>
+
+        <div style="margin-top:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:900;">Ставка</div>
+            <div class="badge"><b id="betShow">${bet}</b> 🪙</div>
+          </div>
+
+          <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+            ${presets.map(v => `<button class="chip" data-bet="${v}">${v}</button>`).join("")}
+            <button class="chip" data-bet="max">MAX</button>
+          </div>
+
+          <div class="row" style="margin-top:10px; gap:8px;">
+            <button class="btn btnSmall" id="betMinus">-</button>
+            <input id="bet" type="number" min="1" step="1" value="${bet}" class="input2" style="flex:1;">
+            <button class="btn btnSmall" id="betPlus">+</button>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:14px; gap:8px;">
+          <button class="btn" id="rollBtn" style="flex:1;" ${rolling ? "disabled":""}>
+            Бросить (выигрыш: +${potential} 🪙)
+          </button>
+          <button class="btn ghost" id="bonus">+1000 🪙</button>
+        </div>
+
+        <div class="msg2" id="msg"></div>
       </div>
-    </div>
-  `;
-  const out = document.getElementById("diceResult");
-  const roll = (s) => (out.textContent = `🎲 ${randInt(1, s)} (из ${s})`);
-  document.getElementById("d6").onclick = () => roll(6);
-  document.getElementById("d20").onclick = () => roll(20);
-  document.getElementById("d100").onclick = () => roll(100);
+    `;
+
+    // bind
+    const diceFace = document.getElementById("diceFace");
+    const msg = document.getElementById("msg");
+    const betInput = document.getElementById("bet");
+    const betShow = document.getElementById("betShow");
+    const tShow = document.getElementById("tShow");
+    const tRange = document.getElementById("tRange");
+
+    document.querySelectorAll("[data-sides]").forEach(btn => {
+      btn.onclick = () => {
+        if (rolling) return;
+        sides = Number(btn.dataset.sides);
+        // keep target proportional
+        target = Math.max(1, Math.min(sides, Math.round((target / Math.max(1, (btn.dataset.sides == 6 ? 6 : (btn.dataset.sides == 20 ? 20 : 100)))) * sides)));
+        // safer: clamp
+        clampTarget();
+        draw();
+      };
+    });
+
+    document.querySelectorAll("[data-mode]").forEach(btn => {
+      btn.onclick = () => {
+        if (rolling) return;
+        mode = btn.dataset.mode;
+        draw();
+      };
+    });
+
+    tRange.oninput = () => {
+      if (rolling) return;
+      target = Number(tRange.value);
+      clampTarget();
+      tShow.textContent = String(target);
+      draw();
+    };
+
+    document.querySelectorAll(".chip").forEach(b => {
+      b.onclick = () => {
+        const val = b.dataset.bet;
+        if (val === "max") bet = wallet.coins;
+        else bet = Number(val);
+        clampBet();
+        betInput.value = String(bet);
+        betShow.textContent = String(bet);
+      };
+    });
+
+    document.getElementById("betMinus").onclick = () => {
+      bet = (Number(betInput.value) || 1) - 10;
+      clampBet();
+      betInput.value = String(bet);
+      betShow.textContent = String(bet);
+    };
+    document.getElementById("betPlus").onclick = () => {
+      bet = (Number(betInput.value) || 1) + 10;
+      clampBet();
+      betInput.value = String(bet);
+      betShow.textContent = String(bet);
+    };
+    betInput.oninput = () => {
+      bet = Number(betInput.value);
+      clampBet();
+      betInput.value = String(bet);
+      betShow.textContent = String(bet);
+    };
+
+    document.getElementById("bonus").onclick = () => addCoins(1000);
+
+    document.getElementById("rollBtn").onclick = () => {
+      if (rolling) return;
+
+      clampBet();
+      clampTarget();
+      if (bet <= 0) return alert("Ставка должна быть больше 0");
+      if (bet > wallet.coins) return alert("Недостаточно монет");
+
+      // take bet
+      addCoins(-bet);
+
+      rolling = true;
+      msg.textContent = "";
+      diceFace.classList.remove("spin");
+      void diceFace.offsetWidth; // reflow
+      diceFace.classList.add("spin");
+
+      // quick random preview during spin
+      stopAnim();
+      animTimer = setInterval(() => {
+        const r = randInt(1, sides);
+        diceFace.textContent = sides === 6 ? `🎲 ${r}` : `${r}`;
+      }, 70);
+
+      // resolve after animation
+      setTimeout(() => {
+        stopAnim();
+        const roll = randInt(1, sides);
+        diceFace.textContent = sides === 6 ? `🎲 ${roll}` : `${roll}`;
+
+        const win = mode === "under" ? (roll <= target) : (roll >= target);
+        const mult2 = getPayoutMult();
+        const payout = Math.floor(bet * mult2);
+
+        if (win) {
+          addCoins(payout);
+          msg.textContent = `✅ Выпало ${roll} — выигрыш +${payout} 🪙 (x${mult2.toFixed(2)})`;
+        } else {
+          msg.textContent = `❌ Выпало ${roll} — ставка ${bet} 🪙 проиграна`;
+        }
+
+        rolling = false;
+        draw();
+      }, 950);
+    };
+  };
+
+  draw();
 }
 
 /* =========================
@@ -823,3 +1087,4 @@ function renderCrash() {
 }
 
 setScreen("menu");
+
