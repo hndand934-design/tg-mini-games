@@ -297,12 +297,12 @@ function renderCoin() {
   };
 }
 
-// --- Dice PRO RU + 3D D6 ---
+// --- Dice PRO RU (реалистичный бросок D6 + D20/D100 карточка) ---
 function renderDice() {
   // one-time styles
-  if (!document.getElementById("dicepro3d-style")) {
+  if (!document.getElementById("dice-real-style")) {
     const st = document.createElement("style");
-    st.id = "dicepro3d-style";
+    st.id = "dice-real-style";
     st.textContent = `
       .diceHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
       .diceHeader .sub2{opacity:.82;font-size:12px;line-height:1.25;margin-top:4px;}
@@ -326,63 +326,105 @@ function renderDice() {
         background:rgba(255,255,255,.06);
         color:#e8eefc;outline:none;
       }
+      .msg2{min-height:22px;font-weight:950;margin-top:10px;}
+      .ghost{background:rgba(255,255,255,.06)!important;}
 
       .diceStage{display:flex;gap:14px;align-items:center;margin-top:12px;}
-      .diceLeft{width:110px;display:flex;align-items:center;justify-content:center;}
+      .diceLeft{width:150px;display:flex;align-items:center;justify-content:center;}
       .diceRight{flex:1;}
 
-      /* ---------- 3D D6 CUBE ---------- */
-      .scene{
-        width:92px;height:92px;
-        perspective: 700px;
+      /* ---------- TABLE + REAL THROW ---------- */
+      .table{
+        width:140px;height:120px;border-radius:18px;
+        background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.10), rgba(255,255,255,.03));
+        border:1px solid rgba(255,255,255,.10);
+        box-shadow: 0 18px 35px rgba(0,0,0,.35) inset;
+        position:relative;
+        overflow:hidden;
       }
-      .cube{
-        width:92px;height:92px;position:relative;
-        transform-style:preserve-3d;
-        transform: rotateX(-20deg) rotateY(25deg);
-        transition: transform 900ms cubic-bezier(.15,.85,.15,1);
-      }
-      .cube.rolling{
-        animation: cubeSpin 900ms cubic-bezier(.2,.9,.2,1) both;
-      }
-      @keyframes cubeSpin{
-        0%{ transform: rotateX(-20deg) rotateY(25deg); filter: blur(0px); }
-        35%{ transform: rotateX(220deg) rotateY(260deg); filter: blur(.2px); }
-        70%{ transform: rotateX(520deg) rotateY(560deg); filter: blur(.6px); }
-        100%{ transform: rotateX(740deg) rotateY(920deg); filter: blur(0px); }
+      .shadow{
+        position:absolute;left:50%;top:70%;
+        width:70px;height:24px;border-radius:999px;
+        transform: translateX(-50%) scale(1);
+        background: rgba(0,0,0,.35);
+        filter: blur(10px);
+        opacity:.35;
+        transition: opacity .12s ease;
       }
 
+      .scene{
+        position:absolute;inset:0;
+        perspective: 900px;
+      }
+      .throwWrap{
+        position:absolute;
+        left:50%; top:62%;
+        transform: translate(-50%, -50%);
+        transform-style: preserve-3d;
+        will-change: transform;
+      }
+
+      /* ---------- 3D CUBE ---------- */
+      .cube{
+        width:78px;height:78px;position:relative;
+        transform-style:preserve-3d;
+        transform: rotateX(-18deg) rotateY(24deg);
+        transition: transform 420ms cubic-bezier(.15,.85,.15,1);
+        will-change: transform;
+      }
       .face{
         position:absolute; inset:0;
-        border-radius:18px;
-        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.20), rgba(255,255,255,.06));
-        border:1px solid rgba(255,255,255,.12);
+        border-radius:16px;
+        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.22), rgba(255,255,255,.06));
+        border:1px solid rgba(255,255,255,.14);
         box-shadow: 0 10px 22px rgba(0,0,0,.35);
         display:flex;align-items:center;justify-content:center;
         backface-visibility:hidden;
       }
       .pip{
-        width:12px;height:12px;border-radius:50%;
+        width:10px;height:10px;border-radius:50%;
         background: rgba(232,238,252,.95);
         box-shadow: 0 1px 0 rgba(0,0,0,.25) inset;
       }
-      .pips{display:grid;grid-template-columns:repeat(3, 18px);grid-template-rows:repeat(3, 18px);gap:8px;}
+      .pips{display:grid;grid-template-columns:repeat(3, 16px);grid-template-rows:repeat(3, 16px);gap:7px;}
       .pips .empty{opacity:0;}
-      .face.front  { transform: translateZ(46px); }
-      .face.back   { transform: rotateY(180deg) translateZ(46px); }
-      .face.right  { transform: rotateY(90deg)  translateZ(46px); }
-      .face.left   { transform: rotateY(-90deg) translateZ(46px); }
-      .face.top    { transform: rotateX(90deg)  translateZ(46px); }
-      .face.bottom { transform: rotateX(-90deg) translateZ(46px); }
 
-      /* ---------- 3D CARD for D20/D100 ---------- */
+      .face.front  { transform: translateZ(39px); }
+      .face.back   { transform: rotateY(180deg) translateZ(39px); }
+      .face.right  { transform: rotateY(90deg)  translateZ(39px); }
+      .face.left   { transform: rotateY(-90deg) translateZ(39px); }
+      .face.top    { transform: rotateX(90deg)  translateZ(39px); }
+      .face.bottom { transform: rotateX(-90deg) translateZ(39px); }
+
+      /* throw animation (wrap moves, cube spins) */
+      .throwing .cube{
+        transition: none;
+      }
+
+      @keyframes wrapThrow {
+        0%   { transform: translate(-50%, -50%) translate3d(0px, 0px, 0px) rotateZ(0deg); }
+        15%  { transform: translate(-50%, -50%) translate3d(-18px, -34px, 50px) rotateZ(-12deg); }
+        45%  { transform: translate(-50%, -50%) translate3d(26px, -52px, 120px) rotateZ(16deg); }
+        75%  { transform: translate(-50%, -50%) translate3d(10px, -18px, 40px) rotateZ(6deg); }
+        100% { transform: translate(-50%, -50%) translate3d(0px, 0px, 0px) rotateZ(0deg); }
+      }
+
+      @keyframes shadowThrow {
+        0%   { transform: translateX(-50%) scale(1); opacity:.35; }
+        20%  { transform: translateX(-50%) scale(.75); opacity:.18; }
+        55%  { transform: translateX(-50%) scale(.62); opacity:.12; }
+        85%  { transform: translateX(-50%) scale(.92); opacity:.28; }
+        100% { transform: translateX(-50%) scale(1); opacity:.35; }
+      }
+
+      /* D20/D100 красивое “переворачивание карточки” */
       .num3d{
-        width:92px;height:92px;border-radius:18px;
+        width:120px;height:120px;border-radius:18px;
         display:flex;align-items:center;justify-content:center;
         background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.20), rgba(255,255,255,.06));
         border:1px solid rgba(255,255,255,.12);
         box-shadow: 0 10px 22px rgba(0,0,0,.35);
-        font-size:28px;font-weight:1000;
+        font-size:30px;font-weight:1000;
         transform-style:preserve-3d;
         user-select:none;
       }
@@ -391,24 +433,19 @@ function renderDice() {
       }
       @keyframes numFlip{
         0%{ transform: rotateY(0deg) rotateX(0deg) scale(1); filter: blur(0px); }
-        35%{ transform: rotateY(240deg) rotateX(90deg) scale(1.06); filter: blur(.3px); }
-        70%{ transform: rotateY(520deg) rotateX(180deg) scale(1.08); filter: blur(.7px); }
+        35%{ transform: rotateY(260deg) rotateX(90deg) scale(1.06); filter: blur(.3px); }
+        70%{ transform: rotateY(560deg) rotateX(180deg) scale(1.08); filter: blur(.7px); }
         100%{ transform: rotateY(720deg) rotateX(360deg) scale(1); filter: blur(0px); }
       }
-
-      .msg2{min-height:22px;font-weight:950;margin-top:10px;}
-
-      /* keep your existing chips styles if already present */
-      .ghost{background:rgba(255,255,255,.06)!important;}
     `;
     document.head.appendChild(st);
   }
 
-  // state inside renderDice
-  let sides = 6;         // 6 / 20 / 100
+  // local state
+  let sides = 6;         // 6/20/100
   let mode = "under";    // under/over
   let bet = 50;
-  let target = 6;
+  let target = 4;        // по умолчанию адекватнее, чем 6/6
   let rolling = false;
 
   const presets = [10, 50, 100, 250, 500];
@@ -430,16 +467,15 @@ function renderDice() {
     return winCount / sides;
   };
 
-  // payout with small house edge (виртуально)
+  // payout with small edge
   const getPayoutMult = () => {
     const p = Math.max(0.0001, getWinChance());
     const mult = 0.95 / p;
     return Math.max(1.02, mult);
   };
 
-  // map D6 result -> cube rotation (so the correct face is "front")
-  // Face naming in our cube:
-  // front=1, right=2, back=6, left=5, top=3, bottom=4  (classic-ish)
+  // D6 result -> final cube orientation
+  // front=1, right=2, back=6, left=5, top=3, bottom=4
   const cubeRotationFor = (n) => {
     switch (n) {
       case 1: return { x: 0,   y: 0 };
@@ -450,6 +486,14 @@ function renderDice() {
       case 6: return { x: 0,   y: 180 };
       default: return { x: 0, y: 0 };
     }
+  };
+
+  // prettier defaults when switching sides
+  const defaultTargetForSides = (s) => {
+    if (s === 6) return 4;
+    if (s === 20) return 10;
+    if (s === 100) return 50;
+    return 1;
   };
 
   const draw = () => {
@@ -466,8 +510,7 @@ function renderDice() {
           <div>
             <div style="font-weight:1000;font-size:16px;">Dice</div>
             <div class="sub2">
-              Ставка 🪙 + режим <b>${mode === "under" ? "Ниже" : "Выше"}</b>.
-              Выплата зависит от шанса.
+              Реалистичный бросок 🎲 · Режим <b>${mode === "under" ? "Ниже" : "Выше"}</b> · Выплата зависит от шанса.
             </div>
           </div>
           <div class="badge2">Баланс: <b>🪙 ${wallet.coins}</b></div>
@@ -532,22 +575,27 @@ function renderDice() {
       </div>
     `;
 
-    // render left (3D)
+    // left render
     const diceLeft = document.getElementById("diceLeft");
     if (sides === 6) {
       diceLeft.innerHTML = `
-        <div class="scene">
-          <div class="cube" id="cube">
-            ${makeFaceHTML("front", 1)}
-            ${makeFaceHTML("right", 2)}
-            ${makeFaceHTML("back", 6)}
-            ${makeFaceHTML("left", 5)}
-            ${makeFaceHTML("top", 3)}
-            ${makeFaceHTML("bottom", 4)}
+        <div class="table">
+          <div class="shadow" id="shadow"></div>
+          <div class="scene">
+            <div class="throwWrap" id="wrap">
+              <div class="cube" id="cube">
+                ${makeFaceHTML("front", 1)}
+                ${makeFaceHTML("right", 2)}
+                ${makeFaceHTML("back", 6)}
+                ${makeFaceHTML("left", 5)}
+                ${makeFaceHTML("top", 3)}
+                ${makeFaceHTML("bottom", 4)}
+              </div>
+            </div>
           </div>
         </div>
       `;
-      // set to current target just for stable view (face 1 default)
+      // stable default view
       const cube = document.getElementById("cube");
       const rot = cubeRotationFor(1);
       cube.style.transform = `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`;
@@ -566,7 +614,7 @@ function renderDice() {
       btn.onclick = () => {
         if (rolling) return;
         sides = Number(btn.dataset.sides);
-        target = Math.min(target, sides);
+        target = defaultTargetForSides(sides);
         clampTarget();
         draw();
       };
@@ -632,7 +680,6 @@ function renderDice() {
       if (bet <= 0) return alert("Ставка должна быть больше 0");
       if (bet > wallet.coins) return alert("Недостаточно монет");
 
-      // списываем ставку
       addCoins(-bet);
 
       rolling = true;
@@ -640,32 +687,61 @@ function renderDice() {
 
       const mult2 = getPayoutMult();
       const payout = Math.floor(bet * mult2);
-
-      // итоговый roll
       const roll = randInt(1, sides);
 
-      // анимация
       if (sides === 6) {
+        const wrap = document.getElementById("wrap");
         const cube = document.getElementById("cube");
-        cube.classList.remove("rolling");
-        void cube.offsetWidth;
-        cube.classList.add("rolling");
+        const shadow = document.getElementById("shadow");
 
-        // через 900ms фиксируем на правильной грани
+        // add "throwing" mode
+        wrap.classList.add("throwing");
+
+        // 1) wrap flight animation (real movement)
+        wrap.style.animation = "none";
+        shadow.style.animation = "none";
+        void wrap.offsetWidth;
+
+        wrap.style.animation = "wrapThrow 900ms cubic-bezier(.2,.9,.2,1) both";
+        shadow.style.animation = "shadowThrow 900ms cubic-bezier(.2,.9,.2,1) both";
+
+        // 2) cube spins while flying (random heavy spins)
+        const spinX = 720 + randInt(360, 1080);
+        const spinY = 720 + randInt(360, 1080);
+        const spinZ = randInt(-180, 180);
+
+        cube.style.transform = `rotateX(${spinX}deg) rotateY(${spinY}deg) rotateZ(${spinZ}deg)`;
+
+        // 3) at landing: snap to exact face with a short settle
         setTimeout(() => {
-          cube.classList.remove("rolling");
           const rot = cubeRotationFor(roll);
-          cube.style.transform = `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`;
 
-          resolveRoll(roll, payout, mult2);
+          // little "settle" random micro rotate then final
+          const settleX = rot.x + randInt(-6, 6);
+          const settleY = rot.y + randInt(-6, 6);
+
+          cube.style.transition = "transform 220ms cubic-bezier(.2,.9,.2,1)";
+          cube.style.transform = `rotateX(${settleX}deg) rotateY(${settleY}deg)`;
+
+          setTimeout(() => {
+            cube.style.transition = "transform 240ms cubic-bezier(.15,.85,.15,1)";
+            cube.style.transform = `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`;
+
+            setTimeout(() => {
+              wrap.classList.remove("throwing");
+              wrap.style.animation = "";
+              shadow.style.animation = "";
+              resolveRoll(roll, payout, mult2);
+            }, 260);
+          }, 220);
         }, 900);
+
       } else {
         const num3d = document.getElementById("num3d");
         num3d.classList.remove("rolling");
         void num3d.offsetWidth;
         num3d.classList.add("rolling");
 
-        // показываем финальное число
         setTimeout(() => {
           num3d.classList.remove("rolling");
           num3d.textContent = String(roll);
@@ -690,7 +766,6 @@ function renderDice() {
   };
 
   function makeFaceHTML(cls, num) {
-    // pip layouts (3x3 grid)
     const map = {
       1: [0,0,0, 0,1,0, 0,0,0],
       2: [1,0,0, 0,0,0, 0,0,1],
@@ -1212,5 +1287,6 @@ function renderCrash() {
 }
 
 setScreen("menu");
+
 
 
