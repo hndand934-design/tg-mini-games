@@ -83,23 +83,223 @@ function renderMenu() {
   `;
 }
 
-// Coin Flip
+/* =========================
+   COIN FLIP (анимация + ставка)
+   ========================= */
+
+// --- CoinFlip styles (one-time) ---
+if (!document.getElementById("coinflip-style")) {
+  const st = document.createElement("style");
+  st.id = "coinflip-style";
+  st.textContent = `
+    .coinWrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:12px;}
+    .coin3d{
+      width:96px;height:96px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.22), rgba(255,255,255,.06));
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: 0 10px 25px rgba(0,0,0,.35);
+      font-size:44px;
+      transform-style:preserve-3d;
+      user-select:none;
+    }
+    .coin3d.spin{ animation: coinspin 1.1s ease-in-out both; }
+    @keyframes coinspin{
+      0%   { transform: rotateY(0deg)   rotateX(0deg)   scale(1);   filter: blur(0px); }
+      20%  { transform: rotateY(360deg) rotateX(90deg)  scale(1.05);filter: blur(.2px);}
+      50%  { transform: rotateY(900deg) rotateX(180deg) scale(1.08);filter: blur(.6px);}
+      80%  { transform: rotateY(1440deg)rotateX(270deg) scale(1.03);filter: blur(.2px);}
+      100% { transform: rotateY(1800deg)rotateX(360deg) scale(1);   filter: blur(0px); }
+    }
+    .seg{display:flex;gap:8px;flex-wrap:wrap;}
+    .seg button{
+      padding:10px 12px;border-radius:12px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10);
+      color:#e8eefc;cursor:pointer;font-weight:800;
+    }
+    .seg button.active{outline:2px solid rgba(76,133,255,.85);}
+    .small{opacity:.8;font-size:12px;line-height:1.25;}
+    .msg{min-height:20px;font-weight:900;margin-top:6px;}
+  `;
+  document.head.appendChild(st);
+}
+
+let coinState = {
+  pick: "heads", // heads / tails
+  bet: 50,
+  busy: false,
+};
+
 function renderCoin() {
+  const presets = [10, 50, 100, 250, 500];
+
   screenEl.innerHTML = `
     <div class="card">
-      <div style="font-weight:800; font-size:16px;">Coin Flip</div>
-      <div id="coinResult" style="margin:12px 0; font-size:28px;">🪙</div>
-      <button class="btn" id="flipBtn">Бросить</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div>
+          <div style="font-weight:900; font-size:16px;">Coin Flip</div>
+          <div class="small" style="margin-top:4px;">Выбери Орёл/Решка, поставь 🪙 и бросай. Выигрыш: <b>x2</b>.</div>
+        </div>
+        <div class="badge">Баланс: <b>🪙 ${wallet.coins}</b></div>
+      </div>
+
+      <div class="coinWrap">
+        <div id="coin3d" class="coin3d">🪙</div>
+
+        <div class="seg">
+          <button id="pickHeads" class="${coinState.pick === "heads" ? "active" : ""}">🦅 Орёл</button>
+          <button id="pickTails" class="${coinState.pick === "tails" ? "active" : ""}">🌙 Решка</button>
+        </div>
+
+        <div style="width:100%; margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:800;">Ставка</div>
+            <div class="badge"><b id="betShow">${coinState.bet}</b> 🪙</div>
+          </div>
+
+          <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+            ${presets.map(v => `<button class="chip" data-bet="${v}">${v}</button>`).join("")}
+            <button class="chip" data-bet="max">MAX</button>
+          </div>
+
+          <div class="row" style="margin-top:10px; gap:8px;">
+            <button class="btn btnSmall" id="betMinus">-</button>
+            <input id="bet" type="number" min="1" step="1" value="${coinState.bet}" class="input" style="flex:1;">
+            <button class="btn btnSmall" id="betPlus">+</button>
+          </div>
+        </div>
+
+        <button class="btn" id="flipBtn" style="width:100%; margin-top:6px;">Бросить</button>
+        <div id="coinMsg" class="msg"></div>
+
+        <button class="btn ghost" id="bonusCoins" style="width:100%;">+1000 🪙</button>
+      </div>
     </div>
   `;
+
+  const coinEl = document.getElementById("coin3d");
+  const msgEl = document.getElementById("coinMsg");
+  const betInput = document.getElementById("bet");
+  const betShow = document.getElementById("betShow");
+
+  // чтобы чипы/инпут работали (они есть в Mines-style, но на всякий случай)
+  if (!document.getElementById("shared-input-style")) {
+    const st = document.createElement("style");
+    st.id = "shared-input-style";
+    st.textContent = `
+      .input{
+        width:100%;
+        padding:10px;
+        border-radius:12px;
+        border:1px solid rgba(255,255,255,.10);
+        background:rgba(255,255,255,.06);
+        color:#e8eefc;
+        outline:none;
+      }
+      .chip{
+        padding:8px 10px;
+        border-radius:999px;
+        border:1px solid rgba(255,255,255,.10);
+        background:rgba(255,255,255,.06);
+        color:#e8eefc;
+        cursor:pointer;
+        font-weight:800;
+        font-size:12px;
+        transition: transform .08s ease, background .12s ease;
+      }
+      .chip:active{transform:scale(.98);}
+      .btnSmall{padding:10px 12px; min-width:44px;}
+      .ghost{background:rgba(255,255,255,.06)!important;}
+    `;
+    document.head.appendChild(st);
+  }
+
+  const clampBet = () => {
+    let v = Math.floor(Number(betInput.value) || 0);
+    if (v < 1) v = 1;
+    if (v > wallet.coins) v = wallet.coins;
+    betInput.value = String(v);
+    betShow.textContent = String(v);
+    coinState.bet = v;
+  };
+  clampBet();
+
+  document.getElementById("pickHeads").onclick = () => {
+    coinState.pick = "heads";
+    renderCoin();
+  };
+  document.getElementById("pickTails").onclick = () => {
+    coinState.pick = "tails";
+    renderCoin();
+  };
+
+  document.querySelectorAll(".chip").forEach((b) => {
+    b.onclick = () => {
+      const val = b.dataset.bet;
+      if (val === "max") betInput.value = String(wallet.coins);
+      else betInput.value = String(val);
+      clampBet();
+    };
+  });
+
+  document.getElementById("betMinus").onclick = () => {
+    betInput.value = String((Number(betInput.value) || 1) - 10);
+    clampBet();
+  };
+  document.getElementById("betPlus").onclick = () => {
+    betInput.value = String((Number(betInput.value) || 1) + 10);
+    clampBet();
+  };
+  betInput.oninput = clampBet;
+
+  document.getElementById("bonusCoins").onclick = () => addCoins(1000);
+
   document.getElementById("flipBtn").onclick = () => {
-    const r = randFloat() < 0.5 ? "Орёл" : "Решка";
-    document.getElementById("coinResult").textContent =
-      r === "Орёл" ? "🦅 Орёл" : "🌙 Решка";
+    if (coinState.busy) return;
+
+    const bet = Math.floor(Number(betInput.value) || 0);
+    if (bet <= 0) return alert("Ставка должна быть больше 0");
+    if (bet > wallet.coins) return alert("Недостаточно монет");
+
+    // списываем ставку
+    addCoins(-bet);
+
+    coinState.busy = true;
+    msgEl.textContent = "";
+    coinEl.textContent = "🪙";
+
+    // перезапуск анимации
+    coinEl.classList.remove("spin");
+    void coinEl.offsetWidth;
+    coinEl.classList.add("spin");
+
+    // исход
+    const result = randFloat() < 0.5 ? "heads" : "tails";
+
+    setTimeout(() => {
+      coinEl.classList.remove("spin");
+
+      const win = result === coinState.pick;
+      if (result === "heads") coinEl.textContent = "🦅";
+      else coinEl.textContent = "🌙";
+
+      if (win) {
+        const payout = bet * 2;
+        addCoins(payout);
+        msgEl.textContent = `✅ Выигрыш +${payout} 🪙`;
+      } else {
+        msgEl.textContent = `❌ Проигрыш -${bet} 🪙`;
+      }
+
+      coinState.busy = false;
+    }, 1100);
   };
 }
 
-// Dice
+/* =========================
+   DICE
+   ========================= */
 function renderDice() {
   screenEl.innerHTML = `
     <div class="card">
@@ -119,20 +319,19 @@ function renderDice() {
   document.getElementById("d100").onclick = () => roll(100);
 }
 
-// --- MINES PRO ---
+/* =========================
+   MINES PRO
+   ========================= */
 let minesState = null;
 
 function renderMines() {
   const size = 25; // 5x5
-  const cols = 5;
 
-  // “приятная” таблица роста множителя (без денег, только виртуальные монеты)
   function calcMultiplier(safeOpened, minesCount) {
-    // Чем больше мин — тем быстрее растёт
     const m = minesCount;
-    const a = 0.095 + m * 0.0075; // рост за safe
-    const b = 0.018 + m * 0.0018; // ускорение
-    const mult = 1 + safeOpened * a + (safeOpened * safeOpened) * b * 0.06;
+    const a = 0.095 + m * 0.0075;
+    const b = 0.018 + m * 0.0018;
+    const mult = 1 + safeOpened * a + safeOpened * safeOpened * b * 0.06;
     return Math.max(1, mult);
   }
 
@@ -204,7 +403,6 @@ function renderMines() {
     minesState.safeOpened += 1;
     minesState.multiplier = calcMultiplier(minesState.safeOpened, minesState.minesCount);
 
-    // если открыл все safe — авто-забор
     if (minesState.safeOpened >= size - minesState.minesCount) {
       minesState.msg = "🏁 Открыл все safe! Авто-забор.";
       cashOut();
@@ -292,11 +490,8 @@ function renderMines() {
     document.querySelectorAll(".chip").forEach((b) => {
       b.onclick = () => {
         const val = b.dataset.bet;
-        if (val === "max") {
-          betInput.value = String(wallet.coins);
-        } else {
-          betInput.value = String(val);
-        }
+        if (val === "max") betInput.value = String(wallet.coins);
+        else betInput.value = String(val);
         clampBet();
       };
     });
@@ -394,29 +589,18 @@ function renderMines() {
     const st = document.createElement("style");
     st.id = "mines-pro-style";
     st.textContent = `
-      .range{
-        width:100%;
-        margin-top:8px;
-        accent-color: #4c7dff;
-      }
+      .range{ width:100%; margin-top:8px; accent-color:#4c7dff; }
       .input{
-        width:100%;
-        padding:10px;
-        border-radius:12px;
+        width:100%; padding:10px; border-radius:12px;
         border:1px solid rgba(255,255,255,.10);
         background:rgba(255,255,255,.06);
-        color:#e8eefc;
-        outline:none;
+        color:#e8eefc; outline:none;
       }
       .chip{
-        padding:8px 10px;
-        border-radius:999px;
+        padding:8px 10px; border-radius:999px;
         border:1px solid rgba(255,255,255,.10);
         background:rgba(255,255,255,.06);
-        color:#e8eefc;
-        cursor:pointer;
-        font-weight:700;
-        font-size:12px;
+        color:#e8eefc; cursor:pointer; font-weight:800; font-size:12px;
         transition: transform .08s ease, background .12s ease;
       }
       .chip:active{transform:scale(.98);}
@@ -424,45 +608,29 @@ function renderMines() {
       .ghost{background:rgba(255,255,255,.06)!important;}
 
       .cashBox{
-        padding:10px 12px;
-        border-radius:14px;
+        padding:10px 12px; border-radius:14px;
         background: linear-gradient(180deg, rgba(76,125,255,.18), rgba(76,125,255,.08));
         border:1px solid rgba(76,125,255,.25);
-        min-width:150px;
-        text-align:right;
+        min-width:150px; text-align:right;
       }
 
-      .grid{
-        display:grid;
-        grid-template-columns:repeat(5,1fr);
-        gap:10px;
-        margin-top:12px;
-      }
+      .grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:12px; }
 
       .cell{
-        height:54px;
-        border-radius:14px;
+        height:54px; border-radius:14px;
         background:rgba(255,255,255,.06);
         border:1px solid rgba(255,255,255,.10);
-        color:#e8eefc;
-        cursor:pointer;
-        position:relative;
+        color:#e8eefc; cursor:pointer; position:relative;
         transform-style:preserve-3d;
         transition: transform .12s ease, background .12s ease, border-color .12s ease;
         overflow:hidden;
       }
       .cell:active{transform:scale(.98);}
       .cellInner{
-        display:flex;
-        height:100%;
-        align-items:center;
-        justify-content:center;
-        font-size:18px;
-        font-weight:900;
-        transform: translateZ(1px);
+        display:flex; height:100%; align-items:center; justify-content:center;
+        font-size:18px; font-weight:900; transform: translateZ(1px);
       }
 
-      /* Open animation */
       .cell.safe, .cell.mine{
         transform: rotateX(8deg) rotateY(0deg);
         animation: pop .14s ease-out;
@@ -479,14 +647,8 @@ function renderMines() {
         border-color:rgba(255,80,80,.35);
         box-shadow: 0 0 0 1px rgba(255,80,80,.10) inset;
       }
-      .cell.boom{
-        animation: boom .25s ease-out;
-      }
-      @keyframes boom {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-      }
+      .cell.boom{ animation: boom .25s ease-out; }
+      @keyframes boom { 0%{transform:scale(1);} 50%{transform:scale(1.05);} 100%{transform:scale(1);} }
 
       .cell:disabled{opacity:.88;cursor:not-allowed;}
     `;
@@ -496,10 +658,12 @@ function renderMines() {
   draw();
 }
 
-// --- Black Jack (упрощенно, без монет пока) ---
+/* =========================
+   BLACK JACK (без монет пока)
+   ========================= */
 function makeDeck() {
   const suits = ["♠", "♥", "♦", "♣"];
-  const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
   const deck = [];
   for (const s of suits) for (const r of ranks) deck.push({ r, s });
   for (let i = deck.length - 1; i > 0; i--) {
@@ -509,30 +673,44 @@ function makeDeck() {
   return deck;
 }
 function handValue(cards) {
-  let total = 0, aces = 0;
+  let total = 0,
+    aces = 0;
   for (const c of cards) {
-    if (c.r === "A") { aces++; total += 11; }
-    else if (["K","Q","J"].includes(c.r)) total += 10;
+    if (c.r === "A") {
+      aces++;
+      total += 11;
+    } else if (["K", "Q", "J"].includes(c.r)) total += 10;
     else total += Number(c.r);
   }
-  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  while (total > 21 && aces > 0) {
+    total -= 10;
+    aces--;
+  }
   return total;
 }
 function renderCards(cards) {
-  return cards.map(c => `${c.r}${c.s}`).join(" ");
+  return cards.map((c) => `${c.r}${c.s}`).join(" ");
 }
 let bj = null;
+
 function renderBJ() {
   function newBJ() {
     const deck = makeDeck();
-    bj = { deck, player: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()], over: false, msg: "" };
+    bj = {
+      deck,
+      player: [deck.pop(), deck.pop()],
+      dealer: [deck.pop(), deck.pop()],
+      over: false,
+      msg: "",
+    };
     draw();
   }
+
   function draw() {
     const pVal = handValue(bj.player);
     const dVal = handValue(bj.dealer);
-    let dealerShown = bj.over ? renderCards(bj.dealer) : `${bj.dealer[0].r}${bj.dealer[0].s} ??`;
-    let dealerText = bj.over ? `(${dVal})` : "";
+    const dealerShown = bj.over ? renderCards(bj.dealer) : `${bj.dealer[0].r}${bj.dealer[0].s} ??`;
+    const dealerText = bj.over ? `(${dVal})` : "";
 
     screenEl.innerHTML = `
       <div class="card">
@@ -556,7 +734,10 @@ function renderBJ() {
     document.getElementById("newbj").onclick = newBJ;
     document.getElementById("hit").onclick = () => {
       bj.player.push(bj.deck.pop());
-      if (handValue(bj.player) > 21) { bj.over = true; bj.msg = "Перебор. Ты проиграл."; }
+      if (handValue(bj.player) > 21) {
+        bj.over = true;
+        bj.msg = "Перебор. Ты проиграл.";
+      }
       draw();
     };
     document.getElementById("stand").onclick = () => {
@@ -570,17 +751,22 @@ function renderBJ() {
       draw();
     };
   }
+
   newBJ();
 }
 
-// --- Lucky Jet demo (без монет пока) ---
+/* =========================
+   LUCKY JET (демо)
+   ========================= */
 let crash = null;
+
 function renderCrash() {
   function newCrash() {
     const crashPoint = Math.max(1.05, 1 / (1 - randFloat()));
     crash = { t: 0, mult: 1.0, crashPoint, running: false, cashed: false, msg: "" };
     draw();
   }
+
   let timer = null;
 
   function start() {
@@ -623,7 +809,7 @@ function renderCrash() {
         <div style="min-height:22px;"><b>${crash.msg || ""}</b></div>
         <div class="row" style="margin-top:12px;">
           <button class="btn" id="start" ${crash.running ? "disabled" : ""}>Старт</button>
-          <button class="btn" id="cash" ${(!crash.running || crash.cashed) ? "disabled" : ""}>Забрать</button>
+          <button class="btn" id="cash" ${!crash.running || crash.cashed ? "disabled" : ""}>Забрать</button>
           <button class="btn ghost" id="newc">Новая</button>
         </div>
       </div>
@@ -632,6 +818,7 @@ function renderCrash() {
     document.getElementById("cash").onclick = cashOut;
     document.getElementById("newc").onclick = newCrash;
   }
+
   newCrash();
 }
 
