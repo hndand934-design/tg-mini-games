@@ -297,42 +297,28 @@ function renderCoin() {
   };
 }
 
-// --- Dice PRO (bet + animation) ---
+// --- Dice PRO RU + 3D D6 ---
 function renderDice() {
   // one-time styles
-  if (!document.getElementById("dicepro-style")) {
+  if (!document.getElementById("dicepro3d-style")) {
     const st = document.createElement("style");
-    st.id = "dicepro-style";
+    st.id = "dicepro3d-style";
     st.textContent = `
-      .diceBox{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;}
-      .diceFace{
-        width:96px;height:96px;border-radius:18px;
-        display:flex;align-items:center;justify-content:center;
-        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.18), rgba(255,255,255,.06));
-        border:1px solid rgba(255,255,255,.10);
-        box-shadow: 0 10px 25px rgba(0,0,0,.35);
-        font-size:34px;font-weight:900;
-        user-select:none;
-      }
-      .diceFace.spin{ animation: dicespin .9s ease-in-out both; }
-      @keyframes dicespin{
-        0%{ transform: rotate(0deg) scale(1); filter: blur(0px);}
-        30%{ transform: rotate(140deg) scale(1.06); filter: blur(.3px);}
-        60%{ transform: rotate(320deg) scale(1.08); filter: blur(.7px);}
-        100%{ transform: rotate(720deg) scale(1); filter: blur(0px);}
-      }
+      .diceHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+      .diceHeader .sub2{opacity:.82;font-size:12px;line-height:1.25;margin-top:4px;}
+      .badge2{padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);}
+
       .pillRow{display:flex;gap:8px;flex-wrap:wrap;}
       .pill{
         padding:8px 10px;border-radius:999px;
         background:rgba(255,255,255,.06);
         border:1px solid rgba(255,255,255,.10);
-        color:#e8eefc;cursor:pointer;font-weight:800;font-size:12px;
+        color:#e8eefc;cursor:pointer;font-weight:900;font-size:12px;
       }
       .pill.active{outline:2px solid rgba(76,133,255,.85);}
-      .small2{opacity:.8;font-size:12px;line-height:1.25;}
-      .msg2{min-height:22px;font-weight:900;margin-top:8px;}
-      .kv{display:flex;justify-content:space-between;gap:10px;margin-top:10px;}
-      .kv .badge{white-space:nowrap;}
+
+      .kv{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:10px;}
+      .small2{opacity:.82;font-size:12px;line-height:1.25;}
       .range2{width:100%; margin-top:8px; accent-color:#4c7dff;}
       .input2{
         width:100%;padding:10px;border-radius:12px;
@@ -340,76 +326,157 @@ function renderDice() {
         background:rgba(255,255,255,.06);
         color:#e8eefc;outline:none;
       }
+
+      .diceStage{display:flex;gap:14px;align-items:center;margin-top:12px;}
+      .diceLeft{width:110px;display:flex;align-items:center;justify-content:center;}
+      .diceRight{flex:1;}
+
+      /* ---------- 3D D6 CUBE ---------- */
+      .scene{
+        width:92px;height:92px;
+        perspective: 700px;
+      }
+      .cube{
+        width:92px;height:92px;position:relative;
+        transform-style:preserve-3d;
+        transform: rotateX(-20deg) rotateY(25deg);
+        transition: transform 900ms cubic-bezier(.15,.85,.15,1);
+      }
+      .cube.rolling{
+        animation: cubeSpin 900ms cubic-bezier(.2,.9,.2,1) both;
+      }
+      @keyframes cubeSpin{
+        0%{ transform: rotateX(-20deg) rotateY(25deg); filter: blur(0px); }
+        35%{ transform: rotateX(220deg) rotateY(260deg); filter: blur(.2px); }
+        70%{ transform: rotateX(520deg) rotateY(560deg); filter: blur(.6px); }
+        100%{ transform: rotateX(740deg) rotateY(920deg); filter: blur(0px); }
+      }
+
+      .face{
+        position:absolute; inset:0;
+        border-radius:18px;
+        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.20), rgba(255,255,255,.06));
+        border:1px solid rgba(255,255,255,.12);
+        box-shadow: 0 10px 22px rgba(0,0,0,.35);
+        display:flex;align-items:center;justify-content:center;
+        backface-visibility:hidden;
+      }
+      .pip{
+        width:12px;height:12px;border-radius:50%;
+        background: rgba(232,238,252,.95);
+        box-shadow: 0 1px 0 rgba(0,0,0,.25) inset;
+      }
+      .pips{display:grid;grid-template-columns:repeat(3, 18px);grid-template-rows:repeat(3, 18px);gap:8px;}
+      .pips .empty{opacity:0;}
+      .face.front  { transform: translateZ(46px); }
+      .face.back   { transform: rotateY(180deg) translateZ(46px); }
+      .face.right  { transform: rotateY(90deg)  translateZ(46px); }
+      .face.left   { transform: rotateY(-90deg) translateZ(46px); }
+      .face.top    { transform: rotateX(90deg)  translateZ(46px); }
+      .face.bottom { transform: rotateX(-90deg) translateZ(46px); }
+
+      /* ---------- 3D CARD for D20/D100 ---------- */
+      .num3d{
+        width:92px;height:92px;border-radius:18px;
+        display:flex;align-items:center;justify-content:center;
+        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.20), rgba(255,255,255,.06));
+        border:1px solid rgba(255,255,255,.12);
+        box-shadow: 0 10px 22px rgba(0,0,0,.35);
+        font-size:28px;font-weight:1000;
+        transform-style:preserve-3d;
+        user-select:none;
+      }
+      .num3d.rolling{
+        animation: numFlip 900ms cubic-bezier(.2,.9,.2,1) both;
+      }
+      @keyframes numFlip{
+        0%{ transform: rotateY(0deg) rotateX(0deg) scale(1); filter: blur(0px); }
+        35%{ transform: rotateY(240deg) rotateX(90deg) scale(1.06); filter: blur(.3px); }
+        70%{ transform: rotateY(520deg) rotateX(180deg) scale(1.08); filter: blur(.7px); }
+        100%{ transform: rotateY(720deg) rotateX(360deg) scale(1); filter: blur(0px); }
+      }
+
+      .msg2{min-height:22px;font-weight:950;margin-top:10px;}
+
+      /* keep your existing chips styles if already present */
+      .ghost{background:rgba(255,255,255,.06)!important;}
     `;
     document.head.appendChild(st);
   }
 
   // state inside renderDice
-  let sides = 6;         // D6/D20/D100
+  let sides = 6;         // 6 / 20 / 100
   let mode = "under";    // under/over
   let bet = 50;
-  let target = 50;       // threshold for 1..100 (we scale per sides)
+  let target = 6;
   let rolling = false;
-  let animTimer = null;
 
   const presets = [10, 50, 100, 250, 500];
-
-  const getWinChance = () => {
-    // for "under": win if roll <= threshold
-    // for "over":  win if roll >= threshold
-    // clamp threshold to valid
-    const t = Math.max(1, Math.min(sides, Math.floor(target)));
-    const winCount = mode === "under" ? t : (sides - t + 1);
-    return winCount / sides;
-  };
-
-  const getPayoutMult = () => {
-    // simple fair-ish: 0.95 house edge
-    const p = Math.max(0.0001, getWinChance());
-    const mult = 0.95 / p;
-    return Math.max(1.02, mult);
-  };
 
   const clampBet = () => {
     bet = Math.floor(Number(bet) || 0);
     if (bet < 1) bet = 1;
     if (bet > wallet.coins) bet = wallet.coins;
   };
-
   const clampTarget = () => {
     target = Math.floor(Number(target) || 1);
     if (target < 1) target = 1;
     if (target > sides) target = sides;
   };
 
-  const stopAnim = () => {
-    if (animTimer) clearInterval(animTimer);
-    animTimer = null;
+  const getWinChance = () => {
+    const t = Math.max(1, Math.min(sides, Math.floor(target)));
+    const winCount = mode === "under" ? t : (sides - t + 1);
+    return winCount / sides;
+  };
+
+  // payout with small house edge (виртуально)
+  const getPayoutMult = () => {
+    const p = Math.max(0.0001, getWinChance());
+    const mult = 0.95 / p;
+    return Math.max(1.02, mult);
+  };
+
+  // map D6 result -> cube rotation (so the correct face is "front")
+  // Face naming in our cube:
+  // front=1, right=2, back=6, left=5, top=3, bottom=4  (classic-ish)
+  const cubeRotationFor = (n) => {
+    switch (n) {
+      case 1: return { x: 0,   y: 0 };
+      case 2: return { x: 0,   y: -90 };
+      case 3: return { x: -90, y: 0 };
+      case 4: return { x: 90,  y: 0 };
+      case 5: return { x: 0,   y: 90 };
+      case 6: return { x: 0,   y: 180 };
+      default: return { x: 0, y: 0 };
+    }
   };
 
   const draw = () => {
     clampBet();
     clampTarget();
+
     const chance = getWinChance();
     const mult = getPayoutMult();
     const potential = Math.floor(bet * mult);
 
     screenEl.innerHTML = `
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div class="diceHeader">
           <div>
-            <div style="font-weight:900; font-size:16px;">Dice</div>
-            <div class="small2" style="margin-top:4px;">
-              Ставка 🪙 + режим <b>${mode === "under" ? "Below" : "Above"}</b>.
+            <div style="font-weight:1000;font-size:16px;">Dice</div>
+            <div class="sub2">
+              Ставка 🪙 + режим <b>${mode === "under" ? "Ниже" : "Выше"}</b>.
               Выплата зависит от шанса.
             </div>
           </div>
-          <div class="badge">Баланс: <b>🪙 ${wallet.coins}</b></div>
+          <div class="badge2">Баланс: <b>🪙 ${wallet.coins}</b></div>
         </div>
 
-        <div class="diceBox">
-          <div class="diceFace" id="diceFace">🎲</div>
-          <div style="flex:1;">
+        <div class="diceStage">
+          <div class="diceLeft" id="diceLeft"></div>
+
+          <div class="diceRight">
             <div class="pillRow">
               <button class="pill ${sides===6?"active":""}" data-sides="6">D6</button>
               <button class="pill ${sides===20?"active":""}" data-sides="20">D20</button>
@@ -417,29 +484,29 @@ function renderDice() {
             </div>
 
             <div class="pillRow" style="margin-top:10px;">
-              <button class="pill ${mode==="under"?"active":""}" data-mode="under">Below</button>
-              <button class="pill ${mode==="over"?"active":""}" data-mode="over">Above</button>
+              <button class="pill ${mode==="under"?"active":""}" data-mode="under">Ниже</button>
+              <button class="pill ${mode==="over"?"active":""}" data-mode="over">Выше</button>
+            </div>
+
+            <div class="kv">
+              <div class="small2">Порог: <b id="tShow">${target}</b> из <b>${sides}</b></div>
+              <div class="badge2">Шанс: <b>${(chance*100).toFixed(1)}%</b> · x<b>${mult.toFixed(2)}</b></div>
+            </div>
+
+            <input class="range2" id="tRange" type="range" min="1" max="${sides}" value="${target}">
+            <div class="small2" style="margin-top:6px;">
+              ${mode==="under"
+                ? `Выигрыш если выпало <b>≤ ${target}</b>.`
+                : `Выигрыш если выпало <b>≥ ${target}</b>.`
+              }
             </div>
           </div>
         </div>
 
-        <div class="kv">
-          <div class="small2">Порог: <b id="tShow">${target}</b> из <b>${sides}</b></div>
-          <div class="badge">Шанс: <b>${(chance*100).toFixed(1)}%</b> · x<b>${mult.toFixed(2)}</b></div>
-        </div>
-
-        <input class="range2" id="tRange" type="range" min="1" max="${sides}" value="${target}">
-        <div class="small2" style="margin-top:6px;">
-          ${mode==="under"
-            ? `Выигрыш если выпало <b>≤ ${target}</b>.`
-            : `Выигрыш если выпало <b>≥ ${target}</b>.`
-          }
-        </div>
-
         <div style="margin-top:14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-weight:900;">Ставка</div>
-            <div class="badge"><b id="betShow">${bet}</b> 🪙</div>
+            <div style="font-weight:1000;">Ставка</div>
+            <div class="badge2"><b id="betShow">${bet}</b> 🪙</div>
           </div>
 
           <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
@@ -465,8 +532,30 @@ function renderDice() {
       </div>
     `;
 
+    // render left (3D)
+    const diceLeft = document.getElementById("diceLeft");
+    if (sides === 6) {
+      diceLeft.innerHTML = `
+        <div class="scene">
+          <div class="cube" id="cube">
+            ${makeFaceHTML("front", 1)}
+            ${makeFaceHTML("right", 2)}
+            ${makeFaceHTML("back", 6)}
+            ${makeFaceHTML("left", 5)}
+            ${makeFaceHTML("top", 3)}
+            ${makeFaceHTML("bottom", 4)}
+          </div>
+        </div>
+      `;
+      // set to current target just for stable view (face 1 default)
+      const cube = document.getElementById("cube");
+      const rot = cubeRotationFor(1);
+      cube.style.transform = `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`;
+    } else {
+      diceLeft.innerHTML = `<div class="num3d" id="num3d">🎲</div>`;
+    }
+
     // bind
-    const diceFace = document.getElementById("diceFace");
     const msg = document.getElementById("msg");
     const betInput = document.getElementById("bet");
     const betShow = document.getElementById("betShow");
@@ -477,9 +566,7 @@ function renderDice() {
       btn.onclick = () => {
         if (rolling) return;
         sides = Number(btn.dataset.sides);
-        // keep target proportional
-        target = Math.max(1, Math.min(sides, Math.round((target / Math.max(1, (btn.dataset.sides == 6 ? 6 : (btn.dataset.sides == 20 ? 20 : 100)))) * sides)));
-        // safer: clamp
+        target = Math.min(target, sides);
         clampTarget();
         draw();
       };
@@ -517,18 +604,21 @@ function renderDice() {
       clampBet();
       betInput.value = String(bet);
       betShow.textContent = String(bet);
+      draw();
     };
     document.getElementById("betPlus").onclick = () => {
       bet = (Number(betInput.value) || 1) + 10;
       clampBet();
       betInput.value = String(bet);
       betShow.textContent = String(bet);
+      draw();
     };
     betInput.oninput = () => {
       bet = Number(betInput.value);
       clampBet();
       betInput.value = String(bet);
       betShow.textContent = String(bet);
+      draw();
     };
 
     document.getElementById("bonus").onclick = () => addCoins(1000);
@@ -538,50 +628,85 @@ function renderDice() {
 
       clampBet();
       clampTarget();
+
       if (bet <= 0) return alert("Ставка должна быть больше 0");
       if (bet > wallet.coins) return alert("Недостаточно монет");
 
-      // take bet
+      // списываем ставку
       addCoins(-bet);
 
       rolling = true;
       msg.textContent = "";
-      diceFace.classList.remove("spin");
-      void diceFace.offsetWidth; // reflow
-      diceFace.classList.add("spin");
 
-      // quick random preview during spin
-      stopAnim();
-      animTimer = setInterval(() => {
-        const r = randInt(1, sides);
-        diceFace.textContent = sides === 6 ? `🎲 ${r}` : `${r}`;
-      }, 70);
+      const mult2 = getPayoutMult();
+      const payout = Math.floor(bet * mult2);
 
-      // resolve after animation
-      setTimeout(() => {
-        stopAnim();
-        const roll = randInt(1, sides);
-        diceFace.textContent = sides === 6 ? `🎲 ${roll}` : `${roll}`;
+      // итоговый roll
+      const roll = randInt(1, sides);
 
-        const win = mode === "under" ? (roll <= target) : (roll >= target);
-        const mult2 = getPayoutMult();
-        const payout = Math.floor(bet * mult2);
+      // анимация
+      if (sides === 6) {
+        const cube = document.getElementById("cube");
+        cube.classList.remove("rolling");
+        void cube.offsetWidth;
+        cube.classList.add("rolling");
 
-        if (win) {
-          addCoins(payout);
-          msg.textContent = `✅ Выпало ${roll} — выигрыш +${payout} 🪙 (x${mult2.toFixed(2)})`;
-        } else {
-          msg.textContent = `❌ Выпало ${roll} — ставка ${bet} 🪙 проиграна`;
-        }
+        // через 900ms фиксируем на правильной грани
+        setTimeout(() => {
+          cube.classList.remove("rolling");
+          const rot = cubeRotationFor(roll);
+          cube.style.transform = `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`;
 
-        rolling = false;
-        draw();
-      }, 950);
+          resolveRoll(roll, payout, mult2);
+        }, 900);
+      } else {
+        const num3d = document.getElementById("num3d");
+        num3d.classList.remove("rolling");
+        void num3d.offsetWidth;
+        num3d.classList.add("rolling");
+
+        // показываем финальное число
+        setTimeout(() => {
+          num3d.classList.remove("rolling");
+          num3d.textContent = String(roll);
+          resolveRoll(roll, payout, mult2);
+        }, 900);
+      }
     };
+
+    function resolveRoll(roll, payout, mult2) {
+      const win = mode === "under" ? (roll <= target) : (roll >= target);
+
+      if (win) {
+        addCoins(payout);
+        msg.textContent = `✅ Выпало ${roll}. Выигрыш +${payout} 🪙 (x${mult2.toFixed(2)})`;
+      } else {
+        msg.textContent = `❌ Выпало ${roll}. Ставка ${bet} 🪙 проиграна`;
+      }
+
+      rolling = false;
+      draw();
+    }
   };
+
+  function makeFaceHTML(cls, num) {
+    // pip layouts (3x3 grid)
+    const map = {
+      1: [0,0,0, 0,1,0, 0,0,0],
+      2: [1,0,0, 0,0,0, 0,0,1],
+      3: [1,0,0, 0,1,0, 0,0,1],
+      4: [1,0,1, 0,0,0, 1,0,1],
+      5: [1,0,1, 0,1,0, 1,0,1],
+      6: [1,0,1, 1,0,1, 1,0,1],
+    };
+    const grid = map[num] || map[1];
+    const cells = grid.map(v => v ? `<span class="pip"></span>` : `<span class="pip empty"></span>`).join("");
+    return `<div class="face ${cls}"><div class="pips">${cells}</div></div>`;
+  }
 
   draw();
 }
+
 
 /* =========================
    MINES PRO
@@ -1087,4 +1212,5 @@ function renderCrash() {
 }
 
 setScreen("menu");
+
 
