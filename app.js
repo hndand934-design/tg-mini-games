@@ -51,99 +51,96 @@ function renderTopBar() {
 }
 renderTopBar();
 
-// ===============================
-// SFX (без файлов) — WebAudio
-// ===============================
-let _ac = null;
-function audioCtx() {
-  if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)();
-  return _ac;
+// ---------- SFX (modern, no files) ----------
+let _audioCtx = null;
+
+function getAudio() {
+  if (_audioCtx) return _audioCtx;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  _audioCtx = Ctx ? new Ctx() : null;
+  return _audioCtx;
 }
-function playClick() {
-  try {
-    const ac = audioCtx();
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type = "square";
-    o.frequency.setValueAtTime(600, ac.currentTime);
-    g.gain.setValueAtTime(0.07, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.05);
-    o.connect(g).connect(ac.destination);
-    o.start();
-    o.stop(ac.currentTime + 0.06);
-  } catch {}
+
+function playTone({ type = "sine", f = 440, t = 0.08, g = 0.07, detune = 0, when = 0 }) {
+  const ctx = getAudio();
+  if (!ctx) return;
+
+  const now = ctx.currentTime + when;
+  const o = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const filt = ctx.createBiquadFilter();
+
+  o.type = type;
+  o.frequency.setValueAtTime(f, now);
+  o.detune.setValueAtTime(detune, now);
+
+  filt.type = "lowpass";
+  filt.frequency.setValueAtTime(12000, now);
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(g, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + t);
+
+  o.connect(filt);
+  filt.connect(gain);
+  gain.connect(ctx.destination);
+
+  o.start(now);
+  o.stop(now + t + 0.02);
 }
-function playRoll() {
-  // мягкий "шорох" броска
-  try {
-    const ac = audioCtx();
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    const f = ac.createBiquadFilter();
-    o.type = "triangle";
-    o.frequency.setValueAtTime(220, ac.currentTime);
-    o.frequency.exponentialRampToValueAtTime(90, ac.currentTime + 0.6);
-    f.type = "lowpass";
-    f.frequency.setValueAtTime(900, ac.currentTime);
-    f.frequency.exponentialRampToValueAtTime(240, ac.currentTime + 0.6);
-    g.gain.setValueAtTime(0.0001, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.09, ac.currentTime + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.0008, ac.currentTime + 0.7);
-    o.connect(f).connect(g).connect(ac.destination);
-    o.start();
-    o.stop(ac.currentTime + 0.72);
-  } catch {}
+
+function playNoise({ t = 0.10, g = 0.03, when = 0, hp = 900 }) {
+  const ctx = getAudio();
+  if (!ctx) return;
+
+  const now = ctx.currentTime + when;
+  const bufferSize = Math.floor(ctx.sampleRate * t);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(g, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + t);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.setValueAtTime(hp, now);
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+
+  src.start(now);
+  src.stop(now + t + 0.02);
 }
-function playWin() {
-  try {
-    const ac = audioCtx();
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(440, ac.currentTime);
-    o.frequency.setValueAtTime(660, ac.currentTime + 0.08);
-    o.frequency.setValueAtTime(880, ac.currentTime + 0.16);
-    g.gain.setValueAtTime(0.0001, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.12, ac.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.28);
-    o.connect(g).connect(ac.destination);
-    o.start();
-    o.stop(ac.currentTime + 0.3);
-  } catch {}
+
+// Coin: swoosh + impact + win/lose
+function sfxCoinStart() {
+  // swoosh
+  playNoise({ t: 0.12, g: 0.025, hp: 1200, when: 0 });
+  playTone({ type: "triangle", f: 420, t: 0.11, g: 0.03, when: 0.01 });
+  playTone({ type: "triangle", f: 320, t: 0.11, g: 0.02, when: 0.02 });
 }
-function playLose() {
-  try {
-    const ac = audioCtx();
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type = "sawtooth";
-    o.frequency.setValueAtTime(220, ac.currentTime);
-    o.frequency.exponentialRampToValueAtTime(120, ac.currentTime + 0.25);
-    g.gain.setValueAtTime(0.0001, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.10, ac.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.28);
-    o.connect(g).connect(ac.destination);
-    o.start();
-    o.stop(ac.currentTime + 0.3);
-  } catch {}
+function sfxCoinImpact() {
+  // soft metallic tick
+  playTone({ type: "sine", f: 980, t: 0.06, g: 0.05, when: 0 });
+  playTone({ type: "sine", f: 1560, t: 0.05, g: 0.03, when: 0.01 });
+  playNoise({ t: 0.06, g: 0.015, hp: 2500, when: 0.005 });
 }
-function playMine() {
-  // "удар + хлопок"
-  try {
-    const ac = audioCtx();
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type = "square";
-    o.frequency.setValueAtTime(90, ac.currentTime);
-    o.frequency.setValueAtTime(60, ac.currentTime + 0.08);
-    g.gain.setValueAtTime(0.0001, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.16, ac.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.18);
-    o.connect(g).connect(ac.destination);
-    o.start();
-    o.stop(ac.currentTime + 0.20);
-  } catch {}
+function sfxWin() {
+  playTone({ type: "sine", f: 740, t: 0.10, g: 0.05, when: 0 });
+  playTone({ type: "sine", f: 932, t: 0.12, g: 0.045, when: 0.05 });
+  playTone({ type: "sine", f: 1244, t: 0.14, g: 0.040, when: 0.10 });
 }
+function sfxLose() {
+  playTone({ type: "sine", f: 220, t: 0.16, g: 0.06, when: 0 });
+  playTone({ type: "sine", f: 165, t: 0.18, g: 0.05, when: 0.06 });
+}
+
 
 // ===============================
 // Навигация
@@ -218,194 +215,416 @@ function renderMenu() {
   `;
 }
 
-// ============================
-// COIN FLIP PRO (3D + серия)
-// ============================
+// --- COIN FLIP PRO (3D + streak multipliers + sounds) ---
+let coinState = {
+  choice: "heads",      // heads/tails
+  bet: 50,
+  spinning: false,
+  sfx: true,
 
-// храним прогресс серии локально (чтобы "хотелось дальше кидать")
-const COIN_STATE_KEY = "coinflip_state_v1";
-function loadCoinState() {
-  try {
-    const s = JSON.parse(localStorage.getItem(COIN_STATE_KEY) || "null");
-    if (s && typeof s === "object") return s;
-  } catch {}
-  return {
-    seriesEnabled: true,
-    seriesStep: 0,       // 0..N-1
-    seriesActive: false, // в процессе серии
-    seriesBet: 50,
-    seriesChoice: "heads",
-    lastResult: null,
-    sound: true,
+  streakOn: true,
+  streakIndex: 0,       // 0..N
+  // как на скрине (примерно): x1.94, x3.88, x7.76, x15.52
+  streakSteps: [1.94, 3.88, 7.76, 15.52],
+
+  lastResult: null,     // heads/tails
+  lastMsg: ""
+};
+
+function renderCoin() {
+  const chips = [10, 50, 100, 250, 500];
+
+  const mult = coinState.streakOn
+    ? coinState.streakSteps[Math.min(coinState.streakIndex, coinState.streakSteps.length - 1)]
+    : 1.94;
+
+  const possibleWin = Math.floor(coinState.bet * mult);
+
+  screenEl.innerHTML = `
+    <div class="cfWrap">
+      <div class="cfGrid">
+
+        <div class="cfCard">
+          <div class="cfTitle">Coin Flip</div>
+          <div class="cfSub">
+            Выбери сторону, сделай ставку и бросай монету.<br/>
+            Серия даёт растущий множитель — можно продолжать или “забрать”.
+          </div>
+
+          <div class="coinStage" style="margin-top:10px;">
+            <div class="coinShadow" id="coinShadow"></div>
+            <div class="coin3D coinBlank" id="coin3D">
+              <div class="rim"></div>
+              <div class="face front"><div class="label">ОРЁЛ</div></div>
+              <div class="face back"><div class="label">РЕШКА</div></div>
+            </div>
+          </div>
+
+          <div class="cfRow" style="margin-top:10px;">
+            <button class="cfPill ${coinState.choice === "heads" ? "active" : ""}" id="pickHeads" ${coinState.spinning ? "disabled" : ""}>🦅 Орёл</button>
+            <button class="cfPill ${coinState.choice === "tails" ? "active" : ""}" id="pickTails" ${coinState.spinning ? "disabled" : ""}>🌙 Решка</button>
+
+            <div style="flex:1"></div>
+
+            <div class="cfToggle">
+              <div style="opacity:.8;font-size:12px;font-weight:800;">Звук</div>
+              <div class="cfSwitch ${coinState.sfx ? "on" : ""}" id="sfxSwitch"></div>
+            </div>
+          </div>
+
+          <div class="cfInfoGrid">
+            <div class="cfBox">
+              <div class="h">Множитель</div>
+              <div class="v">x${mult.toFixed(2)}</div>
+            </div>
+            <div class="cfBox">
+              <div class="h">Возможный выигрыш</div>
+              <div class="v">+${possibleWin} 🪙</div>
+            </div>
+          </div>
+
+          <div class="cfRow" style="margin-top:10px;">
+            <div class="cfToggle">
+              <div style="opacity:.8;font-size:12px;font-weight:800;">Серия</div>
+              <div class="cfSwitch ${coinState.streakOn ? "on" : ""}" id="streakSwitch" ${coinState.spinning ? "style='pointer-events:none;opacity:.6;'" : ""}></div>
+            </div>
+
+            <div class="cfRow" style="gap:8px; margin-left:auto;">
+              ${coinState.streakSteps.map((v, i) => `
+                <span class="cfChip" style="${i === coinState.streakIndex && coinState.streakOn ? "outline:2px solid rgba(76,133,255,.85);" : ""}">
+                  x${v.toFixed(2)}
+                </span>
+              `).join("")}
+            </div>
+          </div>
+
+          <div class="cfMsg" id="coinMsg">${coinState.lastMsg || ""}</div>
+
+          <div class="cfRow" style="margin-top:10px; gap:10px;">
+            <button class="cfBtn" id="coinThrow" ${coinState.spinning ? "disabled" : ""} style="flex:1;">
+              Бросить
+            </button>
+            <button class="cfBtnGhost" id="coinCash" ${coinState.streakOn && coinState.streakIndex > 0 ? "" : "disabled"}>
+              Забрать
+            </button>
+          </div>
+
+          <div style="opacity:.65;font-size:12px;margin-top:10px;">
+            Виртуальные монеты 🪙, без вывода.
+          </div>
+        </div>
+
+        <div class="cfCard">
+          <div class="cfRow" style="justify-content:space-between;align-items:center;">
+            <div class="cfTitle" style="margin:0;">Ставка</div>
+            <div class="cfChip" style="font-weight:950;">Баланс: <b>🪙 ${wallet.coins}</b></div>
+          </div>
+
+          <div class="cfChips">
+            ${chips.map(v => `<button class="cfChip" data-bet="${v}">${v}</button>`).join("")}
+            <button class="cfChip" data-bet="max">MAX</button>
+          </div>
+
+          <div class="cfBetRow">
+            <button class="cfMiniBtn" id="betMinus">-</button>
+            <input class="cfInput" id="bet" type="number" min="1" step="1" value="${coinState.bet}">
+            <button class="cfMiniBtn" id="betPlus">+</button>
+          </div>
+
+          <div class="cfRightHint">
+            Ставка списывается при “Бросить”.<br/>
+            Серия: если выиграл — множитель растёт, если проиграл — серия сбрасывается.
+          </div>
+
+          <div class="cfRow" style="margin-top:12px;">
+            <button class="cfBtnGhost" id="bonusCoins" style="width:100%;">+1000 🪙</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  // --- UI bindings ---
+  const coinEl = document.getElementById("coin3D");
+  const msgEl = document.getElementById("coinMsg");
+
+  // allow changing side ANY time except while spinning (фикс твоей проблемы)
+  document.getElementById("pickHeads").onclick = () => { if (!coinState.spinning) { coinState.choice = "heads"; renderCoin(); } };
+  document.getElementById("pickTails").onclick = () => { if (!coinState.spinning) { coinState.choice = "tails"; renderCoin(); } };
+
+  document.getElementById("sfxSwitch").onclick = () => {
+    coinState.sfx = !coinState.sfx;
+    renderCoin();
   };
-}
-function saveCoinState() {
-  localStorage.setItem(COIN_STATE_KEY, JSON.stringify(coinState));
-}
-let coinState = loadCoinState();
 
-// множители "как на скрине" — растущие цели
-// (в серии ты можешь "забрать" или рискнуть дальше)
-const SERIES_MULTS = [1.94, 3.88, 7.76, 15.52];
+  document.getElementById("streakSwitch").onclick = () => {
+    if (coinState.spinning) return;
+    coinState.streakOn = !coinState.streakOn;
+    // если выключили серию — сбросим прогресс серии
+    if (!coinState.streakOn) coinState.streakIndex = 0;
+    renderCoin();
+  };
 
-// --- CoinFlip styles (one-time) ---
-if (!document.getElementById("coinflip-pro-style")) {
+  // bet controls
+  const betInput = document.getElementById("bet");
+  const clampBet = () => {
+    let v = Math.floor(Number(betInput.value) || 0);
+    if (v < 1) v = 1;
+    if (v > wallet.coins) v = wallet.coins;
+    coinState.bet = v;
+    betInput.value = String(v);
+  };
+  clampBet();
+
+  document.querySelectorAll(".cfChip[data-bet]").forEach((b) => {
+    b.onclick = () => {
+      const val = b.dataset.bet;
+      betInput.value = val === "max" ? String(wallet.coins) : String(val);
+      clampBet();
+    };
+  });
+
+  document.getElementById("betMinus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) - 10); clampBet(); };
+  document.getElementById("betPlus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) + 10); clampBet(); };
+  betInput.oninput = clampBet;
+
+  document.getElementById("bonusCoins").onclick = () => addCoins(1000);
+
+  // --- mechanics ---
+  function currentMult() {
+    if (!coinState.streakOn) return 1.94;
+    return coinState.streakSteps[Math.min(coinState.streakIndex, coinState.streakSteps.length - 1)];
+  }
+
+  function cashOut() {
+    if (!(coinState.streakOn && coinState.streakIndex > 0)) return;
+    const m = currentMult();
+    const payout = Math.floor(coinState.bet * m);
+    addCoins(payout);
+    coinState.lastMsg = `✅ Забрал: +${payout} 🪙 (x${m.toFixed(2)})`;
+    coinState.streakIndex = 0;
+    coinState.lastResult = null;
+    renderCoin();
+  }
+
+  document.getElementById("coinCash").onclick = cashOut;
+
+  async function throwCoin() {
+    clampBet();
+    const bet = coinState.bet;
+
+    if (bet <= 0) return alert("Ставка должна быть больше 0");
+    if (bet > wallet.coins) return alert("Недостаточно монет");
+
+    // списываем сразу
+    addCoins(-bet);
+
+    coinState.spinning = true;
+    msgEl.textContent = "Монета в воздухе…";
+
+    // включаем звук (нужен user gesture)
+    if (coinState.sfx) {
+      const ctx = getAudio();
+      if (ctx && ctx.state === "suspended") ctx.resume().catch(()=>{});
+      sfxCoinStart();
+    }
+
+    // “пустая” монета в начале броска
+    coinEl.classList.add("coinBlank");
+
+    // рандом конечного вращения
+    const rz = (Math.random() * 420 + 380) | 0;     // 380..800
+    const rx = (Math.random() * 900 + 1300) | 0;    // 1300..2200
+    coinEl.style.setProperty("--rz", `${rz}deg`);
+    coinEl.style.setProperty("--rx", `${rx}deg`);
+
+    // запускаем анимацию
+    coinEl.classList.remove("coinAnim");
+    void coinEl.offsetWidth; // reflow
+    coinEl.classList.add("coinAnim");
+
+    // результат выбираем заранее (честный RNG у тебя уже есть)
+    const res = randFloat() < 0.5 ? "heads" : "tails";
+
+    // удар/приземление ближе к концу
+    setTimeout(() => { if (coinState.sfx) sfxCoinImpact(); }, 850);
+
+    // дождёмся окончания анимации
+    await new Promise(r => setTimeout(r, 1050));
+
+    // показываем грань после “приземления”
+    coinEl.classList.remove("coinBlank");
+    // фиксируем сторону монеты: heads -> фронт, tails -> бэк
+    // (через rotateY 0 / 180)
+    coinEl.style.transform = res === "heads"
+      ? "rotateY(0deg)"
+      : "rotateY(180deg)";
+
+    // расчёт выигрыша
+    const won = (coinState.choice === res);
+    const m = currentMult();
+
+    if (won) {
+      const payout = Math.floor(bet * m);
+      addCoins(payout);
+
+      if (coinState.streakOn) {
+        // продвигаем серию (но даём выбирать сторону дальше — мы НЕ блокируем)
+        coinState.streakIndex = Math.min(coinState.streakIndex + 1, coinState.streakSteps.length - 1);
+      }
+
+      coinState.lastMsg = `✅ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · Выигрыш +${payout} 🪙 (x${m.toFixed(2)})`;
+      if (coinState.sfx) sfxWin();
+    } else {
+      coinState.lastMsg = `❌ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · Проигрыш -${bet} 🪙`;
+      // серия сбрасывается при проигрыше
+      coinState.streakIndex = 0;
+      if (coinState.sfx) sfxLose();
+    }
+
+    coinState.lastResult = res;
+    coinState.spinning = false;
+
+    renderCoin();
+  }
+
+  document.getElementById("coinThrow").onclick = throwCoin;
+}
+
+// --- CoinFlip PRO styles (one-time) ---
+if (!document.getElementById("coinflip-style")) {
   const st = document.createElement("style");
-  st.id = "coinflip-pro-style";
+  st.id = "coinflip-style";
   st.textContent = `
-  .cfWrap{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;}
-  .cfLeft{flex:1;min-width:260px;}
-  .cfRight{width:280px;min-width:260px;}
-  .cfTitle{font-weight:900;font-size:16px;margin-bottom:4px;}
-  .cfSub{opacity:.78;font-size:12px;line-height:1.25}
-  .cfPanel{
-    padding:12px;border-radius:16px;
-    background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.10);
-  }
+  .cfWrap{display:grid;gap:12px;}
+  .cfGrid{display:grid;grid-template-columns:1.15fr .85fr;gap:12px;align-items:start;}
+  @media (max-width: 520px){ .cfGrid{grid-template-columns:1fr;} }
 
-  .seriesRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
-  .pill{
-    padding:8px 10px;border-radius:999px;
-    background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.10);
-    font-weight:800;font-size:12px;color:#e8eefc;
-    user-select:none;
-  }
-  .pill.dim{opacity:.55}
-  .toggle{
-    display:flex;align-items:center;gap:8px;
-    padding:8px 10px;border-radius:12px;
-    background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.10);
-    cursor:pointer;font-weight:800;font-size:12px;
-  }
-  .toggle b{opacity:.9}
-  .toggle .dot{
-    width:36px;height:20px;border-radius:999px;
-    background:rgba(255,255,255,.10);
-    border:1px solid rgba(255,255,255,.14);
-    position:relative;
-  }
-  .toggle .dot:after{
-    content:""; position:absolute; top:2px; left:2px;
-    width:16px;height:16px;border-radius:50%;
-    background:rgba(255,255,255,.65);
-    transition: transform .18s ease;
-  }
-  .toggle.on .dot{ background:rgba(76,125,255,.20); border-color:rgba(76,125,255,.35); }
-  .toggle.on .dot:after{ transform: translateX(16px); background:rgba(76,125,255,.85); }
+  .cfCard{border-radius:18px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);box-shadow:0 12px 40px rgba(0,0,0,.22);padding:12px;}
+  .cfTitle{font-weight:900;font-size:15px;margin-bottom:4px;}
+  .cfSub{opacity:.78;font-size:12px;line-height:1.25;}
+  .cfRow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .cfPill{padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.05);font-weight:800;font-size:12px;cursor:pointer;color:#e8eefc;}
+  .cfPill.active{outline:2px solid rgba(76,133,255,.85);background:rgba(76,133,255,.14);}
+  .cfToggle{display:flex;align-items:center;gap:8px;}
+  .cfSwitch{width:44px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);position:relative;cursor:pointer;}
+  .cfSwitch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.86);transition:transform .18s ease;}
+  .cfSwitch.on{background:rgba(76,133,255,.18);border-color:rgba(76,133,255,.28);}
+  .cfSwitch.on::after{transform:translateX(18px);background:#fff;}
 
-  .choiceRow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
-  .choiceBtn{
-    flex:1;
-    padding:10px 12px;border-radius:12px;
-    background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.10);
-    cursor:pointer;font-weight:900;color:#e8eefc;
-    display:flex;justify-content:center;align-items:center;gap:8px;
-    min-width:120px;
-  }
-  .choiceBtn.active{outline:2px solid rgba(76,133,255,.85);}
-
-  /* === 3D coin stage === */
+  /* --- 3D coin --- */
   .coinStage{
-    height:220px;
-    display:flex;align-items:center;justify-content:center;
-    perspective: 900px;
-    border-radius:16px;
-    background: radial-gradient(circle at 50% 35%, rgba(255,220,120,.10), rgba(0,0,0,0));
+    height:210px;
+    border-radius:18px;
+    background:
+      radial-gradient(120px 120px at 50% 40%, rgba(255,255,255,.07), rgba(0,0,0,0)),
+      linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
     border:1px solid rgba(255,255,255,.08);
+    display:grid;place-items:center;
+    perspective:900px;
     position:relative;
     overflow:hidden;
   }
-  .coinGlow{
-    position:absolute; inset:-60px;
-    background: radial-gradient(circle at 50% 50%, rgba(255,200,80,.18), rgba(0,0,0,0) 60%);
-    filter: blur(10px);
-    opacity:.9;
-    pointer-events:none;
-    transition: opacity .2s ease;
+  .coinShadow{
+    position:absolute;bottom:34px;
+    width:120px;height:26px;border-radius:50%;
+    background:rgba(0,0,0,.35);
+    filter:blur(10px);
+    transform:scale(.75);
+    opacity:.55;
   }
-  .coin{
-    width:112px;height:112px;border-radius:50%;
+  .coin3D{
+    width:118px;height:118px;
     position:relative;
     transform-style:preserve-3d;
-    transform: translateY(8px) rotateX(18deg) rotateY(12deg);
-    filter: drop-shadow(0 18px 18px rgba(0,0,0,.35));
-  }
-  .coinFace{
-    position:absolute; inset:0;
     border-radius:50%;
+    will-change:transform;
+  }
+  .coin3D .face{
+    position:absolute;inset:0;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:950;
+    letter-spacing:.6px;
+    text-transform:uppercase;
     backface-visibility:hidden;
-    display:flex;align-items:center;justify-content:center;
-    font-weight:1000;
-    letter-spacing:.5px;
+    border:1px solid rgba(255,255,255,.18);
+    box-shadow:
+      0 14px 36px rgba(0,0,0,.35),
+      0 0 0 2px rgba(0,0,0,.12) inset;
   }
-  .coinFront{
+  .coin3D .front{
+    transform:translateZ(7px);
     background:
-      radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), rgba(255,255,255,.08) 45%, rgba(0,0,0,.10) 72%),
-      linear-gradient(180deg, rgba(255,210,90,.95), rgba(255,170,50,.80));
-    border:1px solid rgba(255,220,120,.55);
+      radial-gradient(circle at 30% 25%, rgba(255,255,255,.20), rgba(255,255,255,0) 55%),
+      radial-gradient(circle at 70% 80%, rgba(255,255,255,.08), rgba(255,255,255,0) 55%),
+      linear-gradient(145deg, rgba(255,210,95,.95), rgba(180,120,20,.95));
   }
-  .coinBack{
-    transform: rotateY(180deg);
+  .coin3D .back{
+    transform:rotateY(180deg) translateZ(7px);
     background:
-      radial-gradient(circle at 30% 30%, rgba(255,255,255,.30), rgba(255,255,255,.08) 45%, rgba(0,0,0,.12) 72%),
-      linear-gradient(180deg, rgba(220,240,255,.95), rgba(130,190,255,.78));
-    border:1px solid rgba(170,220,255,.55);
+      radial-gradient(circle at 30% 25%, rgba(255,255,255,.20), rgba(255,255,255,0) 55%),
+      radial-gradient(circle at 70% 80%, rgba(255,255,255,.08), rgba(255,255,255,0) 55%),
+      linear-gradient(145deg, rgba(220,240,255,.9), rgba(90,140,190,.95));
   }
-  .coinMark{
-    width:78%;height:78%;
+  .coin3D .rim{
+    position:absolute;inset:-2px;
     border-radius:50%;
-    border:2px solid rgba(0,0,0,.18);
-    display:flex;align-items:center;justify-content:center;
-    background:rgba(255,255,255,.06);
-    box-shadow: 0 0 0 1px rgba(255,255,255,.10) inset;
-    font-size:40px;
+    transform:translateZ(0px);
+    background:conic-gradient(from 0deg,
+      rgba(255,255,255,.18), rgba(0,0,0,.08),
+      rgba(255,255,255,.16), rgba(0,0,0,.10),
+      rgba(255,255,255,.18));
+    filter:blur(.2px);
+    opacity:.55;
+  }
+  .coinBlank .front .label, .coinBlank .back .label{opacity:0;}
+  .label{
+    font-size:15px;
+    padding:8px 12px;
+    border-radius:14px;
+    background:rgba(0,0,0,.16);
+    border:1px solid rgba(255,255,255,.18);
+    text-shadow:0 2px 12px rgba(0,0,0,.35);
   }
 
-  /* throw animation */
-  .coin.isThrow{
-    animation: coinThrow 1.15s cubic-bezier(.12,.74,.08,1) both;
+  .coinAnim{
+    --rz: 540deg;
+    --rx: 1440deg;
+    animation: coinThrow 1.05s cubic-bezier(.18,.8,.18,1) both;
   }
   @keyframes coinThrow{
-    0%   { transform: translateY(45px) translateZ(0) rotateX(25deg) rotateY(10deg) rotateZ(0deg); }
-    18%  { transform: translateY(-25px) translateZ(60px) rotateX(180deg) rotateY(240deg) rotateZ(35deg); }
-    42%  { transform: translateY(-62px) translateZ(140px) rotateX(520deg) rotateY(680deg) rotateZ(90deg); }
-    70%  { transform: translateY(10px) translateZ(50px)  rotateX(880deg) rotateY(980deg) rotateZ(150deg); }
-    100% { transform: translateY(18px) translateZ(0) rotateX(var(--finalX)) rotateY(var(--finalY)) rotateZ(10deg); }
-  }
-  .coinStage.shake{
-    animation: stageShake .22s ease-in-out both;
-  }
-  @keyframes stageShake{
-    0%{ transform: translateX(0px); }
-    25%{ transform: translateX(-3px); }
-    50%{ transform: translateX(3px); }
-    75%{ transform: translateX(-2px); }
-    100%{ transform: translateX(0px); }
+    0%   { transform: translateY(24px) rotateX(0deg) rotateZ(0deg) scale(.98); }
+    18%  { transform: translateY(-56px) rotateX(calc(var(--rx) * .35)) rotateZ(calc(var(--rz) * .25)) scale(1.02); }
+    55%  { transform: translateY(-88px) rotateX(calc(var(--rx) * .75)) rotateZ(calc(var(--rz) * .65)) scale(1.03); }
+    78%  { transform: translateY(-22px) rotateX(calc(var(--rx) * .92)) rotateZ(calc(var(--rz) * .92)) scale(1.00); }
+    100% { transform: translateY(0px)  rotateX(var(--rx)) rotateZ(var(--rz)) scale(1); }
   }
 
-  .cfNums{
-    display:grid; grid-template-columns:1fr 1fr;
-    gap:10px; margin-top:10px;
+  .cfInfoGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+  .cfBox{
+    border-radius:14px;
+    padding:10px 10px;
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.08);
   }
-  .cfNumBox{
-    padding:10px 12px;border-radius:14px;
-    background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.10);
-  }
-  .cfNumBox .lbl{opacity:.7;font-size:11px;margin-bottom:4px}
-  .cfNumBox .val{font-weight:1000;font-size:18px}
-
-  .cfBetRow{margin-top:12px;}
-  .cfMsg{min-height:20px;margin-top:8px;font-weight:900}
-  .cfMsg.ok{color:#bfe6c8}
-  .cfMsg.bad{color:#ffb4b4}
+  .cfBox .h{opacity:.7;font-size:11px;}
+  .cfBox .v{font-weight:950;font-size:16px;margin-top:4px;}
+  .cfMsg{min-height:18px;margin-top:8px;font-weight:900;}
+  .cfBtn{padding:12px 14px;border-radius:14px;background:rgba(76,133,255,.92);border:1px solid rgba(76,133,255,.35);color:#fff;font-weight:950;cursor:pointer;}
+  .cfBtn:disabled{opacity:.55;cursor:not-allowed;}
+  .cfBtnGhost{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);color:#e8eefc;font-weight:900;cursor:pointer;}
+  .cfBetRow{display:flex;gap:8px;align-items:center;margin-top:10px;}
+  .cfInput{flex:1;padding:11px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:#e8eefc;outline:none;}
+  .cfMiniBtn{width:44px;height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:#e8eefc;font-weight:950;cursor:pointer;}
+  .cfChips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .cfChip{padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:#e8eefc;font-weight:800;font-size:12px;cursor:pointer;}
+  .cfRightHint{opacity:.75;font-size:12px;line-height:1.25;margin-top:10px;}
   `;
   document.head.appendChild(st);
 }
+
 
 // --- Sounds (no external files) ---
 function cfBeep(type = "tap") {
@@ -798,7 +1017,6 @@ function renderCoin() {
   // если серия активна — включим кнопку "Забрать"
   document.getElementById("cfCash").disabled = !coinState.seriesActive;
 }
-
 
 // ===============================
 // DICE PRO — “как бросок” + звук + задержка фиксации
@@ -1795,7 +2013,6 @@ function renderCrash() {
 }
 
 setScreen("menu");
-
 
 
 
