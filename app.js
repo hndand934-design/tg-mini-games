@@ -177,173 +177,181 @@ function setScreen(name) {
   renderCoin();
 }
 
-// ===============================
-// COIN FLIP (Purple idle -> Gold/Silver after bet)
-// ===============================
-const coinState = {
+// --- COIN FLIP (фиолетовая во время броска -> золото/серебро после) ---
+let coinState = {
   choice: "heads",
   bet: 50,
   spinning: false,
   sfx: true,
+
   streakOn: true,
   streakIndex: 0,
   streakSteps: [1.94, 3.88, 7.76, 15.52],
+
   lastMsg: "",
-  // NEW:
-  skin: "neutral", // "neutral" | "gold" | "silver"
-  armed: false,    // false = ставка не "поставлена" (не нажимали Бросить после последней смены ставки)
+
+  // NEW: текущий скин монеты
+  skin: "purple", // "purple" | "gold" | "silver"
 };
 
-function coinSetNeutral() {
-  coinState.armed = false;
-  coinState.skin = "neutral";
-}
-
 function renderCoin() {
+  const chips = [10, 50, 100, 250, 500];
+
   const mult = coinState.streakOn
     ? coinState.streakSteps[Math.min(coinState.streakIndex, coinState.streakSteps.length - 1)]
     : 1.94;
+
   const possibleWin = Math.floor(coinState.bet * mult);
 
   screenEl.innerHTML = `
-    <div class="card">
-      <div class="row">
-        <div>
-          <div class="h1">Coin Flip</div>
-          <div class="muted">Выбери сторону, сделай ставку и бросай монету. Серия даёт рост множителя.</div>
-        </div>
-        <div class="spacer"></div>
-        <div class="badge">Баланс: <b>🪙 ${wallet.coins}</b></div>
-      </div>
+    <div class="cfWrap">
+      <div class="cfGrid">
 
-      <div class="cfGrid" style="margin-top:12px;">
-        <div class="card" style="box-shadow:none;">
-          <div class="coinStage">
+        <div class="cfCard">
+          <div class="cfTitle">Coin Flip</div>
+          <div class="cfSub">
+            Выбери сторону, сделай ставку и бросай монету. Серия даёт рост множителя.
+          </div>
+
+          <div class="coinStage" style="margin-top:10px;">
             <div class="coinShadow" id="coinShadow"></div>
 
-            <div class="coin3D ${coinState.skin === "neutral" ? "skinNeutral" : ""} ${coinState.skin === "gold" ? "skinGold" : ""} ${coinState.skin === "silver" ? "skinSilver" : ""} ${coinState.skin === "neutral" ? "coinBlank" : ""}"
+            <div class="coin3D ${coinState.skin === "purple" ? "skinPurple coinBlank" : ""} ${coinState.skin === "gold" ? "skinGold" : ""} ${coinState.skin === "silver" ? "skinSilver" : ""}"
                  id="coin3D">
               <div class="rim"></div>
+              <div class="face front"><div class="label">ОРЁЛ</div></div>
+              <div class="face back"><div class="label">РЕШКА</div></div>
+            </div>
+          </div>
 
-              <div class="face front">
-                <div class="coinLabel">ОРЁЛ</div>
-              </div>
+          <div class="cfRow" style="margin-top:10px;">
+            <button class="cfPill ${coinState.choice === "heads" ? "active" : ""}" id="pickHeads" ${coinState.spinning ? "disabled" : ""}>🦅 Орёл</button>
+            <button class="cfPill ${coinState.choice === "tails" ? "active" : ""}" id="pickTails" ${coinState.spinning ? "disabled" : ""}>🌙 Решка</button>
 
-              <div class="face back">
-                <div class="coinLabel">РЕШКА</div>
-              </div>
+            <div style="flex:1"></div>
+
+            <div class="cfToggle">
+              <div style="opacity:.8;font-size:12px;font-weight:800;">Звук</div>
+              <div class="cfSwitch ${coinState.sfx ? "on" : ""}" id="sfxSwitch"></div>
+            </div>
+          </div>
+
+          <div class="cfInfoGrid">
+            <div class="cfBox">
+              <div class="h">Множитель</div>
+              <div class="v">x${mult.toFixed(2)}</div>
+            </div>
+            <div class="cfBox">
+              <div class="h">Возможный выигрыш</div>
+              <div class="v">+${possibleWin} 🪙</div>
+            </div>
+          </div>
+
+          <div class="cfRow" style="margin-top:10px;">
+            <div class="cfToggle">
+              <div style="opacity:.8;font-size:12px;font-weight:800;">Серия</div>
+              <div class="cfSwitch ${coinState.streakOn ? "on" : ""}" id="streakSwitch" ${coinState.spinning ? "style='pointer-events:none;opacity:.6;'" : ""}></div>
             </div>
 
-            <div class="coinGlow" aria-hidden="true"></div>
+            <div class="cfRow" style="gap:8px; margin-left:auto;">
+              ${coinState.streakSteps.map((v, i) => `
+                <span class="cfChip" style="${i === coinState.streakIndex && coinState.streakOn ? "outline:2px solid rgba(76,133,255,.85);" : ""}">
+                  x${v.toFixed(2)}
+                </span>
+              `).join("")}
+            </div>
           </div>
 
-          <div class="row" style="margin-top:10px;">
-            <button class="chip ${coinState.choice==="heads"?"active":""}" id="pickHeads" ${coinState.spinning?"disabled":""}>🦅 Орёл</button>
-            <button class="chip ${coinState.choice==="tails"?"active":""}" id="pickTails" ${coinState.spinning?"disabled":""}>🌙 Решка</button>
-            <div class="spacer"></div>
-            <button class="chip ${coinState.sfx?"active":""}" id="toggleSfx">Звук</button>
-            <button class="chip ${coinState.streakOn?"active":""}" id="toggleStreak">Серия</button>
-          </div>
+          <div class="cfMsg" id="coinMsg">${coinState.lastMsg || ""}</div>
 
-          <div class="kpiGrid">
-            <div class="kpi"><div class="t">Множитель</div><div class="v">x${mult.toFixed(2)}</div></div>
-            <div class="kpi"><div class="t">Возможный выигрыш</div><div class="v">+${possibleWin} 🪙</div></div>
-            <div class="kpi"><div class="t">Статус</div><div class="v">${coinState.armed ? "Ставка поставлена" : "Ждёт ставку"}</div></div>
-          </div>
-
-          <div class="msgLine" id="coinMsg">${coinState.lastMsg || ""}</div>
-
-          <div class="row" style="margin-top:10px;">
-            <button class="btn" id="coinThrow" style="flex:1" ${coinState.spinning?"disabled":""}>Бросить</button>
-            <button class="btn ghost" id="coinCash" ${coinState.streakOn && coinState.streakIndex>0 ? "" : "disabled"}>Забрать</button>
+          <div class="cfRow" style="margin-top:10px; gap:10px;">
+            <button class="cfBtn" id="coinThrow" ${coinState.spinning ? "disabled" : ""} style="flex:1;">
+              Бросить
+            </button>
+            <button class="cfBtnGhost" id="coinCash" ${coinState.streakOn && coinState.streakIndex > 0 ? "" : "disabled"}>
+              Забрать
+            </button>
           </div>
         </div>
 
-        <div class="card" style="box-shadow:none;">
-          <div class="h1">Ставка</div>
-          <div class="row" style="margin-top:8px;">
-            ${[10,50,100,250,500].map(v=>`<button class="chip" data-bet="${v}">${v}</button>`).join("")}
-            <button class="chip" data-bet="max">MAX</button>
+        <div class="cfCard">
+          <div class="cfRow" style="justify-content:space-between;align-items:center;">
+            <div class="cfTitle" style="margin:0;">Ставка</div>
+            <div class="cfChip" style="font-weight:950;">Баланс: <b>🪙 ${wallet.coins}</b></div>
           </div>
 
-          <div class="row" style="margin-top:10px;">
-            <button class="btn ghost small" id="betMinus">-</button>
-            <input class="input" id="betInput" type="number" min="1" step="1" value="${coinState.bet}" />
-            <button class="btn ghost small" id="betPlus">+</button>
+          <div class="cfChips">
+            ${chips.map(v => `<button class="cfChip" data-bet="${v}">${v}</button>`).join("")}
+            <button class="cfChip" data-bet="max">MAX</button>
           </div>
 
-          <div class="muted" style="margin-top:10px;">
-            Фишка: пока ты не “поставил ставку” (не нажал Бросить), монета фиолетовая.
-            После броска она становится золотой/серебряной и останется такой,
-            пока ты не изменишь ставку.
+          <div class="cfBetRow">
+            <button class="cfMiniBtn" id="betMinus">-</button>
+            <input class="cfInput" id="bet" type="number" min="1" step="1" value="${coinState.bet}">
+            <button class="cfMiniBtn" id="betPlus">+</button>
           </div>
 
-          <div class="row" style="margin-top:12px;">
-            <button class="btn ghost" id="bonusCoins" style="width:100%;">+1000 🪙</button>
+          <div class="cfRightHint">
+            Ставка списывается при “Бросить”.
+          </div>
+
+          <div class="cfRow" style="margin-top:12px;">
+            <button class="cfBtnGhost" id="bonusCoins" style="width:100%;">+1000 🪙</button>
           </div>
         </div>
+
       </div>
     </div>
   `;
 
   const coinEl = document.getElementById("coin3D");
   const msgEl = document.getElementById("coinMsg");
-  const betEl = document.getElementById("betInput");
 
-  const clampBet = () => {
-    let v = Math.floor(Number(betEl.value) || 0);
-    if (v < 1) v = 1;
-    if (v > wallet.coins) v = wallet.coins;
-    coinState.bet = v;
-    betEl.value = String(v);
-  };
+  // выбор стороны (всегда можно, кроме момента вращения)
+  document.getElementById("pickHeads").onclick = () => { if (!coinState.spinning) { coinState.choice = "heads"; renderCoin(); } };
+  document.getElementById("pickTails").onclick = () => { if (!coinState.spinning) { coinState.choice = "tails"; renderCoin(); } };
 
-  // IMPORTANT: любые изменения ставки -> вернуться в нейтральный фиолетовый
-  function onBetChanged() {
-    clampBet();
-    // если монета уже показывала результат — при изменении ставки возвращаем в фиолетовый режим ожидания
-    coinSetNeutral();
-    coinState.lastMsg = "";
-    renderCoin();
-  }
+  document.getElementById("sfxSwitch").onclick = () => { coinState.sfx = !coinState.sfx; renderCoin(); };
 
-  clampBet();
-
-  document.getElementById("pickHeads").onclick = () => { if(!coinState.spinning){ coinState.choice="heads"; renderCoin(); } };
-  document.getElementById("pickTails").onclick = () => { if(!coinState.spinning){ coinState.choice="tails"; renderCoin(); } };
-
-  document.getElementById("toggleSfx").onclick = () => { coinState.sfx = !coinState.sfx; renderCoin(); };
-  document.getElementById("toggleStreak").onclick = () => {
+  document.getElementById("streakSwitch").onclick = () => {
     if (coinState.spinning) return;
     coinState.streakOn = !coinState.streakOn;
     if (!coinState.streakOn) coinState.streakIndex = 0;
     renderCoin();
   };
 
-  document.querySelectorAll("[data-bet]").forEach(b=>{
+  // bet controls
+  const betInput = document.getElementById("bet");
+  const clampBet = () => {
+    let v = Math.floor(Number(betInput.value) || 0);
+    if (v < 1) v = 1;
+    if (v > wallet.coins) v = wallet.coins;
+    coinState.bet = v;
+    betInput.value = String(v);
+  };
+  clampBet();
+
+  // ВАЖНО: при изменении ставки возвращаем монету в фиолетовую
+  const betChanged = () => {
+    clampBet();
+    coinState.skin = "purple";
+    coinState.lastMsg = "";
+    renderCoin();
+  };
+
+  document.querySelectorAll(".cfChip[data-bet]").forEach((b) => {
     b.onclick = () => {
       const val = b.dataset.bet;
-      betEl.value = val === "max" ? String(wallet.coins) : String(val);
-      onBetChanged();
+      betInput.value = val === "max" ? String(wallet.coins) : String(val);
+      betChanged();
     };
   });
 
-  document.getElementById("betMinus").onclick = () => {
-    betEl.value = String((Number(betEl.value)||1) - 10);
-    onBetChanged();
-  };
-  document.getElementById("betPlus").onclick = () => {
-    betEl.value = String((Number(betEl.value)||1) + 10);
-    onBetChanged();
-  };
+  document.getElementById("betMinus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) - 10); betChanged(); };
+  document.getElementById("betPlus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) + 10); betChanged(); };
+  betInput.onchange = betChanged;
 
-  // если пользователь руками вводит — тоже считаем "сменой ставки"
-  betEl.addEventListener("change", onBetChanged);
-  betEl.addEventListener("input", () => {
-    clampBet();
-  });
-
-  document.getElementById("bonusCoins").onclick = () => { addCoins(1000); renderCoin(); };
+  document.getElementById("bonusCoins").onclick = () => addCoins(1000);
 
   function currentMult() {
     if (!coinState.streakOn) return 1.94;
@@ -357,14 +365,10 @@ function renderCoin() {
     addCoins(payout);
     coinState.lastMsg = `✅ Забрал: +${payout} 🪙 (x${m.toFixed(2)})`;
     coinState.streakIndex = 0;
-
-    // Не возвращаем в фиолетовый! (по твоему ТЗ)
-    // Фиолетовый будет только если изменят ставку
     renderCoin();
   };
 
   document.getElementById("coinThrow").onclick = async () => {
-    await unlockAudio();
     clampBet();
     const bet = coinState.bet;
     if (bet <= 0) return alert("Ставка должна быть больше 0");
@@ -372,26 +376,35 @@ function renderCoin() {
 
     addCoins(-bet);
 
-    coinState.armed = true; // ставка поставлена
     coinState.spinning = true;
     msgEl.textContent = "Монета в воздухе…";
 
-    if (coinState.sfx && globalSound) SFX.coinStart();
+    // во время броска ВСЕГДА фиолетовая (как ты хочешь)
+    coinState.skin = "purple";
+    coinEl.classList.add("coinBlank");
 
-    // запускаем анимацию
+    if (coinState.sfx) {
+      const ctx = getAudio();
+      if (ctx && ctx.state === "suspended") ctx.resume().catch(()=>{});
+      sfxCoinStart();
+    }
+
+    // рандом вращения
     const rz = (Math.random() * 420 + 380) | 0;
     const rx = (Math.random() * 900 + 1300) | 0;
     coinEl.style.setProperty("--rz", `${rz}deg`);
     coinEl.style.setProperty("--rx", `${rx}deg`);
+
     coinEl.classList.remove("coinAnim");
     void coinEl.offsetWidth;
     coinEl.classList.add("coinAnim");
 
     const res = randFloat() < 0.5 ? "heads" : "tails";
-    setTimeout(() => { if (coinState.sfx && globalSound) SFX.coinImpact(); }, 850);
+    setTimeout(() => { if (coinState.sfx) sfxCoinImpact(); }, 850);
     await new Promise(r => setTimeout(r, 1050));
 
-    // фиксируем ориентацию и скин по результату
+    // после броска: показываем орёл/решка цветом
+    coinEl.classList.remove("coinBlank");
     if (res === "heads") {
       coinState.skin = "gold";
       coinEl.style.transform = "rotateY(0deg)";
@@ -406,15 +419,17 @@ function renderCoin() {
     if (won) {
       const payout = Math.floor(bet * m);
       addCoins(payout);
+
       if (coinState.streakOn) {
         coinState.streakIndex = Math.min(coinState.streakIndex + 1, coinState.streakSteps.length - 1);
       }
-      coinState.lastMsg = `✅ Выпало ${res==="heads"?"ОРЁЛ":"РЕШКА"} · +${payout} 🪙 (x${m.toFixed(2)})`;
-      if (coinState.sfx && globalSound) SFX.win();
+
+      coinState.lastMsg = `✅ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · +${payout} 🪙 (x${m.toFixed(2)})`;
+      if (coinState.sfx) sfxWin();
     } else {
-      coinState.lastMsg = `❌ Выпало ${res==="heads"?"ОРЁЛ":"РЕШКА"} · -${bet} 🪙`;
+      coinState.lastMsg = `❌ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · -${bet} 🪙`;
       coinState.streakIndex = 0;
-      if (coinState.sfx && globalSound) SFX.lose();
+      if (coinState.sfx) sfxLose();
     }
 
     coinState.spinning = false;
@@ -962,4 +977,5 @@ function renderMines() {
 
 // старт по умолчанию
 setScreen("coin");
+
 
