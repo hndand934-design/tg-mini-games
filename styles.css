@@ -217,20 +217,21 @@ body{
     0 0 0 2px rgba(0,0,0,.16) inset;
 }
 
-/* СКИНЫ:
-   neutral = фиолетовая (до ставки)
-   gold = орёл
-   silver = решка
-*/
-.skinNeutral .front,
-.skinNeutral .back{
+/* --- Coin skins ONLY (не трогаем геометрию/размер) --- */
+.skinPurple .front,
+.skinPurple .back{
   background:
     radial-gradient(circle at 30% 25%, rgba(255,255,255,.18), rgba(255,255,255,0) 55%),
     radial-gradient(circle at 70% 80%, rgba(255,255,255,.10), rgba(255,255,255,0) 55%),
     linear-gradient(145deg, rgba(162,96,255,.96), rgba(80,40,160,.96));
 }
 
-.skinGold .front,
+.skinGold .front{
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,.20), rgba(255,255,255,0) 55%),
+    radial-gradient(circle at 70% 80%, rgba(255,255,255,.08), rgba(255,255,255,0) 55%),
+    linear-gradient(145deg, rgba(255,210,95,.95), rgba(180,120,20,.95));
+}
 .skinGold .back{
   background:
     radial-gradient(circle at 30% 25%, rgba(255,255,255,.20), rgba(255,255,255,0) 55%),
@@ -246,8 +247,8 @@ body{
     linear-gradient(145deg, rgba(230,240,255,.96), rgba(110,140,175,.96));
 }
 
-/* пока нейтральная монета — скрываем надписи */
-.coinBlank .coinLabel{opacity:0;}
+/* скрываем надпись на фиолетовой монете */
+.skinPurple.coinBlank .label{opacity:0;}
 
 /* ===== Dice 3D / рулетка ===== */
 .diceArena{
@@ -440,4 +441,5 @@ body{
   background: rgba(42,102,255,.10);
   border-color: rgba(42,102,255,.26);
 }
+
 
