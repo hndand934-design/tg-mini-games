@@ -178,7 +178,7 @@ function setScreen(name) {
 }
 
 // ===============================
-// COIN FLIP
+// COIN FLIP (Purple idle -> Gold/Silver after bet)
 // ===============================
 const coinState = {
   choice: "heads",
@@ -188,8 +188,16 @@ const coinState = {
   streakOn: true,
   streakIndex: 0,
   streakSteps: [1.94, 3.88, 7.76, 15.52],
-  lastMsg: ""
+  lastMsg: "",
+  // NEW:
+  skin: "neutral", // "neutral" | "gold" | "silver"
+  armed: false,    // false = ставка не "поставлена" (не нажимали Бросить после последней смены ставки)
 };
+
+function coinSetNeutral() {
+  coinState.armed = false;
+  coinState.skin = "neutral";
+}
 
 function renderCoin() {
   const mult = coinState.streakOn
@@ -211,12 +219,22 @@ function renderCoin() {
       <div class="cfGrid" style="margin-top:12px;">
         <div class="card" style="box-shadow:none;">
           <div class="coinStage">
-            <div class="coinShadow"></div>
-            <div class="coin3D coinBlank" id="coin3D">
+            <div class="coinShadow" id="coinShadow"></div>
+
+            <div class="coin3D ${coinState.skin === "neutral" ? "skinNeutral" : ""} ${coinState.skin === "gold" ? "skinGold" : ""} ${coinState.skin === "silver" ? "skinSilver" : ""} ${coinState.skin === "neutral" ? "coinBlank" : ""}"
+                 id="coin3D">
               <div class="rim"></div>
-              <div class="face front"><div class="coinLabel">ОРЁЛ</div></div>
-              <div class="face back"><div class="coinLabel">РЕШКА</div></div>
+
+              <div class="face front">
+                <div class="coinLabel">ОРЁЛ</div>
+              </div>
+
+              <div class="face back">
+                <div class="coinLabel">РЕШКА</div>
+              </div>
             </div>
+
+            <div class="coinGlow" aria-hidden="true"></div>
           </div>
 
           <div class="row" style="margin-top:10px;">
@@ -230,7 +248,7 @@ function renderCoin() {
           <div class="kpiGrid">
             <div class="kpi"><div class="t">Множитель</div><div class="v">x${mult.toFixed(2)}</div></div>
             <div class="kpi"><div class="t">Возможный выигрыш</div><div class="v">+${possibleWin} 🪙</div></div>
-            <div class="kpi"><div class="t">Шаг серии</div><div class="v">${coinState.streakOn ? (coinState.streakIndex+1) : "—"}</div></div>
+            <div class="kpi"><div class="t">Статус</div><div class="v">${coinState.armed ? "Ставка поставлена" : "Ждёт ставку"}</div></div>
           </div>
 
           <div class="msgLine" id="coinMsg">${coinState.lastMsg || ""}</div>
@@ -255,7 +273,9 @@ function renderCoin() {
           </div>
 
           <div class="muted" style="margin-top:10px;">
-            Ставка списывается при броске. Серия: выиграл — множитель растёт, проиграл — сброс.
+            Фишка: пока ты не “поставил ставку” (не нажал Бросить), монета фиолетовая.
+            После броска она становится золотой/серебряной и останется такой,
+            пока ты не изменишь ставку.
           </div>
 
           <div class="row" style="margin-top:12px;">
@@ -277,6 +297,16 @@ function renderCoin() {
     coinState.bet = v;
     betEl.value = String(v);
   };
+
+  // IMPORTANT: любые изменения ставки -> вернуться в нейтральный фиолетовый
+  function onBetChanged() {
+    clampBet();
+    // если монета уже показывала результат — при изменении ставки возвращаем в фиолетовый режим ожидания
+    coinSetNeutral();
+    coinState.lastMsg = "";
+    renderCoin();
+  }
+
   clampBet();
 
   document.getElementById("pickHeads").onclick = () => { if(!coinState.spinning){ coinState.choice="heads"; renderCoin(); } };
@@ -294,12 +324,24 @@ function renderCoin() {
     b.onclick = () => {
       const val = b.dataset.bet;
       betEl.value = val === "max" ? String(wallet.coins) : String(val);
-      clampBet();
+      onBetChanged();
     };
   });
-  document.getElementById("betMinus").onclick = () => { betEl.value = String((Number(betEl.value)||1) - 10); clampBet(); };
-  document.getElementById("betPlus").onclick = () => { betEl.value = String((Number(betEl.value)||1) + 10); clampBet(); };
-  betEl.oninput = clampBet;
+
+  document.getElementById("betMinus").onclick = () => {
+    betEl.value = String((Number(betEl.value)||1) - 10);
+    onBetChanged();
+  };
+  document.getElementById("betPlus").onclick = () => {
+    betEl.value = String((Number(betEl.value)||1) + 10);
+    onBetChanged();
+  };
+
+  // если пользователь руками вводит — тоже считаем "сменой ставки"
+  betEl.addEventListener("change", onBetChanged);
+  betEl.addEventListener("input", () => {
+    clampBet();
+  });
 
   document.getElementById("bonusCoins").onclick = () => { addCoins(1000); renderCoin(); };
 
@@ -315,6 +357,9 @@ function renderCoin() {
     addCoins(payout);
     coinState.lastMsg = `✅ Забрал: +${payout} 🪙 (x${m.toFixed(2)})`;
     coinState.streakIndex = 0;
+
+    // Не возвращаем в фиолетовый! (по твоему ТЗ)
+    // Фиолетовый будет только если изменят ставку
     renderCoin();
   };
 
@@ -327,12 +372,13 @@ function renderCoin() {
 
     addCoins(-bet);
 
+    coinState.armed = true; // ставка поставлена
     coinState.spinning = true;
     msgEl.textContent = "Монета в воздухе…";
 
     if (coinState.sfx && globalSound) SFX.coinStart();
 
-    coinEl.classList.add("coinBlank");
+    // запускаем анимацию
     const rz = (Math.random() * 420 + 380) | 0;
     const rx = (Math.random() * 900 + 1300) | 0;
     coinEl.style.setProperty("--rz", `${rz}deg`);
@@ -342,12 +388,17 @@ function renderCoin() {
     coinEl.classList.add("coinAnim");
 
     const res = randFloat() < 0.5 ? "heads" : "tails";
-
     setTimeout(() => { if (coinState.sfx && globalSound) SFX.coinImpact(); }, 850);
     await new Promise(r => setTimeout(r, 1050));
 
-    coinEl.classList.remove("coinBlank");
-    coinEl.style.transform = res === "heads" ? "rotateY(0deg)" : "rotateY(180deg)";
+    // фиксируем ориентацию и скин по результату
+    if (res === "heads") {
+      coinState.skin = "gold";
+      coinEl.style.transform = "rotateY(0deg)";
+    } else {
+      coinState.skin = "silver";
+      coinEl.style.transform = "rotateY(180deg)";
+    }
 
     const won = (coinState.choice === res);
     const m = currentMult();
@@ -911,3 +962,4 @@ function renderMines() {
 
 // старт по умолчанию
 setScreen("coin");
+
