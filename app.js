@@ -218,226 +218,587 @@ function renderMenu() {
   `;
 }
 
-// ===============================
-// COIN FLIP PRO (ставка + выбор + анимация)
-// ===============================
-if (!document.getElementById("coinflip-style")) {
+// ============================
+// COIN FLIP PRO (3D + серия)
+// ============================
+
+// храним прогресс серии локально (чтобы "хотелось дальше кидать")
+const COIN_STATE_KEY = "coinflip_state_v1";
+function loadCoinState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(COIN_STATE_KEY) || "null");
+    if (s && typeof s === "object") return s;
+  } catch {}
+  return {
+    seriesEnabled: true,
+    seriesStep: 0,       // 0..N-1
+    seriesActive: false, // в процессе серии
+    seriesBet: 50,
+    seriesChoice: "heads",
+    lastResult: null,
+    sound: true,
+  };
+}
+function saveCoinState() {
+  localStorage.setItem(COIN_STATE_KEY, JSON.stringify(coinState));
+}
+let coinState = loadCoinState();
+
+// множители "как на скрине" — растущие цели
+// (в серии ты можешь "забрать" или рискнуть дальше)
+const SERIES_MULTS = [1.94, 3.88, 7.76, 15.52];
+
+// --- CoinFlip styles (one-time) ---
+if (!document.getElementById("coinflip-pro-style")) {
   const st = document.createElement("style");
-  st.id = "coinflip-style";
+  st.id = "coinflip-pro-style";
   st.textContent = `
-    .coinWrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:12px;}
-    .coinStage{
-      width:100%; height:140px; border-radius:18px;
-      background: radial-gradient(120px 90px at 50% 20%, rgba(255,255,255,.08), rgba(255,255,255,.02));
-      border:1px solid rgba(255,255,255,.08);
-      position:relative; overflow:hidden;
-      display:flex;align-items:center;justify-content:center;
-    }
-    .coinShadow{
-      position:absolute; bottom:18px; left:50%;
-      width:86px; height:16px; transform:translateX(-50%);
-      background:rgba(0,0,0,.35); filter: blur(10px);
-      border-radius:999px; opacity:.35;
-      transition: transform .25s ease, opacity .25s ease;
-    }
-    .coin3d{
-      width:96px;height:96px;border-radius:50%;
-      display:flex;align-items:center;justify-content:center;
-      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.22), rgba(255,255,255,.06));
-      border:1px solid rgba(255,255,255,.10);
-      box-shadow: 0 10px 25px rgba(0,0,0,.35);
-      font-size:44px;
-      transform-style:preserve-3d;
-      user-select:none;
-      position:relative;
-    }
-    .coin3d.spin{ animation: coinspin 1.25s cubic-bezier(.2,.9,.2,1) both; }
-    .coinShadow.spin{
-      transform:translateX(-50%) scale(1.15);
-      opacity:.55;
-    }
-    @keyframes coinspin{
-      0%   { transform: translateY(10px) rotateY(0deg) rotateX(0deg) scale(1); }
-      20%  { transform: translateY(-18px) rotateY(540deg) rotateX(120deg) scale(1.06); }
-      55%  { transform: translateY(-26px) rotateY(1260deg) rotateX(240deg) scale(1.09); }
-      85%  { transform: translateY(-10px) rotateY(1710deg) rotateX(330deg) scale(1.03); }
-      100% { transform: translateY(10px) rotateY(1980deg) rotateX(360deg) scale(1); }
-    }
-    .seg{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-    .seg button{
-      padding:10px 12px;border-radius:12px;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.10);
-      color:#e8eefc;cursor:pointer;font-weight:900;
-    }
-    .seg button.active{outline:2px solid rgba(76,133,255,.85);}
-    .small{opacity:.8;font-size:12px;line-height:1.25;}
+  .cfWrap{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;}
+  .cfLeft{flex:1;min-width:260px;}
+  .cfRight{width:280px;min-width:260px;}
+  .cfTitle{font-weight:900;font-size:16px;margin-bottom:4px;}
+  .cfSub{opacity:.78;font-size:12px;line-height:1.25}
+  .cfPanel{
+    padding:12px;border-radius:16px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.10);
+  }
+
+  .seriesRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
+  .pill{
+    padding:8px 10px;border-radius:999px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.10);
+    font-weight:800;font-size:12px;color:#e8eefc;
+    user-select:none;
+  }
+  .pill.dim{opacity:.55}
+  .toggle{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 10px;border-radius:12px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.10);
+    cursor:pointer;font-weight:800;font-size:12px;
+  }
+  .toggle b{opacity:.9}
+  .toggle .dot{
+    width:36px;height:20px;border-radius:999px;
+    background:rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.14);
+    position:relative;
+  }
+  .toggle .dot:after{
+    content:""; position:absolute; top:2px; left:2px;
+    width:16px;height:16px;border-radius:50%;
+    background:rgba(255,255,255,.65);
+    transition: transform .18s ease;
+  }
+  .toggle.on .dot{ background:rgba(76,125,255,.20); border-color:rgba(76,125,255,.35); }
+  .toggle.on .dot:after{ transform: translateX(16px); background:rgba(76,125,255,.85); }
+
+  .choiceRow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .choiceBtn{
+    flex:1;
+    padding:10px 12px;border-radius:12px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.10);
+    cursor:pointer;font-weight:900;color:#e8eefc;
+    display:flex;justify-content:center;align-items:center;gap:8px;
+    min-width:120px;
+  }
+  .choiceBtn.active{outline:2px solid rgba(76,133,255,.85);}
+
+  /* === 3D coin stage === */
+  .coinStage{
+    height:220px;
+    display:flex;align-items:center;justify-content:center;
+    perspective: 900px;
+    border-radius:16px;
+    background: radial-gradient(circle at 50% 35%, rgba(255,220,120,.10), rgba(0,0,0,0));
+    border:1px solid rgba(255,255,255,.08);
+    position:relative;
+    overflow:hidden;
+  }
+  .coinGlow{
+    position:absolute; inset:-60px;
+    background: radial-gradient(circle at 50% 50%, rgba(255,200,80,.18), rgba(0,0,0,0) 60%);
+    filter: blur(10px);
+    opacity:.9;
+    pointer-events:none;
+    transition: opacity .2s ease;
+  }
+  .coin{
+    width:112px;height:112px;border-radius:50%;
+    position:relative;
+    transform-style:preserve-3d;
+    transform: translateY(8px) rotateX(18deg) rotateY(12deg);
+    filter: drop-shadow(0 18px 18px rgba(0,0,0,.35));
+  }
+  .coinFace{
+    position:absolute; inset:0;
+    border-radius:50%;
+    backface-visibility:hidden;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:1000;
+    letter-spacing:.5px;
+  }
+  .coinFront{
+    background:
+      radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), rgba(255,255,255,.08) 45%, rgba(0,0,0,.10) 72%),
+      linear-gradient(180deg, rgba(255,210,90,.95), rgba(255,170,50,.80));
+    border:1px solid rgba(255,220,120,.55);
+  }
+  .coinBack{
+    transform: rotateY(180deg);
+    background:
+      radial-gradient(circle at 30% 30%, rgba(255,255,255,.30), rgba(255,255,255,.08) 45%, rgba(0,0,0,.12) 72%),
+      linear-gradient(180deg, rgba(220,240,255,.95), rgba(130,190,255,.78));
+    border:1px solid rgba(170,220,255,.55);
+  }
+  .coinMark{
+    width:78%;height:78%;
+    border-radius:50%;
+    border:2px solid rgba(0,0,0,.18);
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.06);
+    box-shadow: 0 0 0 1px rgba(255,255,255,.10) inset;
+    font-size:40px;
+  }
+
+  /* throw animation */
+  .coin.isThrow{
+    animation: coinThrow 1.15s cubic-bezier(.12,.74,.08,1) both;
+  }
+  @keyframes coinThrow{
+    0%   { transform: translateY(45px) translateZ(0) rotateX(25deg) rotateY(10deg) rotateZ(0deg); }
+    18%  { transform: translateY(-25px) translateZ(60px) rotateX(180deg) rotateY(240deg) rotateZ(35deg); }
+    42%  { transform: translateY(-62px) translateZ(140px) rotateX(520deg) rotateY(680deg) rotateZ(90deg); }
+    70%  { transform: translateY(10px) translateZ(50px)  rotateX(880deg) rotateY(980deg) rotateZ(150deg); }
+    100% { transform: translateY(18px) translateZ(0) rotateX(var(--finalX)) rotateY(var(--finalY)) rotateZ(10deg); }
+  }
+  .coinStage.shake{
+    animation: stageShake .22s ease-in-out both;
+  }
+  @keyframes stageShake{
+    0%{ transform: translateX(0px); }
+    25%{ transform: translateX(-3px); }
+    50%{ transform: translateX(3px); }
+    75%{ transform: translateX(-2px); }
+    100%{ transform: translateX(0px); }
+  }
+
+  .cfNums{
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:10px; margin-top:10px;
+  }
+  .cfNumBox{
+    padding:10px 12px;border-radius:14px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.10);
+  }
+  .cfNumBox .lbl{opacity:.7;font-size:11px;margin-bottom:4px}
+  .cfNumBox .val{font-weight:1000;font-size:18px}
+
+  .cfBetRow{margin-top:12px;}
+  .cfMsg{min-height:20px;margin-top:8px;font-weight:900}
+  .cfMsg.ok{color:#bfe6c8}
+  .cfMsg.bad{color:#ffb4b4}
   `;
   document.head.appendChild(st);
 }
 
-let coinState = {
-  pick: "heads", // heads/tails
-  bet: 50,
-  spinning: false,
-  last: null,
-};
+// --- Sounds (no external files) ---
+function cfBeep(type = "tap") {
+  if (!coinState.sound) return;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+  const ctx = cfBeep._ctx || (cfBeep._ctx = new AudioCtx());
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.connect(g); g.connect(ctx.destination);
 
+  const now = ctx.currentTime;
+  const presets = {
+    tap:   { f1: 420, f2: 260, t: 0.06, v: 0.05 },
+    whoosh:{ f1: 180, f2: 520, t: 0.12, v: 0.04 },
+    hit:   { f1: 90,  f2: 60,  t: 0.08, v: 0.06 },
+    win:   { f1: 520, f2: 740, t: 0.12, v: 0.05 },
+    lose:  { f1: 240, f2: 120, t: 0.14, v: 0.05 },
+  };
+  const p = presets[type] || presets.tap;
+
+  o.type = "sine";
+  o.frequency.setValueAtTime(p.f1, now);
+  o.frequency.exponentialRampToValueAtTime(p.f2, now + p.t);
+
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(p.v, now + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + p.t);
+
+  o.start(now);
+  o.stop(now + p.t + 0.02);
+}
+
+// --- Coin screen ---
 function renderCoin() {
-  const picks = [
-    { key: "heads", label: "🦅 Орёл" },
-    { key: "tails", label: "🌙 Решка" },
-  ];
+  // локальные значения для UI
+  const presets = [10, 50, 100, 250, 500];
 
+  // если серия активна — показываем текущий множитель
+  const currentMult = coinState.seriesEnabled
+    ? SERIES_MULTS[Math.min(coinState.seriesStep, SERIES_MULTS.length - 1)]
+    : 1.94;
+
+  // подготовим экран
   screenEl.innerHTML = `
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
         <div>
-          <div style="font-weight:950; font-size:16px;">Coin Flip</div>
-          <div class="small">Выбери Орёл/Решка, поставь 🪙 и бросай. Выигрыш: x2.</div>
+          <div class="cfTitle">Coin Flip</div>
+          <div class="cfSub">
+            Выбери Орёл/Решка, сделай ставку и бросай монету.<br>
+            <b>Серия</b> даёт растущие множители — можно “Забрать” или рискнуть дальше.
+          </div>
         </div>
-        <div class="badge2">Баланс: 🪙 <b>${wallet.coins}</b></div>
+        <div class="badge">Баланс: <b>🪙 ${wallet.coins}</b></div>
       </div>
 
-      <div class="coinWrap">
-        <div class="coinStage">
-          <div class="coinShadow" id="coinShadow"></div>
-          <div class="coin3d" id="coin3d">${coinState.last ? (coinState.last === "heads" ? "🦅" : "🌙") : "🪙"}</div>
-        </div>
-
-        <div class="seg">
-          ${picks
-            .map(
-              (p) =>
-                `<button class="${coinState.pick === p.key ? "active" : ""}" data-pick="${p.key}">${p.label}</button>`
-            )
-            .join("")}
-        </div>
-
-        <div style="width:100%;margin-top:6px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-weight:900;">Ставка</div>
-            <div class="badge2"><b id="coinBetShow">${coinState.bet}</b> 🪙</div>
+      <div class="cfWrap" style="margin-top:12px;">
+        <div class="cfLeft cfPanel">
+          <div class="coinStage" id="coinStage">
+            <div class="coinGlow" id="coinGlow"></div>
+            <div class="coin" id="coin3d" style="--finalX: 0deg; --finalY: 0deg;">
+              <div class="coinFace coinFront">
+                <div class="coinMark">🦅</div>
+              </div>
+              <div class="coinFace coinBack">
+                <div class="coinMark">🌙</div>
+              </div>
+            </div>
           </div>
 
-          <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
-            ${[10, 50, 100, 250, 500]
-              .map((v) => `<button class="chip" data-cbet="${v}">${v}</button>`)
-              .join("")}
-            <button class="chip" data-cbet="max">MAX</button>
+          <div class="choiceRow">
+            <button class="choiceBtn" id="cfHeads"><span>🦅</span> Орёл</button>
+            <button class="choiceBtn" id="cfTails"><span>🌙</span> Решка</button>
           </div>
 
-          <div class="row" style="margin-top:10px; gap:8px;">
-            <button class="btn btnSmall" id="cMinus">-</button>
-            <input id="coinBet" type="number" min="1" step="1" value="${coinState.bet}" class="input" style="flex:1;">
-            <button class="btn btnSmall" id="cPlus">+</button>
+          <div class="seriesRow">
+            <div class="toggle ${coinState.seriesEnabled ? "on" : ""}" id="toggleSeries">
+              <b>Серия</b>
+              <span class="dot"></span>
+            </div>
+
+            <div class="toggle ${coinState.sound ? "on" : ""}" id="toggleSound">
+              <b>Звук</b>
+              <span class="dot"></span>
+            </div>
+
+            <span class="pill ${coinState.seriesEnabled ? "" : "dim"}">x${currentMult.toFixed(2)}</span>
+            ${
+              coinState.seriesEnabled
+                ? SERIES_MULTS.map((m, i) =>
+                    `<span class="pill ${i === coinState.seriesStep ? "" : "dim"}">x${m.toFixed(2)}</span>`
+                  ).join("")
+                : ""
+            }
+          </div>
+
+          <div class="cfNums">
+            <div class="cfNumBox">
+              <div class="lbl">Выбор</div>
+              <div class="val" id="choiceShow">—</div>
+            </div>
+            <div class="cfNumBox">
+              <div class="lbl">Выпало</div>
+              <div class="val" id="resultShow">—</div>
+            </div>
+          </div>
+
+          <div class="cfMsg" id="cfMsg"></div>
+
+          <div class="row" style="margin-top:12px; gap:8px;">
+            <button class="btn" id="cfThrow" style="flex:1;">Бросить</button>
+            <button class="btn ghost" id="cfCash" style="min-width:140px;">Забрать</button>
+          </div>
+
+          <div class="cfSub" style="margin-top:10px;opacity:.7">
+            Виртуальные монеты 🪙. Без вывода.
           </div>
         </div>
 
-        <button class="btn btnWide" id="coinThrow" ${coinState.spinning ? "disabled" : ""}>
-          Бросить
-        </button>
+        <div class="cfRight cfPanel">
+          <div style="font-weight:900;margin-bottom:8px;">Ставка</div>
 
-        <div class="row" style="margin-top:8px; width:100%; gap:8px;">
-          <button class="btn ghost" id="coinBonus" style="flex:1;">+1000 🪙</button>
-          <div class="msgLine" id="coinMsg" style="flex:2;"></div>
+          <div class="row" style="gap:8px; flex-wrap:wrap;">
+            ${presets.map(v => `<button class="chip" data-bet="${v}">${v}</button>`).join("")}
+            <button class="chip" data-bet="max">MAX</button>
+          </div>
+
+          <div class="row cfBetRow" style="gap:8px;">
+            <button class="btn btnSmall" id="betMinus">-</button>
+            <input id="cfBet" type="number" min="1" step="1" value="${coinState.seriesActive ? coinState.seriesBet : 50}"
+              class="input" style="flex:1;">
+            <button class="btn btnSmall" id="betPlus">+</button>
+          </div>
+
+          <div class="cfNums" style="margin-top:10px;">
+            <div class="cfNumBox">
+              <div class="lbl">Множитель</div>
+              <div class="val" id="multShow">x${currentMult.toFixed(2)}</div>
+            </div>
+            <div class="cfNumBox">
+              <div class="lbl">Возможный выигрыш</div>
+              <div class="val" id="payoutShow">—</div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;opacity:.75;font-size:12px;line-height:1.25">
+            Если включена <b>Серия</b>, ставка списывается один раз в начале,
+            а дальше ты решаешь — <b>забрать</b> или <b>продолжить</b> и рискнуть.
+          </div>
+
+          <div class="row" style="margin-top:12px;">
+            <button class="btn ghost" id="cfReset" style="width:100%;">Сброс серии</button>
+          </div>
+
+          <div class="row" style="margin-top:10px;">
+            <button class="btn ghost" id="bonusCoins" style="width:100%;">+1000 🪙</button>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  const betInput = document.getElementById("coinBet");
-  const betShow = document.getElementById("coinBetShow");
-  const msg = document.getElementById("coinMsg");
-  const coin = document.getElementById("coin3d");
-  const shadow = document.getElementById("coinShadow");
+  const coinEl = document.getElementById("coin3d");
+  const stageEl = document.getElementById("coinStage");
+  const msgEl = document.getElementById("cfMsg");
+  const betEl = document.getElementById("cfBet");
+  const choiceShow = document.getElementById("choiceShow");
+  const resultShow = document.getElementById("resultShow");
+  const payoutShow = document.getElementById("payoutShow");
+  const multShow = document.getElementById("multShow");
+
+  let choice = coinState.seriesActive ? coinState.seriesChoice : null;
+  let busy = false;
+
+  function currentMultiplier() {
+    return coinState.seriesEnabled
+      ? SERIES_MULTS[Math.min(coinState.seriesStep, SERIES_MULTS.length - 1)]
+      : 1.94;
+  }
+
+  function calcPotential() {
+    const bet = Math.floor(Number(betEl.value) || 0);
+    const mult = currentMultiplier();
+    const pot = Math.floor(bet * mult);
+    payoutShow.textContent = pot > 0 ? `+${pot} 🪙` : "—";
+    multShow.textContent = `x${mult.toFixed(2)}`;
+  }
 
   function clampBet() {
-    let v = Math.floor(Number(betInput.value) || 0);
+    let v = Math.floor(Number(betEl.value) || 0);
     if (v < 1) v = 1;
-    if (v > wallet.coins) v = wallet.coins;
-    betInput.value = String(v);
-    betShow.textContent = String(v);
-    coinState.bet = v;
+    if (!coinState.seriesActive && v > wallet.coins) v = wallet.coins;
+    betEl.value = String(v);
+    calcPotential();
   }
-  clampBet();
-  betInput.oninput = clampBet;
 
-  document.getElementById("cMinus").onclick = () => {
-    playClick();
-    betInput.value = String((Number(betInput.value) || 1) - 10);
-    clampBet();
+  function setMsg(text, kind = "") {
+    msgEl.className = `cfMsg ${kind}`;
+    msgEl.textContent = text || "";
+  }
+
+  function setChoice(v) {
+    choice = v;
+    coinState.seriesChoice = v;
+    saveCoinState();
+    document.getElementById("cfHeads").classList.toggle("active", v === "heads");
+    document.getElementById("cfTails").classList.toggle("active", v === "tails");
+    choiceShow.textContent = v === "heads" ? "🦅 Орёл" : "🌙 Решка";
+    cfBeep("tap");
+  }
+
+  function setControlsDisabled(disabled) {
+    document.getElementById("cfThrow").disabled = disabled;
+    document.getElementById("cfCash").disabled = disabled || !coinState.seriesActive;
+    document.getElementById("cfHeads").disabled = disabled || coinState.seriesActive;
+    document.getElementById("cfTails").disabled = disabled || coinState.seriesActive;
+    betEl.disabled = disabled || coinState.seriesActive; // ставка фиксируется при старте серии
+    document.querySelectorAll(".chip").forEach(b => b.disabled = disabled || coinState.seriesActive);
+    document.getElementById("betMinus").disabled = disabled || coinState.seriesActive;
+    document.getElementById("betPlus").disabled = disabled || coinState.seriesActive;
+  }
+
+  // “физика” финального положения:
+  // Орёл: фронт наверху (rotateY(0))
+  // Решка: бэк наверху (rotateY(180))
+  function applyFinalRotation(result) {
+    const y = result === "heads" ? 0 : 180;
+    // добавим чуть "случайности" по X, чтобы не было одинаково
+    const x = 720 + randInt(0, 2) * 180 + randInt(-10, 10);
+    coinEl.style.setProperty("--finalX", `${x}deg`);
+    coinEl.style.setProperty("--finalY", `${y}deg`);
+  }
+
+  async function throwOnce() {
+    if (busy) return;
+    if (!choice) return setMsg("Выбери Орёл или Решка.", "bad");
+
+    const bet = Math.floor(Number(betEl.value) || 0);
+    if (bet <= 0) return setMsg("Ставка должна быть больше 0.", "bad");
+
+    // если это старт серии — списываем ставку один раз
+    if (!coinState.seriesActive) {
+      if (bet > wallet.coins) return setMsg("Недостаточно монет.", "bad");
+      addCoins(-bet);
+      coinState.seriesActive = true;
+      coinState.seriesBet = bet;
+      coinState.seriesStep = 0;
+      saveCoinState();
+    }
+
+    busy = true;
+    setControlsDisabled(true);
+    setMsg("");
+    resultShow.textContent = "—";
+
+    // RNG (50/50)
+    const result = randInt(0, 1) === 0 ? "heads" : "tails";
+
+    // анимация: whoosh -> throw -> hit -> фиксация
+    applyFinalRotation(result);
+    cfBeep("whoosh");
+    stageEl.classList.remove("shake");
+    coinEl.classList.remove("isThrow");
+    void coinEl.offsetWidth; // reflow
+    coinEl.classList.add("isThrow");
+
+    // "удар" в конце
+    setTimeout(() => {
+      stageEl.classList.add("shake");
+      cfBeep("hit");
+    }, 900);
+
+    // подождём окончание броска
+    await new Promise((r) => setTimeout(r, 1180));
+
+    coinEl.classList.remove("isThrow");
+    stageEl.classList.remove("shake");
+
+    // показать результат
+    resultShow.textContent = result === "heads" ? "🦅 Орёл" : "🌙 Решка";
+
+    const win = result === choice;
+    if (win) {
+      // шаг серии растёт, но не выше последнего множителя
+      const mult = currentMultiplier();
+      const payout = Math.floor(coinState.seriesBet * mult);
+      cfBeep("win");
+      setMsg(`✅ Выигрыш! Сейчас можно забрать: +${payout} 🪙 (x${mult.toFixed(2)})`, "ok");
+
+      // если не серия — сразу выдаём и завершаем
+      if (!coinState.seriesEnabled) {
+        addCoins(payout);
+        coinState.seriesActive = false;
+        saveCoinState();
+      } else {
+        // серия: подготовим следующий шаг (если есть)
+        if (coinState.seriesStep < SERIES_MULTS.length - 1) {
+          coinState.seriesStep += 1;
+        }
+        saveCoinState();
+      }
+    } else {
+      cfBeep("lose");
+      setMsg("❌ Проигрыш. Серия сброшена.", "bad");
+      // ставка уже списана при старте серии => просто сбрасываем
+      coinState.seriesActive = false;
+      coinState.seriesStep = 0;
+      saveCoinState();
+    }
+
+    busy = false;
+    setControlsDisabled(false);
+    calcPotential();
+  }
+
+  function cashOut() {
+    if (!coinState.seriesActive) return;
+    const stepForCash = Math.max(0, coinState.seriesStep - 1); // т.к. step уже мог увеличиться после win
+    const mult = SERIES_MULTS[Math.min(stepForCash, SERIES_MULTS.length - 1)];
+    const payout = Math.floor(coinState.seriesBet * mult);
+
+    addCoins(payout);
+    setMsg(`💰 Забрал: +${payout} 🪙 (x${mult.toFixed(2)})`, "ok");
+
+    coinState.seriesActive = false;
+    coinState.seriesStep = 0;
+    saveCoinState();
+    calcPotential();
+    setControlsDisabled(false);
+  }
+
+  // init choice buttons
+  document.getElementById("cfHeads").onclick = () => setChoice("heads");
+  document.getElementById("cfTails").onclick = () => setChoice("tails");
+
+  // toggles
+  document.getElementById("toggleSeries").onclick = () => {
+    if (coinState.seriesActive) return setMsg("Нельзя менять “Серия” во время активной серии.", "bad");
+    coinState.seriesEnabled = !coinState.seriesEnabled;
+    saveCoinState();
+    renderCoin();
   };
-  document.getElementById("cPlus").onclick = () => {
-    playClick();
-    betInput.value = String((Number(betInput.value) || 1) + 10);
-    clampBet();
-  };
-
-  document.querySelectorAll("[data-pick]").forEach((b) => {
-    b.onclick = () => {
-      playClick();
-      coinState.pick = b.dataset.pick;
-      renderCoin();
-    };
-  });
-
-  document.querySelectorAll("[data-cbet]").forEach((b) => {
-    b.onclick = () => {
-      playClick();
-      const v = b.dataset.cbet;
-      betInput.value = v === "max" ? String(wallet.coins) : String(v);
-      clampBet();
-    };
-  });
-
-  document.getElementById("coinBonus").onclick = () => {
-    playClick();
-    addCoins(1000);
+  document.getElementById("toggleSound").onclick = () => {
+    coinState.sound = !coinState.sound;
+    saveCoinState();
     renderCoin();
   };
 
-  document.getElementById("coinThrow").onclick = () => {
-    clampBet();
-    if (coinState.spinning) return;
-    if (coinState.bet <= 0) return alert("Ставка должна быть больше 0");
-    if (coinState.bet > wallet.coins) return alert("Недостаточно монет");
+  // bet controls
+  document.querySelectorAll(".chip").forEach((b) => {
+    b.onclick = () => {
+      const val = b.dataset.bet;
+      betEl.value = val === "max" ? String(wallet.coins) : String(val);
+      clampBet();
+    };
+  });
+  document.getElementById("betMinus").onclick = () => { betEl.value = String((Number(betEl.value)||1) - 10); clampBet(); };
+  document.getElementById("betPlus").onclick = () => { betEl.value = String((Number(betEl.value)||1) + 10); clampBet(); };
+  betEl.oninput = clampBet;
 
-    addCoins(-coinState.bet);
-    coinState.spinning = true;
-    msg.textContent = "";
-    playRoll();
+  // actions
+  document.getElementById("cfThrow").onclick = throwOnce;
+  document.getElementById("cfCash").onclick = cashOut;
 
-    coin.classList.remove("spin");
-    shadow.classList.remove("spin");
-    void coin.offsetWidth; // restart anim
-    coin.classList.add("spin");
-    shadow.classList.add("spin");
-
-    // исход определяется честно ДО анимации
-    const result = randFloat() < 0.5 ? "heads" : "tails";
-
-    setTimeout(() => {
-      coinState.last = result;
-      const win = result === coinState.pick;
-      if (win) {
-        const payout = coinState.bet * 2;
-        addCoins(payout);
-        playWin();
-        msg.textContent = `✅ Выпало ${result === "heads" ? "Орёл" : "Решка"} · +${payout} 🪙`;
-      } else {
-        playLose();
-        msg.textContent = `❌ Выпало ${result === "heads" ? "Орёл" : "Решка"} · -${coinState.bet} 🪙`;
-      }
-      coin.textContent = result === "heads" ? "🦅" : "🌙";
-    }, 950);
-
-    setTimeout(() => {
-      coinState.spinning = false;
-      renderCoin();
-    }, 1300);
+  document.getElementById("cfReset").onclick = () => {
+    coinState.seriesActive = false;
+    coinState.seriesStep = 0;
+    saveCoinState();
+    renderCoin();
   };
+  document.getElementById("bonusCoins").onclick = () => addCoins(1000);
+
+  // initial state
+  if (coinState.seriesActive) {
+    setMsg("Серия активна: можно продолжить бросок или “Забрать”.", "");
+  } else {
+    setMsg("", "");
+  }
+  if (coinState.seriesChoice) {
+    setChoice(coinState.seriesChoice);
+  } else {
+    // дефолт
+    setChoice("heads");
+  }
+
+  clampBet();
+  setControlsDisabled(false);
+
+  // если серия активна — включим кнопку "Забрать"
+  document.getElementById("cfCash").disabled = !coinState.seriesActive;
 }
+
 
 // ===============================
 // DICE PRO — “как бросок” + звук + задержка фиксации
@@ -1434,6 +1795,7 @@ function renderCrash() {
 }
 
 setScreen("menu");
+
 
 
 
