@@ -2,34 +2,41 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
   <title>Mini Games</title>
-  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <link rel="stylesheet" href="./styles.css?v=1" />
 </head>
 <body>
   <div class="app">
-    <header class="top">
-      <div>
-        <div class="title">Mini Games</div>
-        <div id="user" class="sub">Загрузка...</div>
+    <header class="topbar">
+      <div class="topbar__left">
+        <div class="appTitle">Mini Games</div>
+        <div id="user" class="userLine">Загрузка…</div>
+      </div>
+      <div class="topbar__right">
+        <button id="btnFull" class="iconBtn" title="На весь экран">⤢</button>
       </div>
     </header>
 
-    <main id="screen"></main>
+    <main id="screen" class="screen"></main>
 
     <nav class="nav">
-      <button data-screen="menu">Меню</button>
-      <button data-screen="coin">Coin Flip</button>
-      <button data-screen="dice">Dice</button>
-      <button data-screen="mines">Mines</button>
-      <button data-screen="bj">Black Jack</button>
-      <button data-screen="crash">Lucky Jet</button>
+      <button data-screen="coin" class="navBtn active">Coin Flip</button>
+      <button data-screen="dice" class="navBtn">Dice</button>
+      <button data-screen="mines" class="navBtn">Mines</button>
     </nav>
+
+    <footer class="footer">
+      <span>@mini-games</span>
+    </footer>
   </div>
 
-<script src="app.js?v=302"></script>
+  <!-- ВАЖНО: если Telegram кеширует — увеличивай v=2, v=3 ... -->
+  <script src="./app.js?v=1"></script>
 </body>
 </html>
-
-
