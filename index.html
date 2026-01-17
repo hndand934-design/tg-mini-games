@@ -2,37 +2,34 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Mini Games</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=501" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="app">
     <header class="top">
-      <div>
+      <div class="topLeft">
         <div class="title">Mini Games</div>
         <div id="user" class="sub">Загрузка...</div>
       </div>
       <div class="topRight">
-        <div class="pill" id="balancePill">🪙 0</div>
+        <button id="btnSfx" class="pill">🔊 Звук</button>
       </div>
     </header>
 
-    <main id="screen" class="screen"></main>
+    <main id="screen"></main>
 
     <nav class="nav">
-      <button data-screen="coin" class="navBtn active">Coin Flip</button>
-      <button data-screen="dice" class="navBtn">Dice</button>
+      <button data-screen="coin" class="active">Coin Flip</button>
+      <button data-screen="dice">Dice</button>
+      <button data-screen="mines">Mines</button>
     </nav>
-
-    <div class="footer">@mini-games</div>
   </div>
 
-  <script src="app.js?v=1"></script>
+  <script src="app.js?v=501"></script>
 </body>
 </html>
-
-
 
 
