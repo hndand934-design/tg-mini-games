@@ -177,9 +177,11 @@ function setScreen(name) {
   renderCoin();
 }
 
-// --- COIN FLIP (фиолетовая во время броска -> золото/серебро после) ---
+// ===============================
+// COIN FLIP — ULTRA (full UI + 3D coin + purple -> result skins)
+// ===============================
 let coinState = {
-  choice: "heads",
+  choice: "heads",         // heads / tails
   bet: 50,
   spinning: false,
   sfx: true,
@@ -189,18 +191,244 @@ let coinState = {
   streakSteps: [1.94, 3.88, 7.76, 15.52],
 
   lastMsg: "",
-
-  // NEW: текущий скин монеты
-  skin: "purple", // "purple" | "gold" | "silver"
+  skin: "purple",          // purple | gold | silver
 };
 
-function renderCoin() {
-  const chips = [10, 50, 100, 250, 500];
+// 1) CSS inject (чтобы не зависеть от styles.css и не ломалось)
+function ensureCoinFlipStyles() {
+  if (document.getElementById("coinflip-ultra-style")) return;
+  const st = document.createElement("style");
+  st.id = "coinflip-ultra-style";
+  st.textContent = `
+    .cfWrap{display:grid;gap:12px;}
+    .cfGrid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;align-items:start;}
+    @media (max-width: 820px){ .cfGrid{grid-template-columns:1fr;} }
 
+    .cfCard{
+      border-radius:18px;
+      background:rgba(255,255,255,.045);
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow:0 18px 60px rgba(0,0,0,.35);
+      padding:14px;
+    }
+    .cfTitle{font-weight:950;font-size:16px;margin-bottom:4px;}
+    .cfSub{opacity:.8;font-size:12px;line-height:1.25;}
+
+    .cfRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+    .cfPill{
+      padding:9px 12px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:#e8eefc;font-weight:900;font-size:12px;
+      cursor:pointer;
+    }
+    .cfPill.active{
+      outline:2px solid rgba(110,150,255,.75);
+      background:rgba(76,133,255,.16);
+    }
+    .cfPill:disabled{opacity:.55;cursor:not-allowed;}
+
+    .cfSwitch{
+      width:46px;height:28px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      position:relative;cursor:pointer;
+    }
+    .cfSwitch::after{
+      content:"";position:absolute;top:3px;left:3px;
+      width:22px;height:22px;border-radius:50%;
+      background:rgba(255,255,255,.9);
+      transition:transform .18s ease;
+    }
+    .cfSwitch.on{background:rgba(76,133,255,.18);border-color:rgba(76,133,255,.32);}
+    .cfSwitch.on::after{transform:translateX(18px);background:#fff;}
+
+    .cfInfoGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+    @media (max-width: 520px){ .cfInfoGrid{grid-template-columns:1fr;} }
+    .cfBox{
+      border-radius:14px;padding:10px 12px;
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .cfBox .h{opacity:.7;font-size:11px;}
+    .cfBox .v{font-weight:950;font-size:16px;margin-top:4px;}
+    .cfMsg{min-height:20px;margin-top:10px;font-weight:900;}
+
+    .cfBtn{
+      padding:12px 14px;border-radius:14px;
+      background:rgba(76,133,255,.92);
+      border:1px solid rgba(76,133,255,.35);
+      color:#fff;font-weight:950;cursor:pointer;
+    }
+    .cfBtn:disabled{opacity:.55;cursor:not-allowed;}
+    .cfBtnGhost{
+      padding:12px 14px;border-radius:14px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      color:#e8eefc;font-weight:900;cursor:pointer;
+    }
+    .cfBtnGhost:disabled{opacity:.45;cursor:not-allowed;}
+
+    .cfChips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+    .cfChip{
+      padding:8px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      color:#e8eefc;font-weight:900;font-size:12px;
+      cursor:pointer;
+    }
+    .cfBetRow{display:flex;gap:8px;align-items:center;margin-top:10px;}
+    .cfInput{
+      flex:1;padding:11px 12px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      color:#e8eefc;outline:none;
+    }
+    .cfMiniBtn{
+      width:44px;height:44px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      color:#e8eefc;font-weight:950;cursor:pointer;
+    }
+    .cfRightHint{opacity:.75;font-size:12px;line-height:1.25;margin-top:10px;}
+
+    /* --- 3D coin stage --- */
+    .coinStage{
+      height:230px;
+      border-radius:18px;
+      background:
+        radial-gradient(220px 160px at 55% 35%, rgba(140,120,255,.10), rgba(0,0,0,0)),
+        linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.10);
+      display:grid;place-items:center;
+      perspective:1000px;
+      position:relative;
+      overflow:hidden;
+    }
+    .coinShadow{
+      position:absolute;bottom:44px;
+      width:130px;height:30px;border-radius:50%;
+      background:rgba(0,0,0,.42);
+      filter:blur(12px);
+      transform:scale(.78);
+      opacity:.55;
+      transition:transform .18s ease, opacity .18s ease;
+    }
+
+    .coin3D{
+      width:130px;height:130px;
+      position:relative;
+      transform-style:preserve-3d;
+      border-radius:50%;
+      will-change:transform;
+    }
+    .coin3D .rim{
+      position:absolute;inset:-3px;border-radius:50%;
+      background: conic-gradient(from 0deg,
+        rgba(255,255,255,.24), rgba(0,0,0,.14),
+        rgba(255,255,255,.18), rgba(0,0,0,.18),
+        rgba(255,255,255,.24));
+      filter:blur(.2px);
+      opacity:.55;
+      transform:translateZ(0px);
+    }
+    .coin3D .face{
+      position:absolute;inset:0;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      backface-visibility:hidden;
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow:
+        0 16px 44px rgba(0,0,0,.42),
+        0 0 0 2px rgba(0,0,0,.10) inset;
+      overflow:hidden;
+    }
+    .coin3D .face::before{
+      content:"";
+      position:absolute;inset:-20px;
+      background: radial-gradient(120px 90px at 35% 30%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%);
+      transform:rotate(-12deg);
+      opacity:.9;
+      pointer-events:none;
+    }
+    .coin3D .front{ transform: translateZ(8px); }
+    .coin3D .back { transform: rotateY(180deg) translateZ(8px); }
+
+    .coinMark{
+      position:relative;
+      font-weight:1000;
+      letter-spacing:.6px;
+      text-transform:uppercase;
+      padding:10px 14px;
+      border-radius:16px;
+      background:rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.18);
+      text-shadow:0 2px 14px rgba(0,0,0,.38);
+      display:flex;gap:8px;align-items:center;
+      user-select:none;
+    }
+    .coinMark b{font-size:14px;}
+    .coinMark span{font-size:18px;}
+
+    /* skins */
+    .skinPurple .front, .skinPurple .back{
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,.22), rgba(255,255,255,0) 55%),
+        radial-gradient(circle at 70% 80%, rgba(255,255,255,.10), rgba(255,255,255,0) 55%),
+        linear-gradient(145deg, rgba(165,100,255,.96), rgba(72,32,150,.98));
+    }
+    .skinGold .front, .skinGold .back{
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,.22), rgba(255,255,255,0) 55%),
+        radial-gradient(circle at 70% 80%, rgba(255,255,255,.10), rgba(255,255,255,0) 55%),
+        linear-gradient(145deg, rgba(255,214,100,.96), rgba(178,112,18,.98));
+    }
+    .skinSilver .front, .skinSilver .back{
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,.24), rgba(255,255,255,0) 55%),
+        radial-gradient(circle at 70% 80%, rgba(255,255,255,.12), rgba(255,255,255,0) 55%),
+        linear-gradient(145deg, rgba(235,245,255,.96), rgba(105,132,165,.98));
+    }
+
+    /* hiding labels on purple only */
+    .skinPurple .coinMark{opacity:0; transform:scale(.98);}
+    .showMark .coinMark{opacity:1; transform:scale(1); transition:opacity .12s ease, transform .12s ease;}
+
+    /* throw animation */
+    .coinAnim{
+      --rz: 540deg;
+      --rx: 1440deg;
+      animation: coinThrow 1.05s cubic-bezier(.18,.8,.18,1) both;
+    }
+    @keyframes coinThrow{
+      0%   { transform: translateY(28px) rotateX(0deg) rotateZ(0deg) scale(.98); }
+      18%  { transform: translateY(-62px) rotateX(calc(var(--rx) * .35)) rotateZ(calc(var(--rz) * .25)) scale(1.02); }
+      55%  { transform: translateY(-96px) rotateX(calc(var(--rx) * .75)) rotateZ(calc(var(--rz) * .65)) scale(1.03); }
+      78%  { transform: translateY(-26px) rotateX(calc(var(--rx) * .92)) rotateZ(calc(var(--rz) * .92)) scale(1.00); }
+      100% { transform: translateY(0px)  rotateX(var(--rx)) rotateZ(var(--rz)) scale(1); }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+// 2) helpers (используем твои функции, если есть)
+function cfAudioUnlock() {
+  try {
+    const ctx = (typeof getAudio === "function") ? getAudio() : null;
+    if (ctx && ctx.state === "suspended") ctx.resume().catch(()=>{});
+  } catch {}
+}
+function cfSfxStart(){ if (typeof sfxCoinStart === "function") sfxCoinStart(); }
+function cfSfxImpact(){ if (typeof sfxCoinImpact === "function") sfxCoinImpact(); }
+function cfSfxWin(){ if (typeof sfxWin === "function") sfxWin(); }
+function cfSfxLose(){ if (typeof sfxLose === "function") sfxLose(); }
+
+function renderCoin() {
+  ensureCoinFlipStyles();
+
+  const chips = [10, 50, 100, 250, 500];
   const mult = coinState.streakOn
     ? coinState.streakSteps[Math.min(coinState.streakIndex, coinState.streakSteps.length - 1)]
     : 1.94;
-
   const possibleWin = Math.floor(coinState.bet * mult);
 
   screenEl.innerHTML = `
@@ -210,29 +438,37 @@ function renderCoin() {
         <div class="cfCard">
           <div class="cfTitle">Coin Flip</div>
           <div class="cfSub">
-            Выбери сторону, сделай ставку и бросай монету. Серия даёт рост множителя.
+            Монета по умолчанию <b>фиолетовая</b>. При броске крутится фиолетовой, после приземления становится
+            <b>золотой (Орёл)</b> или <b>серебряной (Решка)</b>.
           </div>
 
-          <div class="coinStage" style="margin-top:10px;">
+          <div class="coinStage" style="margin-top:12px;">
             <div class="coinShadow" id="coinShadow"></div>
 
-            <div class="coin3D ${coinState.skin === "purple" ? "skinPurple coinBlank" : ""} ${coinState.skin === "gold" ? "skinGold" : ""} ${coinState.skin === "silver" ? "skinSilver" : ""}"
+            <div class="coin3D ${coinState.skin === "purple" ? "skinPurple" : (coinState.skin === "gold" ? "skinGold showMark" : "skinSilver showMark")}"
                  id="coin3D">
               <div class="rim"></div>
-              <div class="face front"><div class="label">ОРЁЛ</div></div>
-              <div class="face back"><div class="label">РЕШКА</div></div>
+              <div class="face front">
+                <div class="coinMark"><span>🦅</span> <b>ОРЁЛ</b></div>
+              </div>
+              <div class="face back">
+                <div class="coinMark"><span>🌙</span> <b>РЕШКА</b></div>
+              </div>
             </div>
           </div>
 
-          <div class="cfRow" style="margin-top:10px;">
+          <div class="cfRow" style="margin-top:12px;">
             <button class="cfPill ${coinState.choice === "heads" ? "active" : ""}" id="pickHeads" ${coinState.spinning ? "disabled" : ""}>🦅 Орёл</button>
             <button class="cfPill ${coinState.choice === "tails" ? "active" : ""}" id="pickTails" ${coinState.spinning ? "disabled" : ""}>🌙 Решка</button>
 
             <div style="flex:1"></div>
 
-            <div class="cfToggle">
-              <div style="opacity:.8;font-size:12px;font-weight:800;">Звук</div>
+            <div class="cfRow" style="gap:8px;">
+              <div style="opacity:.8;font-size:12px;font-weight:900;">Звук</div>
               <div class="cfSwitch ${coinState.sfx ? "on" : ""}" id="sfxSwitch"></div>
+
+              <div style="opacity:.8;font-size:12px;font-weight:900;margin-left:10px;">Серия</div>
+              <div class="cfSwitch ${coinState.streakOn ? "on" : ""}" id="streakSwitch" ${coinState.spinning ? "style='pointer-events:none;opacity:.6;'" : ""}></div>
             </div>
           </div>
 
@@ -248,36 +484,25 @@ function renderCoin() {
           </div>
 
           <div class="cfRow" style="margin-top:10px;">
-            <div class="cfToggle">
-              <div style="opacity:.8;font-size:12px;font-weight:800;">Серия</div>
-              <div class="cfSwitch ${coinState.streakOn ? "on" : ""}" id="streakSwitch" ${coinState.spinning ? "style='pointer-events:none;opacity:.6;'" : ""}></div>
-            </div>
-
-            <div class="cfRow" style="gap:8px; margin-left:auto;">
-              ${coinState.streakSteps.map((v, i) => `
-                <span class="cfChip" style="${i === coinState.streakIndex && coinState.streakOn ? "outline:2px solid rgba(76,133,255,.85);" : ""}">
-                  x${v.toFixed(2)}
-                </span>
-              `).join("")}
-            </div>
+            ${coinState.streakSteps.map((v, i) => `
+              <span class="cfChip" style="${i === coinState.streakIndex && coinState.streakOn ? "outline:2px solid rgba(76,133,255,.85);" : ""}">
+                x${v.toFixed(2)}
+              </span>
+            `).join("")}
           </div>
 
           <div class="cfMsg" id="coinMsg">${coinState.lastMsg || ""}</div>
 
           <div class="cfRow" style="margin-top:10px; gap:10px;">
-            <button class="cfBtn" id="coinThrow" ${coinState.spinning ? "disabled" : ""} style="flex:1;">
-              Бросить
-            </button>
-            <button class="cfBtnGhost" id="coinCash" ${coinState.streakOn && coinState.streakIndex > 0 ? "" : "disabled"}>
-              Забрать
-            </button>
+            <button class="cfBtn" id="coinThrow" ${coinState.spinning ? "disabled" : ""} style="flex:1;">Бросить</button>
+            <button class="cfBtnGhost" id="coinCash" ${coinState.streakOn && coinState.streakIndex > 0 ? "" : "disabled"}>Забрать</button>
           </div>
         </div>
 
         <div class="cfCard">
           <div class="cfRow" style="justify-content:space-between;align-items:center;">
             <div class="cfTitle" style="margin:0;">Ставка</div>
-            <div class="cfChip" style="font-weight:950;">Баланс: <b>🪙 ${wallet.coins}</b></div>
+            <div class="cfChip" style="font-weight:950;">Баланс: <b>🪙 ${wallet?.coins ?? 0}</b></div>
           </div>
 
           <div class="cfChips">
@@ -292,7 +517,7 @@ function renderCoin() {
           </div>
 
           <div class="cfRightHint">
-            Ставка списывается при “Бросить”.
+            При изменении ставки монета возвращается в <b>фиолетовый</b> режим ожидания.
           </div>
 
           <div class="cfRow" style="margin-top:12px;">
@@ -306,13 +531,14 @@ function renderCoin() {
 
   const coinEl = document.getElementById("coin3D");
   const msgEl = document.getElementById("coinMsg");
+  const betInput = document.getElementById("bet");
 
-  // выбор стороны (всегда можно, кроме момента вращения)
+  // pick side (можно всегда, кроме кручения)
   document.getElementById("pickHeads").onclick = () => { if (!coinState.spinning) { coinState.choice = "heads"; renderCoin(); } };
   document.getElementById("pickTails").onclick = () => { if (!coinState.spinning) { coinState.choice = "tails"; renderCoin(); } };
 
+  // toggles
   document.getElementById("sfxSwitch").onclick = () => { coinState.sfx = !coinState.sfx; renderCoin(); };
-
   document.getElementById("streakSwitch").onclick = () => {
     if (coinState.spinning) return;
     coinState.streakOn = !coinState.streakOn;
@@ -320,38 +546,41 @@ function renderCoin() {
     renderCoin();
   };
 
-  // bet controls
-  const betInput = document.getElementById("bet");
+  // bet clamp + purple reset on any bet change
   const clampBet = () => {
     let v = Math.floor(Number(betInput.value) || 0);
     if (v < 1) v = 1;
-    if (v > wallet.coins) v = wallet.coins;
+    if (wallet && typeof wallet.coins === "number") v = Math.min(v, wallet.coins);
     coinState.bet = v;
     betInput.value = String(v);
   };
-  clampBet();
 
-  // ВАЖНО: при изменении ставки возвращаем монету в фиолетовую
-  const betChanged = () => {
+  const onBetChanged = () => {
     clampBet();
+    // вернули "ожидание" — фиолетовая
     coinState.skin = "purple";
     coinState.lastMsg = "";
     renderCoin();
   };
 
+  clampBet();
+  betInput.onchange = onBetChanged;
+
   document.querySelectorAll(".cfChip[data-bet]").forEach((b) => {
     b.onclick = () => {
       const val = b.dataset.bet;
       betInput.value = val === "max" ? String(wallet.coins) : String(val);
-      betChanged();
+      onBetChanged();
     };
   });
 
-  document.getElementById("betMinus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) - 10); betChanged(); };
-  document.getElementById("betPlus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) + 10); betChanged(); };
-  betInput.onchange = betChanged;
+  document.getElementById("betMinus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) - 10); onBetChanged(); };
+  document.getElementById("betPlus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) + 10); onBetChanged(); };
 
-  document.getElementById("bonusCoins").onclick = () => addCoins(1000);
+  document.getElementById("bonusCoins").onclick = () => {
+    if (typeof addCoins === "function") addCoins(1000);
+    renderCoin();
+  };
 
   function currentMult() {
     if (!coinState.streakOn) return 1.94;
@@ -362,55 +591,59 @@ function renderCoin() {
     if (!(coinState.streakOn && coinState.streakIndex > 0)) return;
     const m = currentMult();
     const payout = Math.floor(coinState.bet * m);
-    addCoins(payout);
+    if (typeof addCoins === "function") addCoins(payout);
     coinState.lastMsg = `✅ Забрал: +${payout} 🪙 (x${m.toFixed(2)})`;
     coinState.streakIndex = 0;
+    coinState.skin = "purple"; // после забора снова ожидание
     renderCoin();
   };
 
   document.getElementById("coinThrow").onclick = async () => {
     clampBet();
     const bet = coinState.bet;
-    if (bet <= 0) return alert("Ставка должна быть больше 0");
-    if (bet > wallet.coins) return alert("Недостаточно монет");
 
-    addCoins(-bet);
+    if (!wallet || bet > wallet.coins) return alert("Недостаточно монет");
+
+    // списываем ставку
+    if (typeof addCoins === "function") addCoins(-bet);
 
     coinState.spinning = true;
     msgEl.textContent = "Монета в воздухе…";
 
-    // во время броска ВСЕГДА фиолетовая (как ты хочешь)
+    // ВАЖНО: при броске всегда фиолетовая
     coinState.skin = "purple";
-    coinEl.classList.add("coinBlank");
+    renderCoin(); // перерисуем чтобы точно стало purple перед анимацией
 
-    if (coinState.sfx) {
-      const ctx = getAudio();
-      if (ctx && ctx.state === "suspended") ctx.resume().catch(()=>{});
-      sfxCoinStart();
-    }
-
-    // рандом вращения
+    const coinEl2 = document.getElementById("coin3D"); // после renderCoin DOM новый
     const rz = (Math.random() * 420 + 380) | 0;
     const rx = (Math.random() * 900 + 1300) | 0;
-    coinEl.style.setProperty("--rz", `${rz}deg`);
-    coinEl.style.setProperty("--rx", `${rx}deg`);
+    coinEl2.style.setProperty("--rz", `${rz}deg`);
+    coinEl2.style.setProperty("--rx", `${rx}deg`);
 
-    coinEl.classList.remove("coinAnim");
-    void coinEl.offsetWidth;
-    coinEl.classList.add("coinAnim");
+    // звук
+    if (coinState.sfx) {
+      cfAudioUnlock();
+      cfSfxStart();
+      setTimeout(() => cfSfxImpact(), 860);
+    }
 
-    const res = randFloat() < 0.5 ? "heads" : "tails";
-    setTimeout(() => { if (coinState.sfx) sfxCoinImpact(); }, 850);
+    // анимация
+    coinEl2.classList.remove("coinAnim");
+    void coinEl2.offsetWidth;
+    coinEl2.classList.add("coinAnim");
+
+    // честный результат
+    const res = (typeof randFloat === "function" ? randFloat() : Math.random()) < 0.5 ? "heads" : "tails";
+
     await new Promise(r => setTimeout(r, 1050));
 
-    // после броска: показываем орёл/решка цветом
-    coinEl.classList.remove("coinBlank");
+    // после приземления: меняем цвет и показываем грань
     if (res === "heads") {
       coinState.skin = "gold";
-      coinEl.style.transform = "rotateY(0deg)";
+      coinEl2.style.transform = "rotateY(0deg)";
     } else {
       coinState.skin = "silver";
-      coinEl.style.transform = "rotateY(180deg)";
+      coinEl2.style.transform = "rotateY(180deg)";
     }
 
     const won = (coinState.choice === res);
@@ -418,18 +651,18 @@ function renderCoin() {
 
     if (won) {
       const payout = Math.floor(bet * m);
-      addCoins(payout);
+      if (typeof addCoins === "function") addCoins(payout);
 
       if (coinState.streakOn) {
         coinState.streakIndex = Math.min(coinState.streakIndex + 1, coinState.streakSteps.length - 1);
       }
 
       coinState.lastMsg = `✅ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · +${payout} 🪙 (x${m.toFixed(2)})`;
-      if (coinState.sfx) sfxWin();
+      if (coinState.sfx) cfSfxWin();
     } else {
       coinState.lastMsg = `❌ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · -${bet} 🪙`;
       coinState.streakIndex = 0;
-      if (coinState.sfx) sfxLose();
+      if (coinState.sfx) cfSfxLose();
     }
 
     coinState.spinning = false;
@@ -977,5 +1210,6 @@ function renderMines() {
 
 // старт по умолчанию
 setScreen("coin");
+
 
 
