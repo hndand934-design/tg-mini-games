@@ -1,5 +1,5 @@
 // ===============================
-// RNG (честный, crypto)
+// RNG (crypto)
 // ===============================
 function randFloat() {
   const a = new Uint32Array(1);
@@ -21,15 +21,11 @@ if (tg) {
 
 const screenEl = document.getElementById("screen");
 const userEl = document.getElementById("user");
-const btnFull = document.getElementById("btnFull");
+const balancePill = document.getElementById("balancePill");
 const user = tg?.initDataUnsafe?.user;
 
-btnFull?.addEventListener("click", () => {
-  try { tg?.expand(); } catch {}
-});
-
 // ===============================
-// Virtual Wallet (local)
+// Wallet (local)
 // ===============================
 const WALLET_KEY = "mini_wallet_v3";
 function loadWallet() {
@@ -57,11 +53,12 @@ function renderTopBar() {
   userEl.textContent = user
     ? `Привет, ${user.first_name} · 🪙 ${coins}`
     : `Открыто вне Telegram · 🪙 ${coins}`;
+  balancePill.textContent = `🪙 ${coins}`;
 }
 renderTopBar();
 
 // ===============================
-// WebAudio SFX (современные)
+// Audio (modern synth) + unlock
 // ===============================
 let _audioCtx = null;
 function getAudio() {
@@ -70,627 +67,401 @@ function getAudio() {
   _audioCtx = Ctx ? new Ctx() : null;
   return _audioCtx;
 }
-async function unlockAudio() {
+let __audioUnlocked = false;
+function unlockAudioOnce() {
+  if (__audioUnlocked) return;
+  const ctx = getAudio();
+  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+  __audioUnlocked = true;
+}
+window.addEventListener("pointerdown", unlockAudioOnce, { once: true });
+window.addEventListener("touchstart", unlockAudioOnce, { once: true });
+
+function playTone({ type="sine", f=440, t=0.08, g=0.07, when=0, detune=0 }) {
   const ctx = getAudio();
   if (!ctx) return;
-  if (ctx.state === "suspended") {
-    try { await ctx.resume(); } catch {}
-  }
-}
-function playTone({ type="sine", f=440, t=0.08, g=0.06, detune=0, when=0 }) {
-  const ctx = getAudio(); if (!ctx) return;
   const now = ctx.currentTime + when;
+
   const o = ctx.createOscillator();
   const gain = ctx.createGain();
   const filt = ctx.createBiquadFilter();
+
   o.type = type;
   o.frequency.setValueAtTime(f, now);
   o.detune.setValueAtTime(detune, now);
+
   filt.type = "lowpass";
   filt.frequency.setValueAtTime(12000, now);
+
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(g, now + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + t);
-  o.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+
+  o.connect(filt);
+  filt.connect(gain);
+  gain.connect(ctx.destination);
+
   o.start(now);
   o.stop(now + t + 0.02);
 }
 function playNoise({ t=0.10, g=0.03, when=0, hp=900 }) {
-  const ctx = getAudio(); if (!ctx) return;
+  const ctx = getAudio();
+  if (!ctx) return;
   const now = ctx.currentTime + when;
+
   const bufferSize = Math.floor(ctx.sampleRate * t);
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
   const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  }
 
   const src = ctx.createBufferSource();
   src.buffer = buffer;
+
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(g, now);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + t);
+
   const filter = ctx.createBiquadFilter();
   filter.type = "highpass";
   filter.frequency.setValueAtTime(hp, now);
-  src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+
   src.start(now);
   src.stop(now + t + 0.02);
 }
 
-// --- SFX набор ---
-const SFX = {
-  click() {
-    playTone({ type:"triangle", f:520, t:0.05, g:0.04 });
-    playTone({ type:"sine", f:840, t:0.04, g:0.02, when:0.01 });
-  },
-  coinStart() {
-    playNoise({ t:0.12, g:0.025, hp:1200, when:0 });
-    playTone({ type:"triangle", f:420, t:0.11, g:0.03, when:0.01 });
-    playTone({ type:"triangle", f:320, t:0.11, g:0.02, when:0.02 });
-  },
-  coinImpact() {
-    playTone({ type:"sine", f:980, t:0.06, g:0.05, when:0 });
-    playTone({ type:"sine", f:1560, t:0.05, g:0.03, when:0.01 });
-    playNoise({ t:0.06, g:0.015, hp:2500, when:0.005 });
-  },
-  win() {
-    playTone({ type:"sine", f:740, t:0.10, g:0.05, when:0 });
-    playTone({ type:"sine", f:932, t:0.12, g:0.045, when:0.05 });
-    playTone({ type:"sine", f:1244, t:0.14, g:0.040, when:0.10 });
-  },
-  lose() {
-    playTone({ type:"sine", f:220, t:0.16, g:0.06, when:0 });
-    playTone({ type:"sine", f:165, t:0.18, g:0.05, when:0.06 });
-  },
-  roll() {
-    playNoise({ t:0.14, g:0.02, hp:1000, when:0 });
-    playTone({ type:"triangle", f:240, t:0.12, g:0.02, when:0.02 });
-  },
-  mineBoom() {
-    playNoise({ t:0.16, g:0.06, hp:120, when:0 });
-    playTone({ type:"sine", f:120, t:0.20, g:0.07, when:0.01 });
-  },
-};
-
-let globalSound = true;
-function playClick() {
-  if (!globalSound) return;
-  unlockAudio();
-  SFX.click();
+function sfxTap() {
+  unlockAudioOnce();
+  playTone({ type:"triangle", f:420, t:0.05, g:0.04, when:0 });
+}
+function sfxCoinStart() {
+  unlockAudioOnce();
+  playNoise({ t:0.12, g:0.025, hp:1200, when:0 });
+  playTone({ type:"triangle", f:420, t:0.11, g:0.03, when:0.01 });
+  playTone({ type:"triangle", f:320, t:0.11, g:0.02, when:0.02 });
+}
+function sfxCoinImpact() {
+  unlockAudioOnce();
+  playTone({ type:"sine", f:980, t:0.06, g:0.05, when:0 });
+  playTone({ type:"sine", f:1560, t:0.05, g:0.03, when:0.01 });
+  playNoise({ t:0.06, g:0.015, hp:2500, when:0.005 });
+}
+function sfxWin() {
+  unlockAudioOnce();
+  playTone({ type:"sine", f:740, t:0.10, g:0.05, when:0 });
+  playTone({ type:"sine", f:932, t:0.12, g:0.045, when:0.05 });
+  playTone({ type:"sine", f:1244, t:0.14, g:0.040, when:0.10 });
+}
+function sfxLose() {
+  unlockAudioOnce();
+  playTone({ type:"sine", f:220, t:0.16, g:0.06, when:0 });
+  playTone({ type:"sine", f:165, t:0.18, g:0.05, when:0.06 });
+}
+function sfxRoll() {
+  unlockAudioOnce();
+  playNoise({ t:0.18, g:0.020, hp:900, when:0 });
+  playTone({ type:"triangle", f:260, t:0.15, g:0.020, when:0.02 });
+}
+function sfxHit() {
+  unlockAudioOnce();
+  playTone({ type:"sine", f:620, t:0.06, g:0.04, when:0 });
+  playNoise({ t:0.06, g:0.012, hp:2000, when:0 });
 }
 
 // ===============================
-// NAV
+// Navigation
 // ===============================
-const navButtons = Array.from(document.querySelectorAll(".navBtn"));
-navButtons.forEach(btn => {
+let currentScreen = "coin";
+function setScreen(name) {
+  currentScreen = name;
+  document.querySelectorAll(".navBtn").forEach(b => {
+    b.classList.toggle("active", b.dataset.screen === name);
+  });
+  if (name === "coin") renderCoin();
+  else renderDice();
+}
+document.querySelectorAll(".nav button").forEach(btn => {
   btn.addEventListener("click", () => {
-    playClick();
-    navButtons.forEach(b => b.classList.toggle("active", b === btn));
+    sfxTap();
     setScreen(btn.dataset.screen);
   });
 });
 
-function setScreen(name) {
-  if (name === "coin") return renderCoin();
-  if (name === "dice") return renderDice();
-  if (name === "mines") return renderMines();
-  renderCoin();
-}
+// ===============================
+// COIN FLIP (purple in flight -> gold/silver result)
+// ===============================
+const COIN_MULTS = [1.94, 3.88, 7.76, 15.52];
 
-// ===============================
-// COIN FLIP — ULTRA (full UI + 3D coin + purple -> result skins)
-// ===============================
 let coinState = {
-  choice: "heads",         // heads / tails
+  choice: "heads",     // heads/tails
   bet: 50,
-  spinning: false,
   sfx: true,
+  series: true,
+  step: 0,             // 0..3
+  spinning: false,
 
-  streakOn: true,
-  streakIndex: 0,
-  streakSteps: [1.94, 3.88, 7.76, 15.52],
+  // skin of coin while idle/after throw:
+  // "neutral" | "heads" | "tails"
+  skin: "neutral",
 
-  lastMsg: "",
-  skin: "purple",          // purple | gold | silver
+  msg: "",
 };
 
-// 1) CSS inject (чтобы не зависеть от styles.css и не ломалось)
-function ensureCoinFlipStyles() {
-  if (document.getElementById("coinflip-ultra-style")) return;
-  const st = document.createElement("style");
-  st.id = "coinflip-ultra-style";
-  st.textContent = `
-    .cfWrap{display:grid;gap:12px;}
-    .cfGrid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;align-items:start;}
-    @media (max-width: 820px){ .cfGrid{grid-template-columns:1fr;} }
-
-    .cfCard{
-      border-radius:18px;
-      background:rgba(255,255,255,.045);
-      border:1px solid rgba(255,255,255,.10);
-      box-shadow:0 18px 60px rgba(0,0,0,.35);
-      padding:14px;
-    }
-    .cfTitle{font-weight:950;font-size:16px;margin-bottom:4px;}
-    .cfSub{opacity:.8;font-size:12px;line-height:1.25;}
-
-    .cfRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-    .cfPill{
-      padding:9px 12px;border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(255,255,255,.06);
-      color:#e8eefc;font-weight:900;font-size:12px;
-      cursor:pointer;
-    }
-    .cfPill.active{
-      outline:2px solid rgba(110,150,255,.75);
-      background:rgba(76,133,255,.16);
-    }
-    .cfPill:disabled{opacity:.55;cursor:not-allowed;}
-
-    .cfSwitch{
-      width:46px;height:28px;border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(255,255,255,.06);
-      position:relative;cursor:pointer;
-    }
-    .cfSwitch::after{
-      content:"";position:absolute;top:3px;left:3px;
-      width:22px;height:22px;border-radius:50%;
-      background:rgba(255,255,255,.9);
-      transition:transform .18s ease;
-    }
-    .cfSwitch.on{background:rgba(76,133,255,.18);border-color:rgba(76,133,255,.32);}
-    .cfSwitch.on::after{transform:translateX(18px);background:#fff;}
-
-    .cfInfoGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
-    @media (max-width: 520px){ .cfInfoGrid{grid-template-columns:1fr;} }
-    .cfBox{
-      border-radius:14px;padding:10px 12px;
-      background:rgba(255,255,255,.04);
-      border:1px solid rgba(255,255,255,.08);
-    }
-    .cfBox .h{opacity:.7;font-size:11px;}
-    .cfBox .v{font-weight:950;font-size:16px;margin-top:4px;}
-    .cfMsg{min-height:20px;margin-top:10px;font-weight:900;}
-
-    .cfBtn{
-      padding:12px 14px;border-radius:14px;
-      background:rgba(76,133,255,.92);
-      border:1px solid rgba(76,133,255,.35);
-      color:#fff;font-weight:950;cursor:pointer;
-    }
-    .cfBtn:disabled{opacity:.55;cursor:not-allowed;}
-    .cfBtnGhost{
-      padding:12px 14px;border-radius:14px;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.12);
-      color:#e8eefc;font-weight:900;cursor:pointer;
-    }
-    .cfBtnGhost:disabled{opacity:.45;cursor:not-allowed;}
-
-    .cfChips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-    .cfChip{
-      padding:8px 10px;border-radius:999px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.06);
-      color:#e8eefc;font-weight:900;font-size:12px;
-      cursor:pointer;
-    }
-    .cfBetRow{display:flex;gap:8px;align-items:center;margin-top:10px;}
-    .cfInput{
-      flex:1;padding:11px 12px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.06);
-      color:#e8eefc;outline:none;
-    }
-    .cfMiniBtn{
-      width:44px;height:44px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.06);
-      color:#e8eefc;font-weight:950;cursor:pointer;
-    }
-    .cfRightHint{opacity:.75;font-size:12px;line-height:1.25;margin-top:10px;}
-
-    /* --- 3D coin stage --- */
-    .coinStage{
-      height:230px;
-      border-radius:18px;
-      background:
-        radial-gradient(220px 160px at 55% 35%, rgba(140,120,255,.10), rgba(0,0,0,0)),
-        linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
-      border:1px solid rgba(255,255,255,.10);
-      display:grid;place-items:center;
-      perspective:1000px;
-      position:relative;
-      overflow:hidden;
-    }
-    .coinShadow{
-      position:absolute;bottom:44px;
-      width:130px;height:30px;border-radius:50%;
-      background:rgba(0,0,0,.42);
-      filter:blur(12px);
-      transform:scale(.78);
-      opacity:.55;
-      transition:transform .18s ease, opacity .18s ease;
-    }
-
-    .coin3D{
-      width:130px;height:130px;
-      position:relative;
-      transform-style:preserve-3d;
-      border-radius:50%;
-      will-change:transform;
-    }
-    .coin3D .rim{
-      position:absolute;inset:-3px;border-radius:50%;
-      background: conic-gradient(from 0deg,
-        rgba(255,255,255,.24), rgba(0,0,0,.14),
-        rgba(255,255,255,.18), rgba(0,0,0,.18),
-        rgba(255,255,255,.24));
-      filter:blur(.2px);
-      opacity:.55;
-      transform:translateZ(0px);
-    }
-    .coin3D .face{
-      position:absolute;inset:0;border-radius:50%;
-      display:flex;align-items:center;justify-content:center;
-      backface-visibility:hidden;
-      border:1px solid rgba(255,255,255,.18);
-      box-shadow:
-        0 16px 44px rgba(0,0,0,.42),
-        0 0 0 2px rgba(0,0,0,.10) inset;
-      overflow:hidden;
-    }
-    .coin3D .face::before{
-      content:"";
-      position:absolute;inset:-20px;
-      background: radial-gradient(120px 90px at 35% 30%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%);
-      transform:rotate(-12deg);
-      opacity:.9;
-      pointer-events:none;
-    }
-    .coin3D .front{ transform: translateZ(8px); }
-    .coin3D .back { transform: rotateY(180deg) translateZ(8px); }
-
-    .coinMark{
-      position:relative;
-      font-weight:1000;
-      letter-spacing:.6px;
-      text-transform:uppercase;
-      padding:10px 14px;
-      border-radius:16px;
-      background:rgba(0,0,0,.18);
-      border:1px solid rgba(255,255,255,.18);
-      text-shadow:0 2px 14px rgba(0,0,0,.38);
-      display:flex;gap:8px;align-items:center;
-      user-select:none;
-    }
-    .coinMark b{font-size:14px;}
-    .coinMark span{font-size:18px;}
-
-    /* skins */
-    .skinPurple .front, .skinPurple .back{
-      background:
-        radial-gradient(circle at 30% 25%, rgba(255,255,255,.22), rgba(255,255,255,0) 55%),
-        radial-gradient(circle at 70% 80%, rgba(255,255,255,.10), rgba(255,255,255,0) 55%),
-        linear-gradient(145deg, rgba(165,100,255,.96), rgba(72,32,150,.98));
-    }
-    .skinGold .front, .skinGold .back{
-      background:
-        radial-gradient(circle at 30% 25%, rgba(255,255,255,.22), rgba(255,255,255,0) 55%),
-        radial-gradient(circle at 70% 80%, rgba(255,255,255,.10), rgba(255,255,255,0) 55%),
-        linear-gradient(145deg, rgba(255,214,100,.96), rgba(178,112,18,.98));
-    }
-    .skinSilver .front, .skinSilver .back{
-      background:
-        radial-gradient(circle at 30% 25%, rgba(255,255,255,.24), rgba(255,255,255,0) 55%),
-        radial-gradient(circle at 70% 80%, rgba(255,255,255,.12), rgba(255,255,255,0) 55%),
-        linear-gradient(145deg, rgba(235,245,255,.96), rgba(105,132,165,.98));
-    }
-
-    /* hiding labels on purple only */
-    .skinPurple .coinMark{opacity:0; transform:scale(.98);}
-    .showMark .coinMark{opacity:1; transform:scale(1); transition:opacity .12s ease, transform .12s ease;}
-
-    /* throw animation */
-    .coinAnim{
-      --rz: 540deg;
-      --rx: 1440deg;
-      animation: coinThrow 1.05s cubic-bezier(.18,.8,.18,1) both;
-    }
-    @keyframes coinThrow{
-      0%   { transform: translateY(28px) rotateX(0deg) rotateZ(0deg) scale(.98); }
-      18%  { transform: translateY(-62px) rotateX(calc(var(--rx) * .35)) rotateZ(calc(var(--rz) * .25)) scale(1.02); }
-      55%  { transform: translateY(-96px) rotateX(calc(var(--rx) * .75)) rotateZ(calc(var(--rz) * .65)) scale(1.03); }
-      78%  { transform: translateY(-26px) rotateX(calc(var(--rx) * .92)) rotateZ(calc(var(--rz) * .92)) scale(1.00); }
-      100% { transform: translateY(0px)  rotateX(var(--rx)) rotateZ(var(--rz)) scale(1); }
-    }
-  `;
-  document.head.appendChild(st);
+function coinCurrentMult() {
+  if (!coinState.series) return 1.94;
+  return COIN_MULTS[Math.min(coinState.step, COIN_MULTS.length - 1)];
 }
-
-// 2) helpers (используем твои функции, если есть)
-function cfAudioUnlock() {
-  try {
-    const ctx = (typeof getAudio === "function") ? getAudio() : null;
-    if (ctx && ctx.state === "suspended") ctx.resume().catch(()=>{});
-  } catch {}
-}
-function cfSfxStart(){ if (typeof sfxCoinStart === "function") sfxCoinStart(); }
-function cfSfxImpact(){ if (typeof sfxCoinImpact === "function") sfxCoinImpact(); }
-function cfSfxWin(){ if (typeof sfxWin === "function") sfxWin(); }
-function cfSfxLose(){ if (typeof sfxLose === "function") sfxLose(); }
 
 function renderCoin() {
-  ensureCoinFlipStyles();
+  // clamp bet
+  coinState.bet = Math.max(1, Math.floor(coinState.bet || 1));
+  if (coinState.bet > wallet.coins) coinState.bet = wallet.coins || 1;
 
-  const chips = [10, 50, 100, 250, 500];
-  const mult = coinState.streakOn
-    ? coinState.streakSteps[Math.min(coinState.streakIndex, coinState.streakSteps.length - 1)]
-    : 1.94;
+  const mult = coinCurrentMult();
   const possibleWin = Math.floor(coinState.bet * mult);
 
   screenEl.innerHTML = `
-    <div class="cfWrap">
-      <div class="cfGrid">
+    <div class="card">
+      <div class="row">
+        <div>
+          <h2 class="h1">Coin Flip</h2>
+          <div class="p">Фиолетовая монета в полёте → после броска становится <b>золотой</b> (орёл) или <b>серебряной</b> (решка).</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
+      </div>
 
-        <div class="cfCard">
-          <div class="cfTitle">Coin Flip</div>
-          <div class="cfSub">
-            Монета по умолчанию <b>фиолетовая</b>. При броске крутится фиолетовой, после приземления становится
-            <b>золотой (Орёл)</b> или <b>серебряной (Решка)</b>.
-          </div>
-
-          <div class="coinStage" style="margin-top:12px;">
+      <div class="grid2">
+        <div class="card" style="padding:12px;">
+          <div class="coinStage">
             <div class="coinShadow" id="coinShadow"></div>
-
-            <div class="coin3D ${coinState.skin === "purple" ? "skinPurple" : (coinState.skin === "gold" ? "skinGold showMark" : "skinSilver showMark")}"
-                 id="coin3D">
+            <div class="coin3D skin-${coinState.skin}" id="coin3D">
               <div class="rim"></div>
-              <div class="face front">
-                <div class="coinMark"><span>🦅</span> <b>ОРЁЛ</b></div>
-              </div>
-              <div class="face back">
-                <div class="coinMark"><span>🌙</span> <b>РЕШКА</b></div>
-              </div>
+              <div class="face front"><div class="label">ОРЁЛ</div></div>
+              <div class="face back"><div class="label">РЕШКА</div></div>
             </div>
           </div>
 
-          <div class="cfRow" style="margin-top:12px;">
-            <button class="cfPill ${coinState.choice === "heads" ? "active" : ""}" id="pickHeads" ${coinState.spinning ? "disabled" : ""}>🦅 Орёл</button>
-            <button class="cfPill ${coinState.choice === "tails" ? "active" : ""}" id="pickTails" ${coinState.spinning ? "disabled" : ""}>🌙 Решка</button>
-
-            <div style="flex:1"></div>
-
-            <div class="cfRow" style="gap:8px;">
-              <div style="opacity:.8;font-size:12px;font-weight:900;">Звук</div>
-              <div class="cfSwitch ${coinState.sfx ? "on" : ""}" id="sfxSwitch"></div>
-
-              <div style="opacity:.8;font-size:12px;font-weight:900;margin-left:10px;">Серия</div>
-              <div class="cfSwitch ${coinState.streakOn ? "on" : ""}" id="streakSwitch" ${coinState.spinning ? "style='pointer-events:none;opacity:.6;'" : ""}></div>
-            </div>
+          <div class="row" style="margin-top:10px;">
+            <button class="chip ${coinState.choice==="heads"?"active":""}" id="pickH" ${coinState.spinning?"disabled":""}>🦅 Орёл</button>
+            <button class="chip ${coinState.choice==="tails"?"active":""}" id="pickT" ${coinState.spinning?"disabled":""}>🌙 Решка</button>
+            <div class="spacer"></div>
+            <button class="chip ${coinState.sfx?"active":""}" id="togSfx">Звук</button>
+            <button class="chip ${coinState.series?"active":""}" id="togSeries">Серия</button>
           </div>
 
-          <div class="cfInfoGrid">
-            <div class="cfBox">
-              <div class="h">Множитель</div>
-              <div class="v">x${mult.toFixed(2)}</div>
-            </div>
-            <div class="cfBox">
-              <div class="h">Возможный выигрыш</div>
-              <div class="v">+${possibleWin} 🪙</div>
-            </div>
+          <div class="kpiGrid">
+            <div class="kpi"><div class="t">Множитель</div><div class="v">x${mult.toFixed(2)}</div></div>
+            <div class="kpi"><div class="t">Возможный выигрыш</div><div class="v">+${possibleWin} 🪙</div></div>
+            <div class="kpi"><div class="t">Статус</div><div class="v">${coinState.spinning ? "В полёте…" : "Готов"}</div></div>
           </div>
 
-          <div class="cfRow" style="margin-top:10px;">
-            ${coinState.streakSteps.map((v, i) => `
-              <span class="cfChip" style="${i === coinState.streakIndex && coinState.streakOn ? "outline:2px solid rgba(76,133,255,.85);" : ""}">
-                x${v.toFixed(2)}
-              </span>
-            `).join("")}
+          <div class="row" style="margin-top:10px; gap:10px;">
+            <button class="btn" id="coinThrow" style="flex:1;" ${coinState.spinning?"disabled":""}>Бросить</button>
+            <button class="btnGhost" id="coinCash" ${coinState.series && coinState.step>0 && !coinState.spinning ? "" : "disabled"}>Забрать</button>
           </div>
 
-          <div class="cfMsg" id="coinMsg">${coinState.lastMsg || ""}</div>
-
-          <div class="cfRow" style="margin-top:10px; gap:10px;">
-            <button class="cfBtn" id="coinThrow" ${coinState.spinning ? "disabled" : ""} style="flex:1;">Бросить</button>
-            <button class="cfBtnGhost" id="coinCash" ${coinState.streakOn && coinState.streakIndex > 0 ? "" : "disabled"}>Забрать</button>
-          </div>
+          <div class="msg ${coinState.msgClass||""}" id="coinMsg">${coinState.msg || ""}</div>
         </div>
 
-        <div class="cfCard">
-          <div class="cfRow" style="justify-content:space-between;align-items:center;">
-            <div class="cfTitle" style="margin:0;">Ставка</div>
-            <div class="cfChip" style="font-weight:950;">Баланс: <b>🪙 ${wallet?.coins ?? 0}</b></div>
+        <div class="card" style="padding:12px;">
+          <div class="row">
+            <div style="font-weight:950;">Ставка</div>
+            <div class="spacer"></div>
+            <button class="btnGhost" id="bonus">+1000 🪙</button>
           </div>
 
-          <div class="cfChips">
-            ${chips.map(v => `<button class="cfChip" data-bet="${v}">${v}</button>`).join("")}
-            <button class="cfChip" data-bet="max">MAX</button>
+          <div class="chips">
+            ${[10,50,100,250,500].map(v => `<button class="chip" data-b="${v}">${v}</button>`).join("")}
+            <button class="chip" data-b="max">MAX</button>
           </div>
 
-          <div class="cfBetRow">
-            <button class="cfMiniBtn" id="betMinus">-</button>
-            <input class="cfInput" id="bet" type="number" min="1" step="1" value="${coinState.bet}">
-            <button class="cfMiniBtn" id="betPlus">+</button>
+          <div class="row" style="margin-top:10px;">
+            <button class="miniBtn" id="m">-</button>
+            <input class="input" id="bet" type="number" min="1" step="1" value="${coinState.bet}">
+            <button class="miniBtn" id="p">+</button>
           </div>
 
-          <div class="cfRightHint">
-            При изменении ставки монета возвращается в <b>фиолетовый</b> режим ожидания.
+          <div class="p" style="margin-top:10px;">
+            Серия: при выигрыше шаг множителя растёт, при проигрыше сбрасывается. Сторону можно менять каждый бросок.
           </div>
 
-          <div class="cfRow" style="margin-top:12px;">
-            <button class="cfBtnGhost" id="bonusCoins" style="width:100%;">+1000 🪙</button>
+          <div class="row" style="margin-top:10px; gap:8px;">
+            ${COIN_MULTS.map((m, i) => `<span class="pill" style="${coinState.series && i===coinState.step ? "border-color:rgba(76,133,255,.55); background: rgba(76,133,255,.14);" : ""}">x${m.toFixed(2)}</span>`).join("")}
           </div>
         </div>
-
       </div>
     </div>
   `;
 
   const coinEl = document.getElementById("coin3D");
-  const msgEl = document.getElementById("coinMsg");
-  const betInput = document.getElementById("bet");
+  const betEl = document.getElementById("bet");
 
-  // pick side (можно всегда, кроме кручения)
-  document.getElementById("pickHeads").onclick = () => { if (!coinState.spinning) { coinState.choice = "heads"; renderCoin(); } };
-  document.getElementById("pickTails").onclick = () => { if (!coinState.spinning) { coinState.choice = "tails"; renderCoin(); } };
-
-  // toggles
-  document.getElementById("sfxSwitch").onclick = () => { coinState.sfx = !coinState.sfx; renderCoin(); };
-  document.getElementById("streakSwitch").onclick = () => {
-    if (coinState.spinning) return;
-    coinState.streakOn = !coinState.streakOn;
-    if (!coinState.streakOn) coinState.streakIndex = 0;
-    renderCoin();
-  };
-
-  // bet clamp + purple reset on any bet change
   const clampBet = () => {
-    let v = Math.floor(Number(betInput.value) || 0);
+    let v = Math.floor(Number(betEl.value) || 0);
     if (v < 1) v = 1;
-    if (wallet && typeof wallet.coins === "number") v = Math.min(v, wallet.coins);
+    if (v > wallet.coins) v = wallet.coins;
+    betEl.value = String(v);
     coinState.bet = v;
-    betInput.value = String(v);
   };
+  clampBet();
 
-  const onBetChanged = () => {
-    clampBet();
-    // вернули "ожидание" — фиолетовая
-    coinState.skin = "purple";
-    coinState.lastMsg = "";
+  document.getElementById("pickH").onclick = () => { if (!coinState.spinning) { sfxTap(); coinState.choice="heads"; renderCoin(); } };
+  document.getElementById("pickT").onclick = () => { if (!coinState.spinning) { sfxTap(); coinState.choice="tails"; renderCoin(); } };
+
+  document.getElementById("togSfx").onclick = () => { unlockAudioOnce(); coinState.sfx = !coinState.sfx; sfxTap(); renderCoin(); };
+  document.getElementById("togSeries").onclick = () => {
+    if (coinState.spinning) return;
+    sfxTap();
+    coinState.series = !coinState.series;
+    if (!coinState.series) coinState.step = 0;
     renderCoin();
   };
 
-  clampBet();
-  betInput.onchange = onBetChanged;
-
-  document.querySelectorAll(".cfChip[data-bet]").forEach((b) => {
+  document.querySelectorAll("[data-b]").forEach(b => {
     b.onclick = () => {
-      const val = b.dataset.bet;
-      betInput.value = val === "max" ? String(wallet.coins) : String(val);
-      onBetChanged();
+      sfxTap();
+      const val = b.dataset.b;
+      betEl.value = val === "max" ? String(wallet.coins) : String(val);
+      clampBet();
+      renderCoin();
     };
   });
 
-  document.getElementById("betMinus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) - 10); onBetChanged(); };
-  document.getElementById("betPlus").onclick = () => { betInput.value = String((Number(betInput.value) || 1) + 10); onBetChanged(); };
+  document.getElementById("m").onclick = () => { sfxTap(); betEl.value = String((Number(betEl.value)||1) - 10); clampBet(); renderCoin(); };
+  document.getElementById("p").onclick = () => { sfxTap(); betEl.value = String((Number(betEl.value)||1) + 10); clampBet(); renderCoin(); };
+  betEl.oninput = () => { clampBet(); renderCoin(); };
 
-  document.getElementById("bonusCoins").onclick = () => {
-    if (typeof addCoins === "function") addCoins(1000);
-    renderCoin();
-  };
+  document.getElementById("bonus").onclick = () => { sfxTap(); addCoins(1000); renderCoin(); };
 
-  function currentMult() {
-    if (!coinState.streakOn) return 1.94;
-    return coinState.streakSteps[Math.min(coinState.streakIndex, coinState.streakSteps.length - 1)];
-  }
-
-  document.getElementById("coinCash").onclick = () => {
-    if (!(coinState.streakOn && coinState.streakIndex > 0)) return;
-    const m = currentMult();
+  function cashOut() {
+    if (!(coinState.series && coinState.step > 0)) return;
+    const m = coinCurrentMult();
     const payout = Math.floor(coinState.bet * m);
-    if (typeof addCoins === "function") addCoins(payout);
-    coinState.lastMsg = `✅ Забрал: +${payout} 🪙 (x${m.toFixed(2)})`;
-    coinState.streakIndex = 0;
-    coinState.skin = "purple"; // после забора снова ожидание
+    addCoins(payout);
+    coinState.msg = `💰 Забрал: +${payout} 🪙 (x${m.toFixed(2)})`;
+    coinState.msgClass = "ok";
+    coinState.step = 0;
     renderCoin();
-  };
+  }
+  document.getElementById("coinCash").onclick = () => { if (coinState.sfx) sfxTap(); cashOut(); };
 
-  document.getElementById("coinThrow").onclick = async () => {
+  async function throwCoin() {
     clampBet();
     const bet = coinState.bet;
 
-    if (!wallet || bet > wallet.coins) return alert("Недостаточно монет");
+    if (bet <= 0) return;
+    if (bet > wallet.coins) {
+      coinState.msg = "Недостаточно монет";
+      coinState.msgClass = "bad";
+      return renderCoin();
+    }
 
     // списываем ставку
-    if (typeof addCoins === "function") addCoins(-bet);
+    addCoins(-bet);
 
     coinState.spinning = true;
-    msgEl.textContent = "Монета в воздухе…";
+    coinState.msg = "Монета в воздухе…";
+    coinState.msgClass = "";
+    // во время полёта монета ВСЕГДА фиолетовая
+    coinState.skin = "neutral";
 
-    // ВАЖНО: при броске всегда фиолетовая
-    coinState.skin = "purple";
-    renderCoin(); // перерисуем чтобы точно стало purple перед анимацией
+    renderCoin();
 
-    const coinEl2 = document.getElementById("coin3D"); // после renderCoin DOM новый
-    const rz = (Math.random() * 420 + 380) | 0;
-    const rx = (Math.random() * 900 + 1300) | 0;
-    coinEl2.style.setProperty("--rz", `${rz}deg`);
-    coinEl2.style.setProperty("--rx", `${rx}deg`);
+    const coin = document.getElementById("coin3D");
 
-    // звук
-    if (coinState.sfx) {
-      cfAudioUnlock();
-      cfSfxStart();
-      setTimeout(() => cfSfxImpact(), 860);
-    }
+    // старт звук
+    if (coinState.sfx) sfxCoinStart();
 
-    // анимация
-    coinEl2.classList.remove("coinAnim");
-    void coinEl2.offsetWidth;
-    coinEl2.classList.add("coinAnim");
+    // рандом вращения
+    const rz = (Math.random() * 420 + 420) | 0;
+    const rx = (Math.random() * 1000 + 1400) | 0;
+    coin.style.setProperty("--rz", `${rz}deg`);
+    coin.style.setProperty("--rx", `${rx}deg`);
+
+    coin.classList.remove("coinAnim");
+    void coin.offsetWidth;
+    coin.classList.add("coinAnim");
 
     // честный результат
-    const res = (typeof randFloat === "function" ? randFloat() : Math.random()) < 0.5 ? "heads" : "tails";
+    const res = randFloat() < 0.5 ? "heads" : "tails";
 
-    await new Promise(r => setTimeout(r, 1050));
+    setTimeout(() => { if (coinState.sfx) sfxCoinImpact(); }, 860);
 
-    // после приземления: меняем цвет и показываем грань
-    if (res === "heads") {
-      coinState.skin = "gold";
-      coinEl2.style.transform = "rotateY(0deg)";
-    } else {
-      coinState.skin = "silver";
-      coinEl2.style.transform = "rotateY(180deg)";
-    }
+    await new Promise(r => setTimeout(r, 1100));
+
+    // фиксируем положение (какая грань сверху)
+    coin.style.transform = res === "heads" ? "rotateY(0deg)" : "rotateY(180deg)";
+
+    // после приземления: монета становится золотой/серебряной
+    coinState.skin = res === "heads" ? "heads" : "tails";
 
     const won = (coinState.choice === res);
-    const m = currentMult();
+    const mult = coinCurrentMult();
 
     if (won) {
-      const payout = Math.floor(bet * m);
-      if (typeof addCoins === "function") addCoins(payout);
+      const payout = Math.floor(bet * mult);
+      addCoins(payout);
 
-      if (coinState.streakOn) {
-        coinState.streakIndex = Math.min(coinState.streakIndex + 1, coinState.streakSteps.length - 1);
+      if (coinState.series) {
+        coinState.step = Math.min(coinState.step + 1, COIN_MULTS.length - 1);
       }
 
-      coinState.lastMsg = `✅ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · +${payout} 🪙 (x${m.toFixed(2)})`;
-      if (coinState.sfx) cfSfxWin();
+      coinState.msg = `✅ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · +${payout} 🪙 (x${mult.toFixed(2)})`;
+      coinState.msgClass = "ok";
+      if (coinState.sfx) sfxWin();
     } else {
-      coinState.lastMsg = `❌ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · -${bet} 🪙`;
-      coinState.streakIndex = 0;
-      if (coinState.sfx) cfSfxLose();
+      coinState.msg = `❌ Выпало ${res === "heads" ? "ОРЁЛ" : "РЕШКА"} · -${bet} 🪙`;
+      coinState.msgClass = "bad";
+      coinState.step = 0;
+      if (coinState.sfx) sfxLose();
     }
 
     coinState.spinning = false;
     renderCoin();
-  };
+  }
+
+  document.getElementById("coinThrow").onclick = () => throwCoin();
 }
 
 // ===============================
-// DICE
+// DICE (D6 cube + D20/D100 bar) + no-100% chance
 // ===============================
 let diceState = {
-  sides: 6,         // 6/20/100
-  mode: "below",    // below/above
+  sides: 6,        // 6/20/100
+  mode: "below",   // below/above
   threshold: 3,
   bet: 50,
   rolling: false,
   lastRoll: null,
-  lastMsg: ""
+  msg: "",
+  msgClass: "",
 };
 
+function diceClampThreshold(sides, mode, t) {
+  t = Math.floor(Number(t) || 1);
+  if (mode === "below") {
+    t = Math.max(1, Math.min(sides - 1, t)); // запрет 100%
+  } else {
+    t = Math.max(2, Math.min(sides, t));     // запрет 100%
+  }
+  return t;
+}
 function diceChance(sides, mode, threshold) {
-  if (mode === "below") return Math.max(1 / sides, Math.min(1, threshold / sides));
-  return Math.max(1 / sides, Math.min(1, (sides - threshold + 1) / sides));
+  threshold = diceClampThreshold(sides, mode, threshold);
+  if (mode === "below") return threshold / sides;                 // <= threshold
+  return (sides - threshold + 1) / sides;                         // >= threshold
 }
 function diceMultiplier(chance) {
-  const edge = 0.98;
+  const edge = 0.98; // 2% edge
   return Math.max(1.02, edge / chance);
 }
+
 function renderCubeFaceHTML(n) {
   const map = {
     1: [0,0,0,0,1,0,0,0,0],
@@ -712,12 +483,19 @@ function renderCubeFaceHTML(n) {
 
 function renderDice() {
   const s = diceState.sides;
-  diceState.threshold = Math.max(1, Math.min(s, diceState.threshold));
-  diceState.bet = Math.max(1, Math.min(wallet.coins, Math.floor(Number(diceState.bet)||1)));
+  diceState.threshold = diceClampThreshold(s, diceState.mode, diceState.threshold);
+
+  // clamp bet
+  diceState.bet = Math.max(1, Math.floor(Number(diceState.bet) || 1));
+  if (diceState.bet > wallet.coins) diceState.bet = wallet.coins || 1;
 
   const chance = diceChance(s, diceState.mode, diceState.threshold);
   const mult = diceMultiplier(chance);
   const payout = Math.floor(diceState.bet * mult);
+
+  const minT = diceState.mode === "below" ? 1 : 2;
+  const maxT = diceState.mode === "below" ? (s - 1) : s;
+
   const winText = diceState.mode === "below"
     ? `Выигрыш, если выпало ≤ ${diceState.threshold}`
     : `Выигрыш, если выпало ≥ ${diceState.threshold}`;
@@ -726,31 +504,20 @@ function renderDice() {
     <div class="card">
       <div class="row">
         <div>
-          <div class="h1">Dice</div>
-          <div class="muted">D6 — 3D кубик. D20/D100 — рулетка. Режим “Меньше/Больше”.</div>
+          <h2 class="h1">Dice</h2>
+          <div class="p">D6 — 3D куб. D20/D100 — понятная шкала с win-зоной и бегунком.</div>
         </div>
         <div class="spacer"></div>
-        <div class="badge">Баланс: <b>🪙 ${wallet.coins}</b></div>
+        <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
       </div>
 
       <div class="row" style="margin-top:10px;">
-        <button class="chip ${s===6?"active":""}" data-sides="6">D6</button>
-        <button class="chip ${s===20?"active":""}" data-sides="20">D20</button>
-        <button class="chip ${s===100?"active":""}" data-sides="100">D100</button>
+        <button class="chip ${s===6?"active":""}" data-s="6">D6</button>
+        <button class="chip ${s===20?"active":""}" data-s="20">D20</button>
+        <button class="chip ${s===100?"active":""}" data-s="100">D100</button>
         <div class="spacer"></div>
-        <button class="chip ${diceState.mode==="below"?"active":""}" data-mode="below">Меньше</button>
-        <button class="chip ${diceState.mode==="above"?"active":""}" data-mode="above">Больше</button>
-      </div>
-
-      <div class="bigNums">
-        <div class="bigNum">
-          <div class="n">${String(diceState.threshold).padStart(2,"0")}</div>
-          <div class="s">твоё число</div>
-        </div>
-        <div class="bigNum">
-          <div class="n">${diceState.lastRoll==null ? "00" : String(diceState.lastRoll).padStart(2,"0")}</div>
-          <div class="s">выпавшее</div>
-        </div>
+        <button class="chip ${diceState.mode==="below"?"active":""}" data-m="below">Меньше</button>
+        <button class="chip ${diceState.mode==="above"?"active":""}" data-m="above">Больше</button>
       </div>
 
       <div class="kpiGrid">
@@ -761,187 +528,262 @@ function renderDice() {
 
       <div style="margin-top:10px;">
         <div class="row" style="justify-content:space-between;">
-          <div style="font-weight:900;">Порог: <b id="thLabel">${diceState.threshold}</b> из ${s}</div>
-          <div class="badge">Шанс <b>${(chance*100).toFixed(1)}%</b> · x<b>${mult.toFixed(2)}</b></div>
+          <div style="font-weight:950;">Порог: <b id="thLabel">${diceState.threshold}</b> из ${s}</div>
+          <div class="pill">Шанс ${(chance*100).toFixed(1)}% · x${mult.toFixed(2)}</div>
         </div>
-        <input id="threshold" class="range" type="range" min="1" max="${s}" value="${diceState.threshold}">
-        <div class="muted">${winText}</div>
+        <input id="threshold" class="range" type="range" min="${minT}" max="${maxT}" value="${diceState.threshold}">
+        <div class="p">${winText}</div>
       </div>
 
       <div class="diceArena" id="diceArena">
-        <div class="diceShadow"></div>
+        <div class="diceShadow" id="diceShadow"></div>
+
         ${
-          s===6
-          ? `<div class="diceThrow">
-              <div class="cube ${diceState.lastRoll ? "show-"+diceState.lastRoll : ""}" id="cube">
-                ${renderCubeFaceHTML(1)}
-                ${renderCubeFaceHTML(2)}
-                ${renderCubeFaceHTML(3)}
-                ${renderCubeFaceHTML(4)}
-                ${renderCubeFaceHTML(5)}
-                ${renderCubeFaceHTML(6)}
+          s === 6
+            ? `
+              <div class="diceThrow">
+                <div class="cube ${diceState.lastRoll ? "show-" + diceState.lastRoll : ""}" id="cube">
+                  ${renderCubeFaceHTML(1)}
+                  ${renderCubeFaceHTML(2)}
+                  ${renderCubeFaceHTML(3)}
+                  ${renderCubeFaceHTML(4)}
+                  ${renderCubeFaceHTML(5)}
+                  ${renderCubeFaceHTML(6)}
+                </div>
               </div>
-            </div>`
-          : `<div class="rollStrip">
-              <div class="ghostL" id="gL">17</div>
-              <div class="num" id="stripNum">00</div>
-              <div class="ghostR" id="gR">13</div>
-            </div>`
+            `
+            : `
+              <div class="probRollNum" id="probRollNum">${diceState.lastRoll == null ? "00" : String(diceState.lastRoll).padStart(2,"0")}</div>
+              <div class="probBar" id="probBar">
+                <div class="probWinZone" id="probWinZone"></div>
+                <div class="probMarker" id="probMarker" style="left: 0%"></div>
+              </div>
+              <div class="probHint">
+                <div>1</div>
+                <div id="probMid">Шанс ${(chance*100).toFixed(1)}% · x${mult.toFixed(2)}</div>
+                <div>${s}</div>
+              </div>
+            `
         }
       </div>
 
-      <div style="margin-top:12px;">
-        <div class="row" style="justify-content:space-between;">
-          <div style="font-weight:900;">Ставка</div>
-          <div class="badge"><b id="betShow">${diceState.bet}</b> 🪙</div>
+      <div class="grid2" style="margin-top:12px;">
+        <div class="card" style="padding:12px;">
+          <div class="row">
+            <div style="font-weight:950;">Ставка</div>
+            <div class="spacer"></div>
+            <div class="pill"><b id="betShow">${diceState.bet}</b> 🪙</div>
+          </div>
+
+          <div class="chips">
+            ${[10,50,100,250,500].map(v => `<button class="chip" data-b="${v}">${v}</button>`).join("")}
+            <button class="chip" data-b="max">MAX</button>
+          </div>
+
+          <div class="row" style="margin-top:10px;">
+            <button class="miniBtn" id="bm">-</button>
+            <input class="input" id="bet" type="number" min="1" step="1" value="${diceState.bet}">
+            <button class="miniBtn" id="bp">+</button>
+          </div>
+
+          <div class="row" style="margin-top:10px; gap:10px;">
+            <button class="btn" id="rollBtn" style="flex:1;" ${diceState.rolling?"disabled":""}>Бросить</button>
+            <button class="btnGhost" id="bonus">+1000 🪙</button>
+          </div>
+
+          <div class="msg ${diceState.msgClass||""}" id="diceMsg">${diceState.msg || ""}</div>
         </div>
 
-        <div class="row" style="margin-top:8px;">
-          ${[10,50,100,250,500].map(v=>`<button class="chip" data-bet="${v}">${v}</button>`).join("")}
-          <button class="chip" data-bet="max">MAX</button>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <button class="btn ghost small" id="betMinus">-</button>
-          <input id="bet" class="input" type="number" min="1" step="1" value="${diceState.bet}">
-          <button class="btn ghost small" id="betPlus">+</button>
+        <div class="card" style="padding:12px;">
+          <div style="font-weight:950;">Пояснение</div>
+          <div class="p" style="margin-top:8px;">
+            <b>Важно:</b> мы запретили 100% шанс, чтобы нельзя было фармить баланс (например “6 из 6”).<br><br>
+            В D20/D100 видно win-зону на шкале и куда “упал” бегунок.
+          </div>
         </div>
       </div>
-
-      <div class="row" style="margin-top:12px;">
-        <button class="btn" id="rollBtn" style="flex:1" ${diceState.rolling?"disabled":""}>Бросить</button>
-        <button class="btn ghost" id="bonus">+1000 🪙</button>
-      </div>
-
-      <div class="msgLine" id="diceMsg">${diceState.lastMsg || ""}</div>
     </div>
   `;
 
   // handlers
-  document.querySelectorAll("[data-sides]").forEach(b=>{
+  document.querySelectorAll("[data-s]").forEach(b => {
     b.onclick = () => {
-      playClick();
-      diceState.sides = Number(b.dataset.sides);
-      diceState.threshold = diceState.sides === 6 ? 3 : (diceState.sides === 20 ? 10 : 50);
+      sfxTap();
+      diceState.sides = Number(b.dataset.s);
+      if (diceState.sides === 6) diceState.threshold = 3;
+      if (diceState.sides === 20) diceState.threshold = 10;
+      if (diceState.sides === 100) diceState.threshold = 50;
       diceState.lastRoll = null;
-      diceState.lastMsg = "";
+      diceState.msg = "";
+      diceState.msgClass = "";
       renderDice();
     };
   });
-  document.querySelectorAll("[data-mode]").forEach(b=>{
+
+  document.querySelectorAll("[data-m]").forEach(b => {
     b.onclick = () => {
-      playClick();
-      diceState.mode = b.dataset.mode;
-      diceState.lastMsg = "";
+      sfxTap();
+      diceState.mode = b.dataset.m;
+      diceState.threshold = diceClampThreshold(diceState.sides, diceState.mode, diceState.threshold);
+      diceState.msg = "";
+      diceState.msgClass = "";
       renderDice();
     };
   });
 
   const th = document.getElementById("threshold");
   th.oninput = () => {
-    diceState.threshold = Number(th.value);
+    diceState.threshold = diceClampThreshold(diceState.sides, diceState.mode, th.value);
     document.getElementById("thLabel").textContent = String(diceState.threshold);
-    diceState.lastMsg = "";
+    diceState.msg = "";
+    diceState.msgClass = "";
     renderDice();
   };
 
-  const betInput = document.getElementById("bet");
+  const betEl = document.getElementById("bet");
   const betShow = document.getElementById("betShow");
   const clampBet = () => {
-    let v = Math.floor(Number(betInput.value)||0);
-    if (v<1) v=1;
-    if (v>wallet.coins) v=wallet.coins;
-    betInput.value = String(v);
+    let v = Math.floor(Number(betEl.value) || 0);
+    if (v < 1) v = 1;
+    if (v > wallet.coins) v = wallet.coins;
+    betEl.value = String(v);
     betShow.textContent = String(v);
     diceState.bet = v;
   };
   clampBet();
-  betInput.oninput = clampBet;
-  document.getElementById("betMinus").onclick = ()=>{ betInput.value=String((Number(betInput.value)||1)-10); clampBet(); };
-  document.getElementById("betPlus").onclick = ()=>{ betInput.value=String((Number(betInput.value)||1)+10); clampBet(); };
-  document.querySelectorAll("[data-bet]").forEach(b=>{
-    b.onclick = ()=>{ betInput.value = b.dataset.bet==="max" ? String(wallet.coins) : String(b.dataset.bet); clampBet(); };
+
+  document.querySelectorAll("[data-b]").forEach(b => {
+    b.onclick = () => {
+      sfxTap();
+      const val = b.dataset.b;
+      betEl.value = val === "max" ? String(wallet.coins) : String(val);
+      clampBet();
+      renderDice();
+    };
   });
+  document.getElementById("bm").onclick = () => { sfxTap(); betEl.value = String((Number(betEl.value)||1) - 10); clampBet(); renderDice(); };
+  document.getElementById("bp").onclick = () => { sfxTap(); betEl.value = String((Number(betEl.value)||1) + 10); clampBet(); renderDice(); };
+  betEl.oninput = () => { clampBet(); renderDice(); };
 
-  document.getElementById("bonus").onclick = ()=>{ addCoins(1000); renderDice(); };
+  document.getElementById("bonus").onclick = () => { sfxTap(); addCoins(1000); renderDice(); };
 
-  document.getElementById("rollBtn").onclick = async () => {
-    await unlockAudio();
+  // roll logic
+  async function rollDice() {
     clampBet();
     if (diceState.rolling) return;
-    if (diceState.bet > wallet.coins) return alert("Недостаточно монет");
 
+    if (diceState.bet > wallet.coins) {
+      diceState.msg = "Недостаточно монет";
+      diceState.msgClass = "bad";
+      return renderDice();
+    }
+
+    // списать ставку
     addCoins(-diceState.bet);
+
     diceState.rolling = true;
-    diceState.lastMsg = "";
+    diceState.msg = "";
+    diceState.msgClass = "";
+    renderDice();
 
-    const roll = randInt(1, diceState.sides);
-    const win = diceState.mode==="below" ? (roll <= diceState.threshold) : (roll >= diceState.threshold);
+    const s = diceState.sides;
+    const threshold = diceClampThreshold(s, diceState.mode, diceState.threshold);
 
-    if (globalSound) SFX.roll();
+    // честный результат заранее
+    const roll = randInt(1, s);
+    const win = diceState.mode === "below" ? (roll <= threshold) : (roll >= threshold);
 
-    if (diceState.sides === 6) {
+    // звук старта
+    sfxRoll();
+
+    if (s === 6) {
       const arena = document.getElementById("diceArena");
       const cube = document.getElementById("cube");
+
       arena.classList.add("throwing");
+
       setTimeout(() => {
-        diceState.lastRoll = roll;
+        // в конце полёта фиксируем грань
         cube.className = "cube show-" + roll;
-      }, 900);
+        sfxHit();
+      }, 880);
 
-      setTimeout(() => {
-        arena.classList.remove("throwing");
-        finish();
-      }, 1250);
-    } else {
-      const numEl = document.getElementById("stripNum");
-      const gL = document.getElementById("gL");
-      const gR = document.getElementById("gR");
-
-      const start = performance.now();
-      let lastSwap = 0;
-      const spinTimer = setInterval(() => {
-        const now = performance.now();
-        if (now - start > 950) return;
-        if (now - lastSwap > 55) {
-          lastSwap = now;
-          gL.textContent = String(randInt(1, diceState.sides)).padStart(2,"0");
-          numEl.textContent = String(randInt(1, diceState.sides)).padStart(2,"0");
-          gR.textContent = String(randInt(1, diceState.sides)).padStart(2,"0");
-        }
-      }, 30);
-
-      setTimeout(() => {
-        clearInterval(spinTimer);
-        numEl.textContent = "00";
-      }, 950);
-
-      setTimeout(() => {
-        diceState.lastRoll = roll;
-        finish();
-      }, 1250);
+      await new Promise(r => setTimeout(r, 1200));
+      arena.classList.remove("throwing");
+      finish(win, roll);
+      return;
     }
 
-    function finish() {
-      const chance = diceChance(diceState.sides, diceState.mode, diceState.threshold);
-      const mult = diceMultiplier(chance);
-      const payout = Math.floor(diceState.bet * mult);
+    // D20/D100: шкала + бегунок + win-зона
+    const marker = document.getElementById("probMarker");
+    const zone = document.getElementById("probWinZone");
+    const num = document.getElementById("probRollNum");
+    const mid = document.getElementById("probMid");
 
-      if (win) {
-        addCoins(payout);
-        if (globalSound) SFX.win();
-        diceState.lastMsg = `✅ Выпало ${roll}. Выигрыш +${payout} 🪙 (x${mult.toFixed(2)})`;
-      } else {
-        if (globalSound) SFX.lose();
-        diceState.lastMsg = `❌ Выпало ${roll}. Проигрыш -${diceState.bet} 🪙`;
+    const chance = diceChance(s, diceState.mode, threshold);
+    const mult = diceMultiplier(chance);
+
+    const winFromPct = diceState.mode === "below" ? 0 : ((threshold - 1) / s) * 100;
+    const winToPct   = diceState.mode === "below" ? (threshold / s) * 100 : 100;
+    zone.style.left = `${winFromPct}%`;
+    zone.style.width = `${Math.max(0, winToPct - winFromPct)}%`;
+
+    const duration = 950;
+    const startX = randFloat() * 100;
+    const endX = ((roll - 0.5) / s) * 100;
+
+    const t0 = performance.now();
+    function tick() {
+      const t = performance.now() - t0;
+      const p = Math.min(1, t / duration);
+      const ease = 1 - Math.pow(1 - p, 3);
+      const wobble = (1 - p) * (Math.sin(p * 16) * 3);
+      const x = startX + (endX - startX) * ease + wobble;
+
+      marker.style.left = `${Math.max(0, Math.min(100, x))}%`;
+
+      const fake = randInt(1, s);
+      num.textContent = String(fake).padStart(2, "0");
+      mid.textContent = `Шанс ${(chance*100).toFixed(1)}% · x${mult.toFixed(2)}`;
+
+      if (p < 1) requestAnimationFrame(tick);
+      else {
+        num.textContent = String(roll).padStart(2, "0");
+        sfxHit();
+        finish(win, roll);
       }
-
-      diceState.rolling = false;
-      renderTopBar();
-      renderDice();
     }
-  };
+    requestAnimationFrame(tick);
+  }
+
+  function finish(win, roll) {
+    const s = diceState.sides;
+    const threshold = diceClampThreshold(s, diceState.mode, diceState.threshold);
+    const chance = diceChance(s, diceState.mode, threshold);
+    const mult = diceMultiplier(chance);
+    const payout = Math.floor(diceState.bet * mult);
+
+    if (win) {
+      addCoins(payout);
+      sfxWin();
+      diceState.msg = `✅ Выпало ${roll}. Выигрыш +${payout} 🪙 (x${mult.toFixed(2)})`;
+      diceState.msgClass = "ok";
+    } else {
+      sfxLose();
+      diceState.msg = `❌ Выпало ${roll}. Проигрыш -${diceState.bet} 🪙`;
+      diceState.msgClass = "bad";
+    }
+
+    diceState.lastRoll = roll;
+    diceState.rolling = false;
+    renderDice();
+  }
+
+  document.getElementById("rollBtn").onclick = () => rollDice();
 }
+
+// старт
+setScreen("coin");
 
 // ===============================
 // MINES
@@ -1210,6 +1052,7 @@ function renderMines() {
 
 // старт по умолчанию
 setScreen("coin");
+
 
 
 
