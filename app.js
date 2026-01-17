@@ -11,15 +11,18 @@ function randInt(min, max) {
 }
 
 // ===============================
-// Telegram WebApp
+// Telegram WebApp (optional)
 // ===============================
 const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
-
-const screenEl = document.getElementById("screen");
-const userEl = document.getElementById("user");
-const btnSfx = document.getElementById("btnSfx");
-const user = tg?.initDataUnsafe?.user;
+const tgHint = document.getElementById("tgHint");
+if (tg) {
+  tg.ready();
+  tg.expand();
+  const u = tg.initDataUnsafe?.user;
+  tgHint.textContent = u ? `Привет, ${u.first_name}` : "Открыто в Telegram";
+} else {
+  tgHint.textContent = "Открыто вне Telegram";
+}
 
 // ===============================
 // Wallet (local)
@@ -32,30 +35,21 @@ function loadWallet() {
   } catch {}
   return { coins: 1000 };
 }
-function saveWallet(w){ localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
+function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
 
-function setCoins(v){
+const balancePill = document.getElementById("balancePill");
+function setCoins(v) {
   wallet.coins = Math.max(0, Math.floor(v));
   saveWallet(wallet);
-  renderTop();
+  balancePill.textContent = `🪙 ${wallet.coins}`;
 }
-function addCoins(d){ setCoins(wallet.coins + d); }
-
-function renderTop(){
-  const coins = wallet.coins;
-  userEl.textContent = user
-    ? `Привет, ${user.first_name} · 🪙 ${coins}`
-    : `Открыто вне Telegram · 🪙 ${coins}`;
-}
-renderTop();
+function addCoins(d) { setCoins(wallet.coins + d); }
+setCoins(wallet.coins);
 
 // ===============================
-// Audio (WebAudio, modern)
+// Modern SFX (WebAudio, no files)
 // ===============================
-let SFX_ENABLED = true;
-btnSfx.classList.toggle("on", SFX_ENABLED);
-
 let _ctx = null;
 function audioCtx() {
   if (_ctx) return _ctx;
@@ -63,20 +57,18 @@ function audioCtx() {
   _ctx = Ctx ? new Ctx() : null;
   return _ctx;
 }
-async function ensureAudio() {
-  if (!SFX_ENABLED) return;
+async function unlockAudio() {
   const ctx = audioCtx();
   if (!ctx) return;
-  if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch {}
+  }
 }
-
-function tone({type="sine", f=440, t=0.08, g=0.06, when=0, detune=0}) {
-  if (!SFX_ENABLED) return;
+function tone({ type="sine", f=440, t=0.08, g=0.06, when=0, detune=0 }) {
   const ctx = audioCtx(); if (!ctx) return;
   const now = ctx.currentTime + when;
-
   const o = ctx.createOscillator();
-  const gn = ctx.createGain();
+  const gain = ctx.createGain();
   const filt = ctx.createBiquadFilter();
 
   o.type = type;
@@ -86,617 +78,693 @@ function tone({type="sine", f=440, t=0.08, g=0.06, when=0, detune=0}) {
   filt.type = "lowpass";
   filt.frequency.setValueAtTime(12000, now);
 
-  gn.gain.setValueAtTime(0.0001, now);
-  gn.gain.exponentialRampToValueAtTime(g, now + 0.01);
-  gn.gain.exponentialRampToValueAtTime(0.0001, now + t);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(g, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + t);
 
-  o.connect(filt);
-  filt.connect(gn);
-  gn.connect(ctx.destination);
-
-  o.start(now);
-  o.stop(now + t + 0.02);
+  o.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+  o.start(now); o.stop(now + t + 0.02);
 }
-
-function noise({t=0.10, g=0.03, when=0, hp=900}) {
-  if (!SFX_ENABLED) return;
+function noise({ t=0.08, g=0.02, when=0, hp=1200 }) {
   const ctx = audioCtx(); if (!ctx) return;
   const now = ctx.currentTime + when;
-
-  const bufferSize = Math.floor(ctx.sampleRate * t);
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const n = Math.floor(ctx.sampleRate * t);
+  const buffer = ctx.createBuffer(1, n, ctx.sampleRate);
   const data = buffer.getChannelData(0);
-  for (let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+  for (let i=0;i<n;i++) data[i] = (Math.random()*2-1) * (1 - i/n);
 
   const src = ctx.createBufferSource();
   src.buffer = buffer;
 
-  const gn = ctx.createGain();
-  gn.gain.setValueAtTime(g, now);
-  gn.gain.exponentialRampToValueAtTime(0.0001, now + t);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(g, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + t);
 
   const filter = ctx.createBiquadFilter();
   filter.type = "highpass";
   filter.frequency.setValueAtTime(hp, now);
 
-  src.connect(filter);
-  filter.connect(gn);
-  gn.connect(ctx.destination);
-
-  src.start(now);
-  src.stop(now + t + 0.02);
+  src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  src.start(now); src.stop(now + t + 0.02);
 }
 
-// global UI clicks
-function sfxClick(){ tone({type:"triangle", f:520, t:0.05, g:0.04}); }
-
-// coin
-function sfxCoinStart(){
-  noise({t:0.12,g:0.026,hp:1200,when:0});
-  tone({type:"triangle",f:420,t:0.11,g:0.03,when:0.01});
-  tone({type:"triangle",f:320,t:0.11,g:0.02,when:0.02});
-}
-function sfxCoinImpact(){
-  tone({type:"sine",f:980,t:0.06,g:0.05,when:0});
-  tone({type:"sine",f:1560,t:0.05,g:0.03,when:0.01});
-  noise({t:0.06,g:0.014,hp:2600,when:0.005});
-}
-function sfxWin(){
-  tone({type:"sine", f:740, t:0.10, g:0.05, when:0});
-  tone({type:"sine", f:932, t:0.12, g:0.045, when:0.05});
-  tone({type:"sine", f:1244,t:0.14, g:0.040, when:0.10});
-}
-function sfxLose(){
-  tone({type:"sine", f:220, t:0.16, g:0.06, when:0});
-  tone({type:"sine", f:165, t:0.18, g:0.05, when:0.06});
-}
-
-// dice
-function sfxRoll(){ noise({t:0.14,g:0.020,hp:900,when:0}); tone({type:"triangle",f:240,t:0.12,g:0.02,when:0}); }
-function sfxHit(){ tone({type:"sine",f:220,t:0.06,g:0.06,when:0}); noise({t:0.05,g:0.012,hp:1800,when:0.005}); }
-
-// mines
-function sfxTile(){ tone({type:"triangle",f:560,t:0.06,g:0.04}); }
-function sfxMine(){ noise({t:0.16,g:0.035,hp:600,when:0}); tone({type:"sine",f:120,t:0.18,g:0.06,when:0.03}); }
-function sfxCash(){ tone({type:"sine",f:660,t:0.10,g:0.05,when:0}); tone({type:"sine",f:880,t:0.12,g:0.045,when:0.06}); }
-
-btnSfx.onclick = async () => {
-  SFX_ENABLED = !SFX_ENABLED;
-  btnSfx.classList.toggle("on", SFX_ENABLED);
-  if (SFX_ENABLED) await ensureAudio();
-  sfxClick();
+const SFX = {
+  click(){ tone({type:"triangle", f:520, t:0.05, g:0.04}); },
+  whoosh(){ noise({t:0.13,g:0.03,hp:900}); tone({type:"triangle", f:340, t:0.12, g:0.03, when:0.01}); },
+  impact(){ tone({type:"sine", f:980, t:0.06, g:0.05}); tone({type:"sine", f:1560, t:0.05, g:0.03, when:0.01}); noise({t:0.05,g:0.015,hp:2600,when:0.005}); },
+  win(){ tone({type:"sine", f:740, t:0.10, g:0.05}); tone({type:"sine", f:932, t:0.12, g:0.045, when:0.05}); tone({type:"sine", f:1244, t:0.14, g:0.040, when:0.10}); },
+  lose(){ tone({type:"sine", f:220, t:0.16, g:0.06}); tone({type:"sine", f:165, t:0.18, g:0.05, when:0.06}); },
+  tick(){ tone({type:"square", f:820, t:0.03, g:0.02}); },
+  mine(){ noise({t:0.14,g:0.05,hp:400}); tone({type:"sine", f:90, t:0.18, g:0.07}); },
+  cash(){ tone({type:"sine", f:660, t:0.08, g:0.05}); tone({type:"sine", f:990, t:0.10, g:0.045, when:0.06}); },
 };
 
 // ===============================
 // Navigation
 // ===============================
-let currentScreen = "coin";
-document.querySelectorAll(".nav button").forEach(btn=>{
-  btn.onclick = async ()=>{
-    await ensureAudio();
-    sfxClick();
-    document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
+const screenEl = document.getElementById("screen");
+const navBtns = document.querySelectorAll(".nav__btn");
+
+function setActiveNav(name){
+  navBtns.forEach(b => b.classList.toggle("active", b.dataset.screen === name));
+}
+navBtns.forEach(btn=>{
+  btn.addEventListener("click", async ()=>{
+    await unlockAudio();
+    SFX.click();
     setScreen(btn.dataset.screen);
-  };
+  });
 });
 
-function setScreen(name){
-  currentScreen = name;
-  if (name === "coin") renderCoin();
-  else if (name === "dice") renderDice();
-  else renderMines();
-}
-
 // ===============================
-// COIN FLIP
+// COIN FLIP state
 // ===============================
-const coin = {
-  choice: "heads",
+const CF = {
+  choice: "heads",     // heads/tails
   bet: 50,
-  busy: false,
-  streakOn: true,
+  spinning: false,
+  sfx: true,
+  streak: true,
   streakIndex: 0,
-  steps: [1.94, 3.88, 7.76, 15.52],
-  last: null,        // heads/tails
-  msg: ""
+  streakSteps: [1.94, 3.88, 7.76, 15.52],
+  coinState: "neutral", // neutral/heads/tails  (важно!)
+  lastMsg: "",
 };
 
-function coinMult(){
-  if (!coin.streakOn) return 1.94;
-  return coin.steps[Math.min(coin.streakIndex, coin.steps.length - 1)];
-}
-
-function renderCoin(){
-  // clamp bet
-  coin.bet = Math.max(1, Math.min(wallet.coins, Math.floor(Number(coin.bet)||50)));
-
-  const m = coinMult();
-  const pot = Math.floor(coin.bet * m);
-
-  const coinClass =
-    coin.last === "heads" ? "gold" :
-    coin.last === "tails" ? "silver" :
-    "purple";
-
-  screenEl.innerHTML = `
-    <div class="card">
-      <div class="row">
-        <div>
-          <div class="h1">Coin Flip</div>
-          <div class="h2">Фиолетовая монета в полёте — после броска становится золотой (орёл) или серебряной (решка).</div>
-        </div>
-        <div class="spacer"></div>
-        <span class="chip">Баланс: <b>🪙 ${wallet.coins}</b></span>
-      </div>
-
-      <div class="grid2" style="margin-top:12px;">
-        <div class="card" style="margin:0;">
-          <div class="stage">
-            <div class="shadow" id="coinShadow"></div>
-            <div class="coin3d ${coinClass}" id="coinEl">
-              <div class="rim"></div>
-              <div class="face front"><div class="coinLabel">ОРЁЛ</div></div>
-              <div class="face back"><div class="coinLabel">РЕШКА</div></div>
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:10px;">
-            <button class="chip ${coin.choice==="heads"?"active":""}" id="cHeads" ${coin.busy?"disabled":""}>🦅 Орёл</button>
-            <button class="chip ${coin.choice==="tails"?"active":""}" id="cTails" ${coin.busy?"disabled":""}>🌙 Решка</button>
-
-            <div class="spacer"></div>
-
-            <button class="pill ${coin.streakOn?"on":""}" id="cStreak" ${coin.busy?"disabled":""}>Серия</button>
-          </div>
-
-          <div class="kpi">
-            <div class="box"><div class="t">Множитель</div><div class="v">x${m.toFixed(2)}</div></div>
-            <div class="box"><div class="t">Возможный выигрыш</div><div class="v">+${pot} 🪙</div></div>
-            <div class="box"><div class="t">Статус</div><div class="v">${coin.busy?"В воздухе…":"Готов"}</div></div>
-          </div>
-
-          <div class="row" style="margin-top:10px;">
-            <button class="btn" id="cThrow" style="flex:1;" ${coin.busy?"disabled":""}>Бросить</button>
-            <button class="btn ghost" id="cCash" ${coin.streakOn && coin.streakIndex>0 && !coin.busy ? "" : "disabled"}>Забрать</button>
-          </div>
-
-          <div class="msg ${coin.msg.startsWith("✅")?"ok":coin.msg.startsWith("❌")?"bad":""}" id="cMsg">${coin.msg||""}</div>
-        </div>
-
-        <div class="card" style="margin:0;">
-          <div class="row">
-            <div class="h1">Ставка</div>
-            <div class="spacer"></div>
-            <button class="pill" id="cBonus">+1000 🪙</button>
-          </div>
-
-          <div class="row" style="margin-top:10px;">
-            ${[10,50,100,250,500].map(v=>`<button class="chip" data-b="${v}">${v}</button>`).join("")}
-            <button class="chip" data-b="max">MAX</button>
-          </div>
-
-          <div class="row" style="margin-top:10px;">
-            <button class="miniBtn" id="cMinus">-</button>
-            <input class="input" id="cBet" type="number" min="1" step="1" value="${coin.bet}">
-            <button class="miniBtn" id="cPlus">+</button>
-          </div>
-
-          <div class="h2" style="margin-top:10px;">
-            Серия: при выигрыше шаг множителя растёт, при проигрыше сбрасывается. Сторону можно менять каждый бросок.
-          </div>
-
-          <div class="row" style="margin-top:10px;">
-            ${coin.steps.map((x,i)=>`<span class="chip ${coin.streakOn && i===coin.streakIndex?"active":""}">x${x.toFixed(2)}</span>`).join("")}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // bindings
-  const coinEl = document.getElementById("coinEl");
-
-  document.getElementById("cHeads").onclick = async ()=>{ await ensureAudio(); sfxClick(); if(!coin.busy){ coin.choice="heads"; renderCoin(); } };
-  document.getElementById("cTails").onclick = async ()=>{ await ensureAudio(); sfxClick(); if(!coin.busy){ coin.choice="tails"; renderCoin(); } };
-
-  document.getElementById("cStreak").onclick = async ()=>{
-    await ensureAudio(); sfxClick();
-    if (coin.busy) return;
-    coin.streakOn = !coin.streakOn;
-    if (!coin.streakOn) coin.streakIndex = 0;
-    renderCoin();
-  };
-
-  document.getElementById("cBonus").onclick = async ()=>{ await ensureAudio(); sfxClick(); addCoins(1000); renderCoin(); };
-
-  const betInput = document.getElementById("cBet");
-  const clamp = ()=>{
-    let v = Math.floor(Number(betInput.value)||0);
-    if (v<1) v=1;
-    if (v>wallet.coins) v=wallet.coins;
-    coin.bet = v;
-    betInput.value = String(v);
-  };
-
-  document.querySelectorAll("[data-b]").forEach(b=>{
-    b.onclick = async ()=>{
-      await ensureAudio(); sfxClick();
-      const v = b.dataset.b;
-      betInput.value = v==="max" ? String(wallet.coins) : String(v);
-      clamp(); renderCoin();
-    };
-  });
-  document.getElementById("cMinus").onclick = async ()=>{ await ensureAudio(); sfxClick(); betInput.value=String((Number(betInput.value)||1)-10); clamp(); renderCoin(); };
-  document.getElementById("cPlus").onclick  = async ()=>{ await ensureAudio(); sfxClick(); betInput.value=String((Number(betInput.value)||1)+10); clamp(); renderCoin(); };
-  betInput.oninput = ()=>{ clamp(); };
-
-  document.getElementById("cCash").onclick = async ()=>{
-    await ensureAudio(); sfxClick();
-    if (!(coin.streakOn && coin.streakIndex>0) || coin.busy) return;
-    const payout = Math.floor(coin.bet * coinMult());
-    addCoins(payout);
-    coin.msg = `✅ Забрал: +${payout} 🪙 (x${coinMult().toFixed(2)})`;
-    coin.streakIndex = 0;
-    renderCoin();
-  };
-
-  document.getElementById("cThrow").onclick = async ()=>{
-    await ensureAudio();
-    clamp();
-    if (coin.busy) return;
-    if (coin.bet > wallet.coins) { coin.msg="❌ Недостаточно монет"; renderCoin(); return; }
-
-    // списываем
-    addCoins(-coin.bet);
-
-    coin.busy = true;
-    coin.msg = "";
-    renderCoin();
-
-    // на время полёта всегда фиолетовая
-    coin.last = null;
-    coinEl.classList.remove("gold","silver");
-    coinEl.classList.add("purple");
-
-    // random spins
-    const rz = (Math.random()*420+380)|0;
-    const rx = (Math.random()*900+1400)|0;
-    coinEl.style.setProperty("--rz", `${rz}deg`);
-    coinEl.style.setProperty("--rx", `${rx}deg`);
-
-    // animate
-    coinEl.classList.remove("coinThrow");
-    void coinEl.offsetWidth;
-    coinEl.classList.add("coinThrow");
-
-    sfxCoinStart();
-    setTimeout(()=>sfxCoinImpact(), 860);
-
-    const result = randFloat()<0.5 ? "heads" : "tails";
-
-    await new Promise(r=>setTimeout(r, 1100));
-
-    // фиксируем сторону
-    coinEl.classList.remove("coinThrow");
-    coinEl.style.transform = result==="heads" ? "rotateY(0deg)" : "rotateY(180deg)";
-
-    // IMPORTANT: цвет результата
-    coin.last = result; // heads -> gold, tails -> silver
-
-    const mNow = coinMult();
-    const win = (coin.choice === result);
-
-    if (win) {
-      const payout = Math.floor(coin.bet * mNow);
-      addCoins(payout);
-      coin.msg = `✅ Выпало ${result==="heads"?"ОРЁЛ":"РЕШКА"} · +${payout} 🪙 (x${mNow.toFixed(2)})`;
-      sfxWin();
-      if (coin.streakOn) coin.streakIndex = Math.min(coin.streakIndex+1, coin.steps.length-1);
-    } else {
-      coin.msg = `❌ Выпало ${result==="heads"?"ОРЁЛ":"РЕШКА"} · -${coin.bet} 🪙`;
-      sfxLose();
-      coin.streakIndex = 0;
-    }
-
-    coin.busy = false;
-    renderTop();
-    renderCoin();
-  };
+function cfMult(){
+  if (!CF.streak) return 1.94;
+  return CF.streakSteps[Math.min(CF.streakIndex, CF.streakSteps.length - 1)];
 }
 
 // ===============================
-// DICE
+// DICE state
 // ===============================
-const dice = {
-  sides: 6,         // 6/20/100
-  mode: "below",    // below/above
+const DICE = {
+  sides: 6,          // 6/20/100
+  mode: "below",     // below/above
   threshold: 3,
   bet: 50,
   rolling: false,
   lastRoll: null,
-  msg: ""
+  lastMsg: "",
+  sfx: true,
 };
 
-function diceChance(sides, mode, threshold){
-  if (mode === "below") return Math.max(1/sides, Math.min(1, threshold / sides));
-  return Math.max(1/sides, Math.min(1, (sides - threshold + 1) / sides));
-}
-function diceMultiplier(chance){
-  const edge = 0.98;
-  // если вдруг chance==1 — не даём играть
-  if (chance >= 0.999) return 0;
-  return Math.max(1.05, edge / chance);
-}
 function diceClampThreshold(){
-  const s = dice.sides;
-  // анти-баг: нельзя 100% шанс
-  if (dice.mode === "below") {
-    dice.threshold = Math.min(Math.max(1, dice.threshold), s-1);
+  const s = DICE.sides;
+
+  // убираем 100% шанс:
+  // below: threshold не может быть == s
+  // above: threshold не может быть == 1
+  if (DICE.mode === "below") {
+    const maxT = Math.max(1, s - 1);
+    DICE.threshold = Math.min(Math.max(1, DICE.threshold), maxT);
   } else {
-    dice.threshold = Math.min(Math.max(2, dice.threshold), s);
+    const minT = Math.min(s, 2); // минимум 2
+    DICE.threshold = Math.min(Math.max(minT, DICE.threshold), s);
   }
 }
 
-function renderDice(){
-  diceClampThreshold();
+function diceChance(){
+  const s = DICE.sides;
+  const t = DICE.threshold;
+  if (DICE.mode === "below") return t / s;          // win if roll <= t
+  return (s - t + 1) / s;                           // win if roll >= t
+}
+function diceMult(){
+  // house edge ~2%
+  const edge = 0.98;
+  return Math.max(1.02, edge / diceChance());
+}
 
-  dice.bet = Math.max(1, Math.min(wallet.coins, Math.floor(Number(dice.bet)||50)));
+// ===============================
+// MINES state
+// ===============================
+let MINES = null; // active round or null
 
-  const chance = diceChance(dice.sides, dice.mode, dice.threshold);
-  const mult = diceMultiplier(chance);
-  const payout = mult ? Math.floor(dice.bet * mult) : 0;
+function minesBuild(minesCount){
+  const size = 25;
+  const s = new Set();
+  while (s.size < minesCount) s.add(randInt(0, size - 1));
+  return s;
+}
 
-  const winText = dice.mode==="below"
-    ? `Выигрыш если выпало ≤ ${dice.threshold}`
-    : `Выигрыш если выпало ≥ ${dice.threshold}`;
+// простой “казиношный” рост (не точные шансы, но выглядит вкусно)
+function minesMult(safeOpened, minesCount){
+  const a = 0.10 + minesCount * 0.007;
+  const b = 0.018 + minesCount * 0.0016;
+  const m = 1 + safeOpened * a + (safeOpened*safeOpened) * b * 0.06;
+  return Math.max(1, m);
+}
+
+// ===============================
+// Screen router
+// ===============================
+function setScreen(name){
+  setActiveNav(name);
+  if (name === "coin") return renderCoin();
+  if (name === "dice") return renderDice();
+  if (name === "mines") return renderMines();
+}
+setScreen("coin");
+
+// ===============================
+// COIN UI
+// ===============================
+function renderCoin(){
+  const mult = cfMult();
+  const possible = Math.floor(CF.bet * mult);
 
   screenEl.innerHTML = `
     <div class="card">
-      <div class="row">
+      <div class="rowBetween">
         <div>
-          <div class="h1">Dice</div>
-          <div class="h2">D6 — куб. D20/D100 — понятный порог и результат. 100% шанс запрещён.</div>
+          <div class="h1">Coin Flip</div>
+          <div class="hint">Фиолетовая монета в полёте — после броска становится золотой (орёл) или серебряной (решка).</div>
         </div>
-        <div class="spacer"></div>
-        <span class="chip">Баланс: <b>🪙 ${wallet.coins}</b></span>
+        <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
       </div>
 
-      <div class="row" style="margin-top:10px;">
-        <button class="chip ${dice.sides===6?"active":""}" data-s="6">D6</button>
-        <button class="chip ${dice.sides===20?"active":""}" data-s="20">D20</button>
-        <button class="chip ${dice.sides===100?"active":""}" data-s="100">D100</button>
+      <div class="grid2">
+        <div class="panel">
+          <div class="coinStage">
+            <div class="coinShadow" id="cfShadow"></div>
+            <div class="coin3d coin--${CF.coinState}" id="cfCoin">
+              <div class="rim"></div>
+              <div class="face front"><div class="label">ОРЁЛ</div></div>
+              <div class="face back"><div class="label">РЕШКА</div></div>
+            </div>
+          </div>
 
-        <div class="spacer"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="chip ${CF.choice==="heads"?"active":""}" id="cfHeads" ${CF.spinning?"disabled":""}>🦅 Орёл</button>
+            <button class="chip ${CF.choice==="tails"?"active":""}" id="cfTails" ${CF.spinning?"disabled":""}>🌙 Решка</button>
 
-        <button class="chip ${dice.mode==="below"?"active":""}" data-m="below">Меньше</button>
-        <button class="chip ${dice.mode==="above"?"active":""}" data-m="above">Больше</button>
-      </div>
+            <div style="flex:1"></div>
 
-      <div class="bigNums">
-        <div class="bigNum">
-          <div class="n">${String(dice.threshold).padStart(2,"0")}</div>
-          <div class="s">твоё число</div>
+            <button class="chip ${CF.sfx?"active":""}" id="cfSfx">Звук</button>
+            <button class="chip ${CF.streak?"active":""}" id="cfStreak">Серия</button>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi"><div class="t">Множитель</div><div class="v">x${mult.toFixed(2)}</div></div>
+            <div class="kpi"><div class="t">Возможный выигрыш</div><div class="v">+${possible} 🪙</div></div>
+            <div class="kpi"><div class="t">Статус</div><div class="v">${CF.spinning ? "В полёте…" : "Готов"}</div></div>
+          </div>
+
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="cfThrow" style="flex:1" ${CF.spinning?"disabled":""}>Бросить</button>
+            <button class="btnGhost" id="cfCash" ${CF.streak && CF.streakIndex>0 && !CF.spinning ? "" : "disabled"}>Забрать</button>
+          </div>
+
+          <div class="msg ${CF.lastMsg.includes("✅")?"good":CF.lastMsg.includes("❌")?"bad":"dim"}" id="cfMsg">${CF.lastMsg||""}</div>
         </div>
-        <div class="bigNum">
-          <div class="n">${dice.lastRoll==null?"00":String(dice.lastRoll).padStart(2,"0")}</div>
-          <div class="s">выпавшее</div>
+
+        <div class="panel">
+          <div class="rowBetween">
+            <div class="h1" style="font-size:14px">Ставка</div>
+            <button class="chip" id="cfBonus">+1000 🪙</button>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            ${[10,50,100,250,500].map(v=>`<button class="chip" data-bet="${v}">${v}</button>`).join("")}
+            <button class="chip" data-bet="max">MAX</button>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btnGhost" id="cfMinus" style="width:44px">-</button>
+            <input class="input" id="cfBet" type="number" min="1" step="1" value="${CF.bet}">
+            <button class="btnGhost" id="cfPlus" style="width:44px">+</button>
+          </div>
+
+          <div class="hint" style="margin-top:10px">
+            Серия: при выигрыше шаг множителя растёт, при проигрыше сбрасывается. Сторону можно менять каждый бросок.
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            ${CF.streakSteps.map((m,i)=>`<span class="chip ${CF.streak && i===CF.streakIndex ? "active":""}" style="cursor:default">x${m.toFixed(2)}</span>`).join("")}
+          </div>
         </div>
       </div>
-
-      <div class="kpi">
-        <div class="box"><div class="t">Множитель</div><div class="v">${mult?`x${mult.toFixed(2)}`:"—"}</div></div>
-        <div class="box"><div class="t">Возможный выигрыш</div><div class="v">${mult?`+${payout} 🪙`:"—"}</div></div>
-        <div class="box"><div class="t">Шанс</div><div class="v">${(chance*100).toFixed(1)}%</div></div>
-      </div>
-
-      <div class="rangeWrap">
-        <div class="rangeTop">
-          <div class="rangeLabel">Порог: ${dice.threshold} из ${dice.sides}</div>
-          <div class="spacer"></div>
-          <div class="bubble">Шанс ${(chance*100).toFixed(1)}% · ${mult?`x${mult.toFixed(2)}`:"—"}</div>
-        </div>
-        <input id="thr" class="range" type="range"
-          min="${dice.mode==="below" ? 1 : 2}"
-          max="${dice.mode==="below" ? dice.sides-1 : dice.sides}"
-          value="${dice.threshold}">
-        <div class="rangeHint">${winText}</div>
-      </div>
-
-      <div class="row" style="margin-top:12px;">
-        <div style="font-weight:950;">Ставка</div>
-        <div class="spacer"></div>
-        <span class="chip"><b id="betShow">${dice.bet}</b> 🪙</span>
-      </div>
-
-      <div class="row" style="margin-top:8px;">
-        ${[10,50,100,250,500].map(v=>`<button class="chip" data-b="${v}">${v}</button>`).join("")}
-        <button class="chip" data-b="max">MAX</button>
-        <div class="spacer"></div>
-        <button class="pill" id="dBonus">+1000 🪙</button>
-      </div>
-
-      <div class="row" style="margin-top:10px;">
-        <button class="miniBtn" id="dMinus">-</button>
-        <input class="input" id="dBet" type="number" min="1" step="1" value="${dice.bet}">
-        <button class="miniBtn" id="dPlus">+</button>
-      </div>
-
-      <div class="row" style="margin-top:12px;">
-        <button class="btn" id="dRoll" style="flex:1;" ${dice.rolling || !mult ? "disabled":""}>
-          Бросить ${dice.rolling?"...":""}
-        </button>
-      </div>
-
-      <div class="msg ${dice.msg.startsWith("✅")?"ok":dice.msg.startsWith("❌")?"bad":""}" id="dMsg">${dice.msg||""}</div>
     </div>
   `;
 
-  // handlers
-  document.querySelectorAll("[data-s]").forEach(b=>{
+  const coinEl = document.getElementById("cfCoin");
+  const shadowEl = document.getElementById("cfShadow");
+  const betInput = document.getElementById("cfBet");
+
+  function clampBet(){
+    let v = Math.floor(Number(betInput.value)||0);
+    if (v<1) v=1;
+    if (v>wallet.coins) v=wallet.coins;
+    CF.bet = v;
+    betInput.value = String(v);
+  }
+  clampBet();
+
+  document.getElementById("cfHeads").onclick = ()=>{ if(!CF.spinning){ CF.choice="heads"; renderCoin(); } };
+  document.getElementById("cfTails").onclick = ()=>{ if(!CF.spinning){ CF.choice="tails"; renderCoin(); } };
+
+  document.getElementById("cfSfx").onclick = async ()=>{
+    await unlockAudio();
+    CF.sfx = !CF.sfx;
+    SFX.click();
+    renderCoin();
+  };
+  document.getElementById("cfStreak").onclick = async ()=>{
+    await unlockAudio();
+    if (CF.spinning) return;
+    CF.streak = !CF.streak;
+    if (!CF.streak) CF.streakIndex = 0;
+    SFX.click();
+    renderCoin();
+  };
+
+  document.querySelectorAll("[data-bet]").forEach(b=>{
     b.onclick = async ()=>{
-      await ensureAudio(); sfxClick();
-      dice.sides = Number(b.dataset.s);
-      dice.lastRoll = null;
-      dice.msg = "";
-      if (dice.sides===6) dice.threshold = 3;
-      if (dice.sides===20) dice.threshold = 11;
-      if (dice.sides===100) dice.threshold = 55;
+      await unlockAudio();
+      SFX.click();
+      const val = b.dataset.bet;
+      betInput.value = val === "max" ? String(wallet.coins) : String(val);
+      clampBet();
+      renderCoin();
+    };
+  });
+
+  document.getElementById("cfMinus").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    betInput.value = String((Number(betInput.value)||1)-10);
+    clampBet(); renderCoin();
+  };
+  document.getElementById("cfPlus").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    betInput.value = String((Number(betInput.value)||1)+10);
+    clampBet(); renderCoin();
+  };
+  betInput.oninput = ()=>{ clampBet(); };
+
+  document.getElementById("cfBonus").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    addCoins(1000);
+    renderCoin();
+  };
+
+  document.getElementById("cfCash").onclick = async ()=>{
+    await unlockAudio();
+    if (!(CF.streak && CF.streakIndex>0)) return;
+    const m = cfMult();
+    const payout = Math.floor(CF.bet * m);
+    addCoins(payout);
+    if (CF.sfx) SFX.cash();
+    CF.lastMsg = `✅ Забрал: +${payout} 🪙 (x${m.toFixed(2)})`;
+    CF.streakIndex = 0;
+    renderCoin();
+  };
+
+  document.getElementById("cfThrow").onclick = async ()=>{
+    await unlockAudio();
+    if (CF.spinning) return;
+
+    clampBet();
+    if (CF.bet <= 0) return;
+    if (CF.bet > wallet.coins) return alert("Недостаточно монет");
+
+    // списываем ставку
+    addCoins(-CF.bet);
+
+    CF.spinning = true;
+    CF.lastMsg = "Монета в воздухе…";
+    renderCoin();
+
+    // монета в полете ВСЕГДА фиолетовая (как ты хочешь)
+    CF.coinState = "neutral";
+
+    const rz = randInt(420, 820);
+    const rx = randInt(1400, 2400);
+
+    coinEl.classList.remove("coinThrow");
+    coinEl.style.setProperty("--rz", `${rz}deg`);
+    coinEl.style.setProperty("--rx", `${rx}deg`);
+    void coinEl.offsetWidth;
+    coinEl.classList.add("coinThrow");
+
+    shadowEl.style.transform = "scale(1.05)";
+    shadowEl.style.opacity = ".70";
+
+    if (CF.sfx) SFX.whoosh();
+
+    // результат честный 50/50
+    const res = randFloat() < 0.5 ? "heads" : "tails";
+
+    setTimeout(()=>{ if (CF.sfx) SFX.impact(); }, 850);
+
+    // ждём окончание
+    await new Promise(r=>setTimeout(r, 1100));
+
+    // фиксируем грань и цвет
+    // heads -> золото, tails -> серебро (решка НЕ фиолетовая!)
+    CF.coinState = (res === "heads") ? "heads" : "tails";
+
+    // Поворачиваем к нужной стороне
+    // heads: front (0deg), tails: back (180deg)
+    coinEl.style.transform = (res==="heads") ? "rotateY(0deg)" : "rotateY(180deg)";
+
+    const won = (CF.choice === res);
+    const m = cfMult();
+
+    if (won){
+      const payout = Math.floor(CF.bet * m);
+      addCoins(payout);
+
+      if (CF.streak) CF.streakIndex = Math.min(CF.streakIndex+1, CF.streakSteps.length-1);
+      CF.lastMsg = `✅ Выпало ${res==="heads"?"ОРЁЛ":"РЕШКА"} · +${payout} 🪙 (x${m.toFixed(2)})`;
+      if (CF.sfx) SFX.win();
+    } else {
+      CF.streakIndex = 0;
+      CF.lastMsg = `❌ Выпало ${res==="heads"?"ОРЁЛ":"РЕШКА"} · -${CF.bet} 🪙`;
+      if (CF.sfx) SFX.lose();
+    }
+
+    CF.spinning = false;
+
+    shadowEl.style.transform = "scale(.8)";
+    shadowEl.style.opacity = ".55";
+
+    renderCoin();
+  };
+}
+
+// ===============================
+// DICE UI
+// ===============================
+function renderDice(){
+  diceClampThreshold();
+
+  // bet clamp
+  DICE.bet = Math.floor(Number(DICE.bet)||1);
+  if (DICE.bet < 1) DICE.bet = 1;
+  if (DICE.bet > wallet.coins) DICE.bet = wallet.coins;
+
+  const chance = diceChance();
+  const mult = diceMult();
+  const payout = Math.floor(DICE.bet * mult);
+
+  const winText = (DICE.mode==="below")
+    ? `Выигрыш, если выпало ≤ ${DICE.threshold}`
+    : `Выигрыш, если выпало ≥ ${DICE.threshold}`;
+
+  // win zone percent (for bar)
+  const s = DICE.sides;
+  const t = DICE.threshold;
+  const winPct = (DICE.mode==="below")
+    ? (t / s) * 100
+    : ((s - t + 1) / s) * 100;
+
+  screenEl.innerHTML = `
+    <div class="card">
+      <div class="rowBetween">
+        <div>
+          <div class="h1">Dice</div>
+          <div class="hint">D6/D20/D100 · понятная шкала + маркер результата. 100% шанс запрещён.</div>
+        </div>
+        <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div class="row">
+          <button class="chip ${DICE.sides===6?"active":""}" data-sides="6">D6</button>
+          <button class="chip ${DICE.sides===20?"active":""}" data-sides="20">D20</button>
+          <button class="chip ${DICE.sides===100?"active":""}" data-sides="100">D100</button>
+
+          <div style="flex:1"></div>
+
+          <button class="chip ${DICE.mode==="below"?"active":""}" data-mode="below">Меньше</button>
+          <button class="chip ${DICE.mode==="above"?"active":""}" data-mode="above">Больше</button>
+
+          <button class="chip ${DICE.sfx?"active":""}" id="diceSfx">Звук</button>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="t">Твоё число</div><div class="v">${String(DICE.threshold).padStart(2,"0")}</div></div>
+          <div class="kpi"><div class="t">Выпало</div><div class="v" id="diceRolled">${DICE.lastRoll==null?"—":String(DICE.lastRoll).padStart(2,"0")}</div></div>
+          <div class="kpi"><div class="t">Шанс</div><div class="v">${(chance*100).toFixed(1)}%</div></div>
+        </div>
+
+        <div class="diceBar">
+          <div class="row">
+            <div style="font-weight:950">Порог: <span id="thLabel">${DICE.threshold}</span> из ${s}</div>
+            <div class="pillHint" id="pillHint">Шанс ${(chance*100).toFixed(1)}% · x${mult.toFixed(2)}</div>
+          </div>
+
+          <input class="range" id="threshold" type="range" min="1" max="${s}" value="${DICE.threshold}" ${DICE.rolling?"disabled":""}>
+
+          <div class="hint" style="margin-top:8px">${winText}</div>
+
+          <div class="barWrap" id="barWrap">
+            <div class="barLose" style="left:0; right:0;"></div>
+            <div class="barWin" id="barWin"></div>
+            <div class="barMarker" id="barMarker" style="left:${DICE.lastRoll? ((DICE.lastRoll-1)/(s-1))*100 : 0}%"></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:12px">
+          <div class="rowBetween">
+            <div style="font-weight:950">Ставка</div>
+            <div class="pill pill--mono"><b id="betShow">${DICE.bet}</b> 🪙</div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            ${[10,50,100,250,500].map(v=>`<button class="chip" data-bet="${v}">${v}</button>`).join("")}
+            <button class="chip" data-bet="max">MAX</button>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btnGhost" id="dMinus" style="width:44px">-</button>
+            <input class="input" id="dBet" type="number" min="1" step="1" value="${DICE.bet}">
+            <button class="btnGhost" id="dPlus" style="width:44px">+</button>
+          </div>
+
+          <div class="kpis" style="margin-top:10px">
+            <div class="kpi"><div class="t">Множитель</div><div class="v">x${mult.toFixed(2)}</div></div>
+            <div class="kpi"><div class="t">Возможный выигрыш</div><div class="v">+${payout} 🪙</div></div>
+            <div class="kpi"><div class="t">Статус</div><div class="v">${DICE.rolling?"Крутится…":"Готов"}</div></div>
+          </div>
+
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="diceRoll" style="flex:1" ${DICE.rolling?"disabled":""}>Бросить</button>
+            <button class="btnGhost" id="diceBonus">+1000 🪙</button>
+          </div>
+
+          <div class="msg ${DICE.lastMsg.includes("✅")?"good":DICE.lastMsg.includes("❌")?"bad":"dim"}">${DICE.lastMsg||""}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // win zone paint
+  const barWin = document.getElementById("barWin");
+  if (DICE.mode === "below"){
+    barWin.style.left = "0%";
+    barWin.style.width = `${winPct}%`;
+  } else {
+    barWin.style.left = `${100 - winPct}%`;
+    barWin.style.width = `${winPct}%`;
+  }
+
+  // handlers
+  document.querySelectorAll("[data-sides]").forEach(b=>{
+    b.onclick = async ()=>{
+      await unlockAudio(); SFX.click();
+      DICE.sides = Number(b.dataset.sides);
+      if (DICE.sides === 6) DICE.threshold = 3;
+      if (DICE.sides === 20) DICE.threshold = 10;
+      if (DICE.sides === 100) DICE.threshold = 50;
+      DICE.lastRoll = null;
+      DICE.lastMsg = "";
       renderDice();
     };
   });
-  document.querySelectorAll("[data-m]").forEach(b=>{
+  document.querySelectorAll("[data-mode]").forEach(b=>{
     b.onclick = async ()=>{
-      await ensureAudio(); sfxClick();
-      dice.mode = b.dataset.m;
-      dice.msg = "";
-      diceClampThreshold();
+      await unlockAudio(); SFX.click();
+      DICE.mode = b.dataset.mode;
+      DICE.lastRoll = null;
+      DICE.lastMsg = "";
       renderDice();
     };
   });
 
-  document.getElementById("thr").oninput = async (e)=>{
-    await ensureAudio();
-    dice.threshold = Number(e.target.value);
-    dice.msg = "";
+  document.getElementById("diceSfx").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    DICE.sfx = !DICE.sfx;
+    renderDice();
+  };
+
+  const threshold = document.getElementById("threshold");
+  threshold.oninput = ()=>{
+    DICE.threshold = Number(threshold.value);
+    diceClampThreshold();
+    document.getElementById("thLabel").textContent = String(DICE.threshold);
     renderDice();
   };
 
   const betInput = document.getElementById("dBet");
-  const clampBet = ()=>{
+  function clampBet(){
     let v = Math.floor(Number(betInput.value)||0);
     if (v<1) v=1;
     if (v>wallet.coins) v=wallet.coins;
-    dice.bet = v;
+    DICE.bet = v;
     betInput.value = String(v);
-    document.getElementById("betShow").textContent = String(v);
-  };
-  clampBet();
+  }
+  betInput.oninput = ()=>{ clampBet(); };
 
-  document.querySelectorAll("[data-b]").forEach(b=>{
+  document.querySelectorAll("[data-bet]").forEach(b=>{
     b.onclick = async ()=>{
-      await ensureAudio(); sfxClick();
-      const v=b.dataset.b;
-      betInput.value = v==="max" ? String(wallet.coins) : String(v);
+      await unlockAudio(); SFX.click();
+      const val = b.dataset.bet;
+      betInput.value = val==="max" ? String(wallet.coins) : String(val);
       clampBet();
       renderDice();
     };
   });
-  document.getElementById("dMinus").onclick = async ()=>{ await ensureAudio(); sfxClick(); betInput.value=String((Number(betInput.value)||1)-10); clampBet(); renderDice(); };
-  document.getElementById("dPlus").onclick  = async ()=>{ await ensureAudio(); sfxClick(); betInput.value=String((Number(betInput.value)||1)+10); clampBet(); renderDice(); };
-  betInput.oninput = ()=>{ clampBet(); };
 
-  document.getElementById("dBonus").onclick = async ()=>{ await ensureAudio(); sfxClick(); addCoins(1000); renderDice(); };
+  document.getElementById("dMinus").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    betInput.value = String((Number(betInput.value)||1)-10);
+    clampBet(); renderDice();
+  };
+  document.getElementById("dPlus").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    betInput.value = String((Number(betInput.value)||1)+10);
+    clampBet(); renderDice();
+  };
 
-  document.getElementById("dRoll").onclick = async ()=>{
-    await ensureAudio();
-    clampBet();
+  document.getElementById("diceBonus").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    addCoins(1000);
+    renderDice();
+  };
+
+  document.getElementById("diceRoll").onclick = async ()=>{
+    await unlockAudio();
+    if (DICE.rolling) return;
+
     diceClampThreshold();
+    clampBet();
 
-    const chance = diceChance(dice.sides, dice.mode, dice.threshold);
-    const mult = diceMultiplier(chance);
-    if (!mult) { dice.msg="❌ Нельзя играть с 100% шансом"; renderDice(); return; }
+    if (DICE.bet <= 0) return;
+    if (DICE.bet > wallet.coins) return alert("Недостаточно монет");
 
-    if (dice.rolling) return;
-    if (dice.bet > wallet.coins) { dice.msg="❌ Недостаточно монет"; renderDice(); return; }
+    // списываем ставку
+    addCoins(-DICE.bet);
 
-    addCoins(-dice.bet);
-    dice.rolling = true;
-    dice.msg = "";
-    dice.lastRoll = null;
-    renderTop();
+    DICE.rolling = true;
+    DICE.lastMsg = "";
     renderDice();
 
-    sfxRoll();
+    const s = DICE.sides;
+    const roll = randInt(1, s);
+    const win = (DICE.mode==="below") ? (roll <= DICE.threshold) : (roll >= DICE.threshold);
 
-    const roll = randInt(1, dice.sides);
-    const win = dice.mode==="below" ? (roll <= dice.threshold) : (roll >= dice.threshold);
+    const marker = document.getElementById("barMarker");
+    const rolledEl = document.getElementById("diceRolled");
 
-    // небольшая понятная задержка “как казино”
-    setTimeout(()=>sfxHit(), 650);
-    await new Promise(r=>setTimeout(r, 950));
+    // анимация маркера + цифры
+    marker.classList.add("anim");
+    marker.style.left = `${((roll-1)/(s-1))*100}%`;
 
-    dice.lastRoll = roll;
+    const t0 = performance.now();
+    const dur = 700;
+    const tickTimer = setInterval(()=>{
+      if (!DICE.sfx) return;
+      SFX.tick();
+    }, 90);
 
-    const payout = Math.floor(dice.bet * mult);
-    if (win) {
-      addCoins(payout);
-      sfxWin();
-      dice.msg = `✅ Выпало ${roll}. Выигрыш +${payout} 🪙 (x${mult.toFixed(2)})`;
-    } else {
-      sfxLose();
-      dice.msg = `❌ Выпало ${roll}. Проигрыш -${dice.bet} 🪙`;
-    }
+    const numTimer = setInterval(()=>{
+      const p = Math.min(1, (performance.now()-t0)/dur);
+      if (p >= 1){
+        clearInterval(numTimer);
+        rolledEl.textContent = String(roll).padStart(2,"0");
+        return;
+      }
+      rolledEl.textContent = String(randInt(1, s)).padStart(2,"0");
+    }, 50);
 
-    dice.rolling = false;
-    renderTop();
-    renderDice();
+    if (DICE.sfx) SFX.whoosh();
+
+    setTimeout(()=>{
+      clearInterval(tickTimer);
+
+      const mult = diceMult();
+      const payout = Math.floor(DICE.bet * mult);
+
+      if (win){
+        addCoins(payout);
+        DICE.lastMsg = `✅ Выпало ${roll}. Выигрыш +${payout} 🪙 (x${mult.toFixed(2)})`;
+        if (DICE.sfx) SFX.win();
+      } else {
+        DICE.lastMsg = `❌ Выпало ${roll}. Проигрыш -${DICE.bet} 🪙`;
+        if (DICE.sfx) SFX.lose();
+      }
+
+      DICE.lastRoll = roll;
+      DICE.rolling = false;
+      renderDice();
+    }, 820);
   };
 }
 
 // ===============================
-// MINES
+// MINES UI
 // ===============================
-let mines = null;
-
-function minesMultiplier(openedSafe, minesCount){
-  const a = 0.095 + minesCount * 0.0075;
-  const b = 0.018 + minesCount * 0.0018;
-  const mult = 1 + openedSafe * a + (openedSafe * openedSafe) * b * 0.06;
-  return Math.max(1, mult);
-}
-function minesBuild(minesCount){
-  const size=25;
-  const set=new Set();
-  while(set.size<minesCount) set.add(randInt(0,size-1));
-  return set;
-}
-
 function renderMines(){
-  const size = 25;
-
-  if (!mines){
+  // setup screen if no round
+  if (!MINES) {
     const betDefault = Math.min(50, wallet.coins);
+    const minesDefault = 5;
+
     screenEl.innerHTML = `
       <div class="card">
-        <div class="row">
+        <div class="rowBetween">
           <div>
             <div class="h1">Mines</div>
-            <div class="h2">Открывай safe, множитель растёт. Можно забрать в любой момент.</div>
+            <div class="hint">5x5 · выбери ставку и количество мин · открывай safe и забирай.</div>
           </div>
-          <div class="spacer"></div>
-          <span class="chip">Баланс: <b>🪙 ${wallet.coins}</b></span>
+          <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
         </div>
 
-        <div class="row" style="margin-top:12px;">
-          <div style="font-weight:950;">Ставка</div>
-          <div class="spacer"></div>
-          <span class="chip"><b id="mBetShow">${betDefault}</b> 🪙</span>
-          <button class="pill" id="mBonus">+1000 🪙</button>
-        </div>
-
-        <div class="row" style="margin-top:8px;">
-          ${[10,50,100,250,500].map(v=>`<button class="chip" data-b="${v}">${v}</button>`).join("")}
-          <button class="chip" data-b="max">MAX</button>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <button class="miniBtn" id="mMinus">-</button>
-          <input class="input" id="mBet" type="number" min="1" step="1" value="${betDefault}">
-          <button class="miniBtn" id="mPlus">+</button>
-        </div>
-
-        <div class="rangeWrap">
-          <div class="rangeTop">
-            <div class="rangeLabel">Мин: <b id="mCountShow">5</b></div>
-            <div class="spacer"></div>
-            <div class="rangeHint">Больше мин → выше риск, множитель растёт быстрее</div>
+        <div class="panel" style="margin-top:12px">
+          <div class="rowBetween">
+            <div style="font-weight:950">Ставка</div>
+            <div class="pill pill--mono"><b id="mBetShow">${betDefault}</b> 🪙</div>
           </div>
-          <input id="mCount" class="range" type="range" min="1" max="24" value="5">
-        </div>
 
-        <div class="row" style="margin-top:12px;">
-          <button class="btn" id="mStart" style="flex:1;">Start</button>
+          <div class="row" style="margin-top:10px">
+            ${[10,50,100,250,500].map(v=>`<button class="chip" data-mbet="${v}">${v}</button>`).join("")}
+            <button class="chip" data-mbet="max">MAX</button>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btnGhost" id="mMinus" style="width:44px">-</button>
+            <input class="input" id="mBet" type="number" min="1" step="1" value="${betDefault}">
+            <button class="btnGhost" id="mPlus" style="width:44px">+</button>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="rowBetween">
+              <div style="font-weight:950">Количество мин</div>
+              <div class="pill pill--mono"><b id="mCountShow">${minesDefault}</b></div>
+            </div>
+            <input class="range" id="mCount" type="range" min="1" max="24" value="${minesDefault}">
+            <div class="hint">Больше мин → выше риск, но множитель растёт быстрее.</div>
+          </div>
+
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="mStart" style="flex:1">Start</button>
+            <button class="btnGhost" id="mBonus">+1000 🪙</button>
+          </div>
+
+          <div class="msg dim" id="mMsg"></div>
         </div>
       </div>
     `;
@@ -706,50 +774,68 @@ function renderMines(){
     const countEl = document.getElementById("mCount");
     const countShow = document.getElementById("mCountShow");
 
-    const clampBet = ()=>{
-      let v=Math.floor(Number(betEl.value)||0);
-      if(v<1)v=1;
-      if(v>wallet.coins)v=wallet.coins;
-      betEl.value=String(v);
-      betShow.textContent=String(v);
-      return v;
-    };
-    const clampCount=()=>{
-      const v=Math.floor(Number(countEl.value)||5);
-      countShow.textContent=String(v);
-      return v;
-    };
+    function clampBet(){
+      let v = Math.floor(Number(betEl.value)||0);
+      if (v<1) v=1;
+      if (v>wallet.coins) v=wallet.coins;
+      betEl.value = String(v);
+      betShow.textContent = String(v);
+    }
+    function clampCount(){
+      let v = Math.floor(Number(countEl.value)||1);
+      v = Math.min(24, Math.max(1, v));
+      countEl.value = String(v);
+      countShow.textContent = String(v);
+    }
+
     clampBet(); clampCount();
 
-    document.querySelectorAll("[data-b]").forEach(b=>{
+    document.querySelectorAll("[data-mbet]").forEach(b=>{
       b.onclick = async ()=>{
-        await ensureAudio(); sfxClick();
-        const v=b.dataset.b;
-        betEl.value = v==="max"?String(wallet.coins):String(v);
+        await unlockAudio(); SFX.click();
+        const val = b.dataset.mbet;
+        betEl.value = val==="max" ? String(wallet.coins) : String(val);
         clampBet();
       };
     });
-    document.getElementById("mMinus").onclick = async ()=>{ await ensureAudio(); sfxClick(); betEl.value=String((Number(betEl.value)||1)-10); clampBet(); };
-    document.getElementById("mPlus").onclick  = async ()=>{ await ensureAudio(); sfxClick(); betEl.value=String((Number(betEl.value)||1)+10); clampBet(); };
-    betEl.oninput=()=>clampBet();
-    countEl.oninput=async ()=>{ await ensureAudio(); sfxClick(); clampCount(); };
+    document.getElementById("mMinus").onclick = async ()=>{
+      await unlockAudio(); SFX.click();
+      betEl.value = String((Number(betEl.value)||1)-10);
+      clampBet();
+    };
+    document.getElementById("mPlus").onclick = async ()=>{
+      await unlockAudio(); SFX.click();
+      betEl.value = String((Number(betEl.value)||1)+10);
+      clampBet();
+    };
+    betEl.oninput = clampBet;
+
+    countEl.oninput = async ()=>{
+      await unlockAudio(); SFX.click();
+      clampCount();
+    };
 
     document.getElementById("mBonus").onclick = async ()=>{
-      await ensureAudio(); sfxClick();
+      await unlockAudio(); SFX.click();
       addCoins(1000);
       renderMines();
     };
 
     document.getElementById("mStart").onclick = async ()=>{
-      await ensureAudio(); sfxClick();
-      const betV=clampBet();
-      const minesCount=clampCount();
+      await unlockAudio(); SFX.click();
+      clampBet(); clampCount();
 
-      if (betV > wallet.coins){ alert("Недостаточно монет"); return; }
-      addCoins(-betV);
+      const bet = Math.floor(Number(betEl.value)||0);
+      const minesCount = Math.floor(Number(countEl.value)||0);
 
-      mines = {
-        bet: betV,
+      if (bet <= 0) return;
+      if (bet > wallet.coins) return alert("Недостаточно монет");
+      if (minesCount < 1 || minesCount > 24) return;
+
+      addCoins(-bet);
+
+      MINES = {
+        bet,
         minesCount,
         mines: minesBuild(minesCount),
         opened: new Set(),
@@ -757,137 +843,126 @@ function renderMines(){
         cashed: false,
         safeOpened: 0,
         mult: 1,
-        msg: ""
+        msg: "",
+        lastMine: null,
       };
-      renderTop();
       renderMines();
     };
 
     return;
   }
 
-  // game view
-  const maxSafe = size - mines.minesCount;
-  const potential = Math.floor(mines.bet * mines.mult);
+  // active round
+  const size = 25;
+  const maxSafe = size - MINES.minesCount;
+  const potential = Math.floor(MINES.bet * MINES.mult);
 
-  const ladder = [];
-  for(let step=1; step<=maxSafe; step++){
-    const x=minesMultiplier(step, mines.minesCount);
-    const cls = step===mines.safeOpened ? "step active" : step<mines.safeOpened ? "step done" : "step";
-    ladder.push(`<div class="${cls}"><div>${step}</div><div class="x">x${x.toFixed(2)}</div></div>`);
-  }
+  // build tiles
+  const tiles = [];
+  for (let i=0;i<size;i++){
+    const opened = MINES.opened.has(i);
+    const isMine = MINES.mines.has(i);
 
-  const cells = [];
-  for(let i=0;i<size;i++){
-    const opened = mines.opened.has(i);
-    const isMine = mines.mines.has(i);
-    let cls="tile";
-    let label="";
-    if (opened && isMine){ cls+=" mine"; label="💣"; }
-    if (opened && !isMine){ cls+=" safe"; label="✅"; }
-    cells.push(`<button class="${cls}" data-i="${i}" ${mines.over?"disabled":""}><div class="tileInner">${label}</div></button>`);
+    let cls = "tile";
+    let label = "";
+    if (opened) cls += " open";
+    if (opened && isMine) { cls += " mine"; label = "💣"; }
+    if (opened && !isMine) { cls += " safe"; label = "✅"; }
+    if (MINES.lastMine === i) cls += " boom";
+
+    tiles.push(`
+      <button class="${cls}" data-i="${i}" ${MINES.over ? "disabled":""}>
+        <div class="tileInner">${label}</div>
+      </button>
+    `);
   }
 
   screenEl.innerHTML = `
     <div class="card">
-      <div class="row">
+      <div class="rowBetween">
         <div>
           <div class="h1">Mines</div>
-          <div class="h2">Safe: <b>${mines.safeOpened}</b> · Мин: <b>${mines.minesCount}</b> · Ставка: <b>${mines.bet} 🪙</b></div>
+          <div class="hint">Safe: <b>${MINES.safeOpened}</b> · Мин: <b>${MINES.minesCount}</b> · Ставка: <b>${MINES.bet} 🪙</b></div>
         </div>
-        <div class="spacer"></div>
-        <span class="chip">Сейчас: <b>x${mines.mult.toFixed(2)}</b></span>
+        <div class="pill">Сейчас: <b>x${MINES.mult.toFixed(2)}</b></div>
       </div>
 
-      <div class="kpi">
-        <div class="box"><div class="t">Забрать сейчас</div><div class="v">${potential} 🪙</div></div>
-        <div class="box"><div class="t">Осталось safe</div><div class="v">${maxSafe - mines.safeOpened}</div></div>
-        <div class="box"><div class="t">Статус</div><div class="v">${mines.over?"Раунд завершён":"Идёт игра"}</div></div>
+      <div class="kpis" style="margin-top:12px">
+        <div class="kpi"><div class="t">Забрать сейчас</div><div class="v">${potential} 🪙</div></div>
+        <div class="kpi"><div class="t">Осталось safe</div><div class="v">${maxSafe - MINES.safeOpened}</div></div>
+        <div class="kpi"><div class="t">Статус</div><div class="v">${MINES.over ? "Раунд завершён" : "Игра"}</div></div>
       </div>
 
-      <div class="msg ${mines.msg.startsWith("✅")?"ok":mines.msg.startsWith("💥")?"bad":""}">${mines.msg||""}</div>
+      <div class="msg ${MINES.msg.includes("✅")?"good":MINES.msg.includes("💥")?"bad":"dim"}">${MINES.msg||""}</div>
 
-      <div class="minesGrid">${cells.join("")}</div>
+      <div class="minesGrid">${tiles.join("")}</div>
 
-      <div class="row" style="margin-top:12px;">
-        <button class="btn" id="mCash" style="flex:1;" ${mines.over?"disabled":""}>Забрать</button>
-        <button class="btn ghost" id="mNew">Новый раунд</button>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="mCash" style="flex:1" ${MINES.over ? "disabled":""}>Забрать</button>
+        <button class="btnGhost" id="mNew">Новый раунд</button>
       </div>
-
-      <div class="ladder" id="ladder">${ladder.join("")}</div>
     </div>
   `;
 
-  // ladder scroll to active
-  const ladderEl=document.getElementById("ladder");
-  const active=ladderEl.querySelector(".step.active");
-  if (active){
-    const left = active.offsetLeft - ladderEl.clientWidth/2 + active.clientWidth/2;
-    ladderEl.scrollLeft = Math.max(0,left);
-  }
-
   function revealAll(){
-    for(let i=0;i<size;i++) mines.opened.add(i);
+    for (let i=0;i<size;i++) MINES.opened.add(i);
   }
 
-  document.getElementById("mCash").onclick = async ()=>{
-    await ensureAudio(); sfxClick();
-    if (mines.over) return;
-    mines.over=true; mines.cashed=true;
-    const payout = Math.floor(mines.bet * mines.mult);
+  function cashOut(){
+    if (MINES.over || MINES.cashed) return;
+    MINES.cashed = true;
+    MINES.over = true;
+    const payout = Math.floor(MINES.bet * MINES.mult);
     addCoins(payout);
-    sfxCash(); sfxWin();
-    mines.msg = `✅ Забрал: +${payout} 🪙 (x${mines.mult.toFixed(2)})`;
+    MINES.msg = `✅ Забрал: +${payout} 🪙 (x${MINES.mult.toFixed(2)})`;
+    if (true) SFX.cash();
     revealAll();
-    renderTop();
     renderMines();
-  };
-  document.getElementById("mNew").onclick = async ()=>{
-    await ensureAudio(); sfxClick();
-    mines=null;
-    renderMines();
-  };
+  }
 
-  document.querySelectorAll(".tile").forEach(btn=>{
-    btn.onclick = async ()=>{
-      await ensureAudio();
-      if (mines.over) return;
-      const i=Number(btn.dataset.i);
-      if (mines.opened.has(i)) return;
-      mines.opened.add(i);
+  function clickTile(i){
+    if (MINES.over) return;
+    if (MINES.opened.has(i)) return;
 
-      if (mines.mines.has(i)){
-        mines.over=true;
-        mines.msg = `💥 Мина! Ставка ${mines.bet} 🪙 сгорела`;
-        sfxMine(); sfxLose();
-        revealAll();
-        renderMines();
-        return;
-      }
+    MINES.opened.add(i);
 
-      sfxTile();
-      mines.safeOpened += 1;
-      mines.mult = minesMultiplier(mines.safeOpened, mines.minesCount);
-
-      if (mines.safeOpened >= (size - mines.minesCount)){
-        // авто-забор
-        mines.over=true; mines.cashed=true;
-        const payout = Math.floor(mines.bet * mines.mult);
-        addCoins(payout);
-        sfxCash(); sfxWin();
-        mines.msg = `✅ Все safe! Авто-забор: +${payout} 🪙 (x${mines.mult.toFixed(2)})`;
-        revealAll();
-        renderTop();
-        renderMines();
-        return;
-      }
-
+    const isMine = MINES.mines.has(i);
+    if (isMine){
+      MINES.over = true;
+      MINES.lastMine = i;
+      MINES.msg = `💥 Мина! Ставка ${MINES.bet} 🪙 сгорела`;
+      SFX.mine();
+      revealAll();
       renderMines();
+      return;
+    }
+
+    SFX.click();
+    MINES.safeOpened += 1;
+    MINES.mult = minesMult(MINES.safeOpened, MINES.minesCount);
+
+    if (MINES.safeOpened >= maxSafe){
+      MINES.msg = "✅ Открыл все safe — авто-забор.";
+      cashOut();
+      return;
+    }
+
+    MINES.msg = `✅ Safe! Сейчас x${MINES.mult.toFixed(2)} · можно забрать ${Math.floor(MINES.bet*MINES.mult)} 🪙`;
+    renderMines();
+  }
+
+  document.getElementById("mCash").onclick = async ()=>{ await unlockAudio(); cashOut(); };
+  document.getElementById("mNew").onclick = async ()=>{
+    await unlockAudio(); SFX.click();
+    MINES = null;
+    renderMines();
+  };
+
+  document.querySelectorAll(".tile").forEach(b=>{
+    b.onclick = async ()=>{
+      await unlockAudio();
+      clickTile(Number(b.dataset.i));
     };
   });
 }
-
-// старт
-setScreen("coin");
-
 
