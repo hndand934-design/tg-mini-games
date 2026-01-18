@@ -3,31 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mini Games</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Mini Games — Coin Flip</title>
+  <link rel="stylesheet" href="styles.css?v=1" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="app">
     <header class="top">
-      <div class="brand">
+      <div class="topLeft">
         <div class="title">Mini Games</div>
-        <div id="user" class="sub">Загрузка...</div>
+        <div id="user" class="sub">Открыто вне Telegram</div>
       </div>
       <div class="topRight">
         <div class="pill" id="balancePill">🪙 0</div>
       </div>
     </header>
 
-    <main id="screen"></main>
+    <main id="screen" class="screen"></main>
 
-    <nav class="nav">
-      <button class="navBtn" data-screen="coin">Coin Flip</button>
-      <button class="navBtn" data-screen="dice">Dice</button>
-      <button class="navBtn" data-screen="mines">Mines</button>
-    </nav>
+    <footer class="foot">
+      <div class="footHint">Режим: <b>Coin Flip</b> (только он, без других режимов)</div>
+    </footer>
   </div>
 
-<script src="app.js?v=999"></script>
+  <script src="app.js?v=1"></script>
 </body>
 </html>
