@@ -2,24 +2,30 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mines</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Rocket Crash</title>
+  <link rel="stylesheet" href="styles.css?v=1" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="app">
     <header class="top">
-      <div>
-        <div class="title">Mini Games</div>
+      <div class="brand">
+        <div class="title">Rocket Crash</div>
         <div id="user" class="sub">Загрузка…</div>
       </div>
-      <div class="pill" id="balancePill">🪙 0</div>
+      <div class="rightPills">
+        <div class="pill" id="balancePill">🪙 0</div>
+      </div>
     </header>
 
     <main id="screen"></main>
+
+    <footer class="foot">
+      <div class="hintFoot">Автораунды: игра → краш → 10 секунд → новый раунд.</div>
+    </footer>
   </div>
 
-  <script src="app.js?v=501"></script>
+  <script src="app.js?v=1"></script>
 </body>
 </html>
