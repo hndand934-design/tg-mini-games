@@ -47,7 +47,7 @@ function renderTopBar() {
   userEl.textContent = user
     ? `Привет, ${user.first_name} · открыто в Telegram`
     : `Открыто вне Telegram`;
-  balancePill.textContent = `🪙 ${coins}`;
+  if (balancePill) balancePill.textContent = `🪙 ${coins}`;
 }
 renderTopBar();
 
@@ -129,16 +129,53 @@ const SFX = {
   lose(){ tone({type:"sine", f:220, t:0.16, g:0.06}); tone({type:"sine", f:165, t:0.18, g:0.05, when:0.06}); },
   roll(){ noise({t:0.10, g:0.014, hp:900}); tone({type:"square", f:220, t:0.06, g:0.03, when:0.02}); },
   mine(){ noise({t:0.16, g:0.03, hp:600}); tone({type:"sawtooth", f:140, t:0.18, g:0.05, when:0.02}); },
+  safe(){ tone({type:"triangle", f:650, t:0.06, g:0.04}); tone({type:"triangle", f:880, t:0.05, g:0.03, when:0.03}); },
 };
-const app = { sfx: true, screen: "coin" };
 function playClick(){ if(app.sfx) SFX.click(); }
-
-// Глобально: клик по документу = unlock аудио
 document.addEventListener("pointerdown", unlockAudio, { once:false });
 
 // ===============================
-// Nav
+// Tiny CSS patch (чтобы не трогать твой styles.css)
+// - монета: neutral/heads/tails цвета
+// - кубик: solid (не прозрачный)
 // ===============================
+(function injectPatchCSS(){
+  if(document.getElementById("patchCssV1")) return;
+  const s = document.createElement("style");
+  s.id = "patchCssV1";
+  s.textContent = `
+    /* coin skins (fallback if not in styles.css) */
+    .coin3d[data-skin="neutral"] .face,
+    .coin3d[data-skin="neutral"] .rim { background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.35), rgba(255,255,255,.06) 42%, rgba(0,0,0,.18) 72%), linear-gradient(135deg, rgba(140,80,255,.92), rgba(100,40,220,.92)); }
+    .coin3d[data-skin="heads"] .face,
+    .coin3d[data-skin="heads"] .rim { background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.35), rgba(255,255,255,.08) 45%, rgba(0,0,0,.2) 76%), linear-gradient(135deg, rgba(255,210,90,.95), rgba(190,135,35,.95)); }
+    .coin3d[data-skin="tails"] .face,
+    .coin3d[data-skin="tails"] .rim { background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.35), rgba(255,255,255,.08) 45%, rgba(0,0,0,.2) 76%), linear-gradient(135deg, rgba(210,225,245,.95), rgba(125,150,175,.95)); }
+
+    /* remove text if any */
+    .coin3d .label { display:none !important; }
+
+    /* cube solid patch */
+    .cube.solid .cubeFace{
+      background: linear-gradient(145deg, rgba(255,255,255,.20), rgba(255,255,255,.06));
+      border: 1px solid rgba(255,255,255,.20);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+      backdrop-filter: none !important;
+    }
+    .cube.solid .pip { background: rgba(255,255,255,.95); }
+    .cube.solid .pip.off { opacity: 0; }
+  `;
+  document.head.appendChild(s);
+})();
+
+// ===============================
+// App state + routing
+// ===============================
+const app = {
+  sfx: true,
+  screen: "coin",
+};
+
 document.querySelectorAll(".navBtn").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     playClick();
@@ -151,18 +188,28 @@ function setNavActive(name){
   });
 }
 
+function setScreen(name){
+  app.screen = name;
+  setNavActive(name);
+  if(name === "coin") renderCoin();
+  else if(name === "dice") renderDice();
+  else if(name === "mines") renderMines();
+  else renderCoin();
+}
+setScreen(app.screen);
+
 // ===============================
 // COIN FLIP
 // ===============================
 const coinState = {
-  choice: "heads", // heads/tails
+  choice: "heads",
   bet: 50,
   spinning: false,
   streakOn: true,
   streakIndex: 0,
   streakSteps: [1.94, 3.88, 7.76, 15.52],
-  lastResult: null,      // "heads"|"tails"|null
-  skin: "neutral",       // "neutral"|"heads"|"tails"
+  lastResult: null,
+  skin: "neutral",
   msg: "",
   msgKind: "",
 };
@@ -174,8 +221,6 @@ function coinCurrentMult(){
 function coinResetToNeutral(){
   coinState.lastResult = null;
   coinState.skin = "neutral";
-  const coinEl = document.getElementById("coin3d");
-  if(coinEl) coinEl.style.transform = ""; // сброс поворота
 }
 
 function renderCoin(){
@@ -187,11 +232,12 @@ function renderCoin(){
       <div class="row">
         <div>
           <h2 class="h1">Coin Flip</h2>
-          <div class="hint">Фиолетовая монета в полёте → после броска становится золотой (орёл) или серебряной (решка). Цвет держится, пока ты не изменишь ставку.</div>
+          <div class="hint">Монета фиолетовая в полёте → после броска становится золотой (орёл) или серебряной (решка). На монете нет текста — только цвет.</div>
         </div>
         <div class="spacer"></div>
         <button class="chip ${app.sfx ? "active":""}" id="toggleSfx">Звук</button>
         <button class="chip ${coinState.streakOn ? "active":""}" id="toggleStreak">Серия</button>
+        <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
       </div>
 
       <div class="grid2" style="margin-top:12px;">
@@ -202,8 +248,8 @@ function renderCoin(){
 
             <div class="coin3d" id="coin3d" data-skin="${coinState.skin}">
               <div class="rim"></div>
-              <div class="face front"><div class="label" id="coinLabelFront">ОРЁЛ</div></div>
-              <div class="face back"><div class="label" id="coinLabelBack">РЕШКА</div></div>
+              <div class="face front"></div>
+              <div class="face back"></div>
             </div>
           </div>
 
@@ -211,7 +257,6 @@ function renderCoin(){
             <button class="chip ${coinState.choice==="heads"?"active":""}" id="pickHeads" ${coinState.spinning?"disabled":""}>🦅 Орёл</button>
             <button class="chip ${coinState.choice==="tails"?"active":""}" id="pickTails" ${coinState.spinning?"disabled":""}>🌙 Решка</button>
             <div class="spacer"></div>
-            <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
           </div>
 
           <div class="kpis">
@@ -260,7 +305,6 @@ function renderCoin(){
     </div>
   `;
 
-  // bind
   document.getElementById("toggleSfx").onclick = ()=>{ app.sfx = !app.sfx; renderCoin(); };
   document.getElementById("toggleStreak").onclick = ()=>{
     if(coinState.spinning) return;
@@ -279,10 +323,7 @@ function renderCoin(){
     const changed = (v !== coinState.bet);
     coinState.bet = v;
     betInput.value = String(v);
-
-    if(resetNeutralIfChanged && changed){
-      coinResetToNeutral(); // если ставку изменили — монета обратно фиолетовая
-    }
+    if(resetNeutralIfChanged && changed) coinResetToNeutral();
   };
   clampBet(false);
 
@@ -330,13 +371,13 @@ function renderCoin(){
     coinState.spinning = true;
     coinState.msg = "Монета в воздухе…";
     coinState.msgKind = "";
-    renderTopBar();
 
-    // на время броска — фиолетовая
+    // во время броска — фиолетовая
     coinEl.dataset.skin = "neutral";
 
     if(app.sfx) SFX.coinStart();
 
+    // рандом вращения
     const rz = (Math.random() * 420 + 380) | 0;
     const rx = (Math.random() * 900 + 1300) | 0;
     coinEl.style.setProperty("--rz", `${rz}deg`);
@@ -354,8 +395,8 @@ function renderCoin(){
 
     await new Promise(r=>setTimeout(r, 1050));
 
+    // фиксируем итоговую сторону
     coinEl.style.transform = (res==="heads") ? "rotateY(0deg)" : "rotateY(180deg)";
-
     coinState.lastResult = res;
     coinState.skin = (res==="heads") ? "heads" : "tails";
     coinEl.dataset.skin = coinState.skin;
@@ -381,17 +422,16 @@ function renderCoin(){
     }
 
     coinState.spinning = false;
-    renderTopBar();
     renderCoin();
   };
 }
 
 // ===============================
-// DICE
+// DICE (D6 + D20) — D100 removed
 // ===============================
 const diceState = {
-  sides: 6,
-  mode: "below",
+  sides: 6,      // 6/20
+  mode: "below", // below/above
   threshold: 3,
   bet: 50,
   rolling: false,
@@ -405,10 +445,9 @@ function diceChance(sides, mode, threshold){
   return (sides - threshold + 1) / sides;
 }
 function diceMultiplier(chance){
-  const edge = 0.98; // 2% house edge
+  const edge = 0.98;
   return Math.max(1.02, edge / chance);
 }
-
 function diceClampThreshold(){
   const s = diceState.sides;
   if(diceState.mode==="below"){
@@ -454,29 +493,27 @@ function renderDice(){
     ? `Выигрыш если выпало ≤ ${diceState.threshold}`
     : `Выигрыш если выпало ≥ ${diceState.threshold}`;
 
-  const rangeMax = diceState.sides;
-  const thresholdPct = (diceState.threshold-1) / (rangeMax-1) * 100;
-  const resultPct = (diceState.lastRoll==null) ? 0 : ((diceState.lastRoll-1)/(rangeMax-1))*100;
+  const s = diceState.sides;
+  const thresholdPct = (diceState.threshold-1) / (s-1) * 100;
+  const resultPct = (diceState.lastRoll==null) ? 0 : ((diceState.lastRoll-1)/(s-1))*100;
 
   screenEl.innerHTML = `
     <div class="card">
       <div class="row">
         <div>
           <h2 class="h1">Dice</h2>
-          <div class="hint">D6 — 3D кубик. D20/D100 — шкала + анимация маркера (видно выиграл/нет).</div>
+          <div class="hint">D6 — кубик (не прозрачный). D20 — шкала и анимация маркера.</div>
         </div>
         <div class="spacer"></div>
         <div class="pill">Баланс: <b>🪙 ${wallet.coins}</b></div>
         <button class="chip ${diceState.mode==="below"?"active":""}" data-mode="below">Меньше</button>
         <button class="chip ${diceState.mode==="above"?"active":""}" data-mode="above">Больше</button>
+        <button class="chip ${app.sfx ? "active":""}" id="toggleSfx2">Звук</button>
       </div>
 
       <div class="row" style="margin-top:10px;">
         <button class="chip ${diceState.sides===6?"active":""}" data-sides="6">D6</button>
         <button class="chip ${diceState.sides===20?"active":""}" data-sides="20">D20</button>
-        <button class="chip ${diceState.sides===100?"active":""}" data-sides="100">D100</button>
-        <div class="spacer"></div>
-        <button class="chip ${app.sfx ? "active":""}" id="toggleSfx2">Звук</button>
       </div>
 
       <div class="kpis">
@@ -501,7 +538,7 @@ function renderDice(){
           diceState.sides === 6
             ? `
               <div class="dice3dWrap">
-                <div class="cube ${diceState.lastRoll ? "show-"+diceState.lastRoll : ""}" id="cube">
+                <div class="cube solid ${diceState.lastRoll ? "show-"+diceState.lastRoll : ""}" id="cube">
                   ${renderCubeFaceHTML(1)}
                   ${renderCubeFaceHTML(2)}
                   ${renderCubeFaceHTML(3)}
@@ -515,13 +552,16 @@ function renderDice(){
               <div style="width:min(720px, 92%);">
                 <div class="scaleWrap">
                   <div class="scaleBar" id="scaleBar">
-                    <div class="scaleFill" id="scaleFill" style="width:${diceState.mode==="below" ? thresholdPct : (100-thresholdPct)}%;"></div>
+                    <div class="scaleFill" id="scaleFill"
+                      style="width:${diceState.mode==="below" ? thresholdPct : (100-thresholdPct)}%;"></div>
 
                     <div class="marker" id="thMarker" style="left:${thresholdPct}%;"></div>
                     <div class="markerLabel" id="thLabel2" style="left:${thresholdPct}%;">Порог ${diceState.threshold}</div>
 
-                    <div class="marker result" id="resMarker" style="left:${resultPct}%; display:${diceState.lastRoll==null?"none":"block"};"></div>
-                    <div class="markerLabel" id="resLabel" style="left:${resultPct}%; display:${diceState.lastRoll==null?"none":"block"};">Выпало ${diceState.lastRoll}</div>
+                    <div class="marker result" id="resMarker"
+                      style="left:${resultPct}%; display:${diceState.lastRoll==null?"none":"block"};"></div>
+                    <div class="markerLabel" id="resLabel"
+                      style="left:${resultPct}%; display:${diceState.lastRoll==null?"none":"block"};">Выпало ${diceState.lastRoll}</div>
                   </div>
                 </div>
 
@@ -571,9 +611,7 @@ function renderDice(){
       diceState.lastRoll = null;
       diceState.msg = "";
       diceState.msgKind = "";
-      if(diceState.sides===6) diceState.threshold = 3;
-      if(diceState.sides===20) diceState.threshold = 11;
-      if(diceState.sides===100) diceState.threshold = 55;
+      diceState.threshold = (diceState.sides===6) ? 3 : 11;
       diceClampThreshold();
       renderDice();
     };
@@ -607,7 +645,6 @@ function renderDice(){
     } else {
       limitHint.textContent = "";
     }
-
     renderDice();
   };
 
@@ -624,7 +661,6 @@ function renderDice(){
 
   document.getElementById("betMinus").onclick = ()=>{ playClick(); betInput.value = String((Number(betInput.value)||1)-10); clampBet(); };
   document.getElementById("betPlus").onclick = ()=>{ playClick(); betInput.value = String((Number(betInput.value)||1)+10); clampBet(); };
-
   document.querySelectorAll("[data-bet]").forEach(b=>{
     b.onclick = ()=>{
       playClick();
@@ -669,7 +705,9 @@ function renderDice(){
       const cube = document.getElementById("cube");
       arena.classList.add("throwing");
 
-      setTimeout(()=>{ cube.className = "cube show-" + roll; }, 900);
+      setTimeout(()=>{
+        cube.className = "cube solid show-" + roll;
+      }, 900);
 
       setTimeout(()=>{
         arena.classList.remove("throwing");
@@ -686,13 +724,12 @@ function renderDice(){
       if(resMarker) resMarker.style.display = "block";
       if(resLabel) resLabel.style.display = "block";
 
-      function pct(v){ return ((v-1)/(s-1))*100; }
+      const pct = (v)=>((v-1)/(s-1))*100;
 
-      const tick = (now)=>{
+      function tick(now){
         const t = Math.min(1, (now-start)/duration);
         const e = 1 - Math.pow(1-t, 3);
-
-        const wobble = (t < 0.92) ? Math.sin(now/45)* (s>20? 2.0 : 1.4) : 0;
+        const wobble = (t < 0.92) ? Math.sin(now/45) * 2.0 : 0;
         const cur = Math.max(1, Math.min(s, Math.round(from + (to-from)*e + wobble)));
 
         const p = pct(cur);
@@ -705,7 +742,7 @@ function renderDice(){
           if(resLabel) { resLabel.style.left = pct(to) + "%"; resLabel.textContent = "Выпало " + to; }
           finishDice(win, to);
         }
-      };
+      }
       requestAnimationFrame(tick);
     }
   };
@@ -755,7 +792,6 @@ function minesMult(openedSafe, minesCount){
 function renderMines(){
   const size = 25;
 
-  // setup screen
   if(!minesGame){
     const betDefault = Math.min(50, wallet.coins);
     screenEl.innerHTML = `
@@ -859,18 +895,18 @@ function renderMines(){
         mines: minesBuild(minesCount),
         opened: new Set(),
         over:false,
-        msg:"",
-        msgKind:"",
         safeOpened:0,
         mult:1,
+        msg:"",
+        msgKind:"",
       };
+      renderTopBar();
       renderMines();
     };
 
     return;
   }
 
-  // game screen
   const maxSafe = size - minesGame.minesCount;
   const potential = Math.floor(minesGame.bet * minesGame.mult);
 
@@ -884,11 +920,7 @@ function renderMines(){
     if(opened && isMine) cls += " mine";
     if(opened && !isMine) cls += " safe";
     if(opened) label = isMine ? "💣" : "✅";
-    cells.push(`
-      <button class="${cls}" data-i="${i}" ${minesGame.over?"disabled":""}>
-        ${label}
-      </button>
-    `);
+    cells.push(`<button class="${cls}" data-i="${i}" ${minesGame.over?"disabled":""}>${label}</button>`);
   }
 
   screenEl.innerHTML = `
@@ -909,91 +941,80 @@ function renderMines(){
         <div class="kpi"><div class="t">Статус</div><div class="v">${minesGame.over ? "Раунд завершён" : "Идёт игра"}</div></div>
       </div>
 
-      <div class="msg ${minesGame.msgKind||""}" id="mMsg">${minesGame.msg||""}</div>
-
-      <div class="minesGrid" id="minesGrid">${cells.join("")}</div>
-
       <div class="row" style="margin-top:12px;">
-        <button class="btn" id="mCash" style="flex:1;" ${minesGame.over?"disabled":""}>Забрать</button>
-        <button class="btnGhost" id="mNew">Новый раунд</button>
-        <button class="btnGhost" id="bonusM">+1000 🪙</button>
+        <button class="btn" id="mCash" ${minesGame.over ? "disabled":""}>Забрать</button>
+        <button class="btnGhost" id="mRestart">Новый раунд</button>
       </div>
+
+      <div class="minesGrid" style="margin-top:12px;">
+        ${cells.join("")}
+      </div>
+
+      <div class="msg ${minesGame.msgKind||""}" style="margin-top:12px;">${minesGame.msg||""}</div>
     </div>
   `;
 
   document.getElementById("toggleSfx3").onclick = ()=>{ app.sfx = !app.sfx; renderMines(); };
-  document.getElementById("bonusM").onclick = ()=>{ playClick(); addCoins(1000); renderMines(); };
 
-  document.getElementById("mNew").onclick = ()=>{ playClick(); minesGame = null; renderMines(); };
+  document.getElementById("mRestart").onclick = ()=>{
+    playClick();
+    minesGame = null;
+    renderMines();
+  };
 
   document.getElementById("mCash").onclick = ()=>{
     playClick();
     if(minesGame.over) return;
-    minesGame.over = true;
     const payout = Math.floor(minesGame.bet * minesGame.mult);
     addCoins(payout);
+    if(app.sfx) SFX.win();
     minesGame.msg = `💰 Забрал: +${payout} 🪙 (x${minesGame.mult.toFixed(2)})`;
     minesGame.msgKind = "ok";
-    if(app.sfx) SFX.win();
-
-    // reveal all
-    for(let i=0;i<size;i++) minesGame.opened.add(i);
+    minesGame.over = true;
+    renderTopBar();
     renderMines();
   };
 
-  document.querySelectorAll("#minesGrid button").forEach(btn=>{
-    btn.onclick = ()=>{
+  screenEl.querySelectorAll("[data-i]").forEach(btn=>{
+    btn.onclick = async ()=>{
+      await unlockAudio();
       if(minesGame.over) return;
       const i = Number(btn.dataset.i);
       if(minesGame.opened.has(i)) return;
 
       minesGame.opened.add(i);
-      const isMine = minesGame.mines.has(i);
 
-      if(isMine){
+      if(minesGame.mines.has(i)){
         minesGame.over = true;
-        minesGame.msg = `💥 Мина! Ставка ${minesGame.bet} 🪙 сгорела`;
+        minesGame.msg = `💥 Мина! Проигрыш -${minesGame.bet} 🪙`;
         minesGame.msgKind = "bad";
-        if(app.sfx) SFX.mine();
+        if(app.sfx) { SFX.mine(); SFX.lose(); }
 
-        for(let k=0;k<size;k++) minesGame.opened.add(k);
+        // раскрыть все мины
+        for(const m of minesGame.mines) minesGame.opened.add(m);
         renderMines();
         return;
       }
 
-      if(app.sfx) SFX.click();
       minesGame.safeOpened += 1;
       minesGame.mult = minesMult(minesGame.safeOpened, minesGame.minesCount);
+      if(app.sfx) SFX.safe();
 
       if(minesGame.safeOpened >= maxSafe){
-        minesGame.msg = "🏁 Открыл все safe! Авто-забор.";
-        minesGame.msgKind = "ok";
+        minesGame.over = true;
         const payout = Math.floor(minesGame.bet * minesGame.mult);
         addCoins(payout);
+        minesGame.msg = `🏆 Все safe! +${payout} 🪙 (x${minesGame.mult.toFixed(2)})`;
+        minesGame.msgKind = "ok";
         if(app.sfx) SFX.win();
-        minesGame.over = true;
-        for(let k=0;k<size;k++) minesGame.opened.add(k);
+        renderTopBar();
+        renderMines();
+        return;
       }
+
+      minesGame.msg = `✅ Safe! x${minesGame.mult.toFixed(2)} · можно продолжить или “Забрать”.`;
+      minesGame.msgKind = "";
       renderMines();
     };
   });
 }
-
-// ===============================
-// Router
-// ===============================
-function setScreen(name){
-  app.screen = name;
-  setNavActive(name);
-
-  if(name==="coin") renderCoin();
-  else if(name==="dice") renderDice();
-  else if(name==="mines") {
-    // если игра была, оставляем; если нет — покажем setup
-    renderMines();
-  }
-}
-
-// старт
-setScreen("coin");
-setNavActive("coin");
