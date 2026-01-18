@@ -24,7 +24,7 @@ const user = tg?.initDataUnsafe?.user;
 // ===============================
 // Wallet (localStorage)
 // ===============================
-const WALLET_KEY = "mini_wallet_dice_only_v1";
+const WALLET_KEY = "mini_wallet_mines_v1";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -120,318 +120,306 @@ function noise({ t=0.10, g=0.02, when=0, hp=900 }) {
 }
 
 const SFX = {
-  click(){
-    tone({type:"triangle", f:520, t:0.05, g:0.035});
-    tone({type:"triangle", f:320, t:0.06, g:0.02, when:0.01});
-  },
-  roll(){
-    noise({t:0.11, g:0.015, hp:800});
-    tone({type:"square", f:220, t:0.06, g:0.03, when:0.02});
-  },
-  win(){
-    tone({type:"sine", f:740, t:0.10, g:0.05});
-    tone({type:"sine", f:932, t:0.12, g:0.045, when:0.05});
-    tone({type:"sine", f:1244, t:0.14, g:0.04, when:0.10});
-  },
-  lose(){
-    tone({type:"sine", f:220, t:0.16, g:0.06});
-    tone({type:"sine", f:165, t:0.18, g:0.05, when:0.06});
-  }
+  click(){ tone({type:"triangle", f:520, t:0.05, g:0.035}); tone({type:"triangle", f:320, t:0.06, g:0.02, when:0.01}); },
+  start(){ noise({t:0.10, g:0.02, hp:1100}); tone({type:"sine", f:420, t:0.08, g:0.03, when:0.01}); },
+  gem(){ tone({type:"sine", f:880, t:0.06, g:0.05}); tone({type:"sine", f:1180, t:0.08, g:0.04, when:0.03}); },
+  mine(){ noise({t:0.16, g:0.035, hp:650}); tone({type:"sawtooth", f:150, t:0.18, g:0.05, when:0.02}); },
+  cash(){ tone({type:"sine", f:740, t:0.10, g:0.05}); tone({type:"sine", f:932, t:0.12, g:0.045, when:0.05}); tone({type:"sine", f:1244, t:0.14, g:0.04, when:0.10}); },
+  lose(){ tone({type:"sine", f:220, t:0.16, g:0.06}); tone({type:"sine", f:165, t:0.18, g:0.05, when:0.06}); },
 };
 document.addEventListener("pointerdown", unlockAudio, { once:false });
 
 // ===============================
-// Dice state (D6 only for now)
+// Mines logic
 // ===============================
 const app = { sfx:true };
 
-const diceState = {
-  sides: 6,          // сейчас делаем D6 (как на твоём скрине). D2 можно добавить потом.
-  mode: "below",     // below/above
-  threshold: 5,      // как на скрине
+const minesState = {
   bet: 100,
-  rolling: false,
-  lastRoll: null,
+  minesCount: 3,
+  running: false,
+  over: false,
+  gridSize: 25,
+  mines: new Set(),
+  opened: new Set(),
+  safeOpened: 0,
+  mult: 1.00,
   msg: "",
   msgKind: "",
 };
 
-// шанс
-function diceChance(sides, mode, threshold){
-  if(mode==="below") return threshold / sides;          // win if roll <= threshold
-  return (sides - threshold + 1) / sides;              // win if roll >= threshold
+function buildMines(minesCount){
+  const size = minesState.gridSize;
+  const s = new Set();
+  while(s.size < minesCount) s.add(randInt(0, size-1));
+  return s;
 }
 
-// множитель с “house edge”
-function diceMultiplier(chance){
-  const edge = 0.98; // 2%
-  // не даём меньше 1.02, чтобы не было “нулевых” коэффициентов
-  return Math.max(1.02, edge / chance);
+// “казиношный” рост множителя, но без дичи
+function calcMult(openedSafe, minesCount){
+  // base risk
+  const risk = 0.085 + minesCount * 0.010;  // растёт с минами
+  const curve = 0.010 + minesCount * 0.0015;
+  const m = 1 + openedSafe * risk + (openedSafe * (openedSafe-1)) * curve * 0.05;
+  return Math.max(1, m);
 }
 
-// запрет 100%
-function diceClampThreshold(){
-  const s = diceState.sides;
-  if(diceState.mode==="below"){
-    if(diceState.threshold >= s) diceState.threshold = s-1; // запрет 6/6
-    if(diceState.threshold < 1) diceState.threshold = 1;
-  } else {
-    if(diceState.threshold <= 1) diceState.threshold = 2;   // запрет 1/6 в “>=”
-    if(diceState.threshold > s) diceState.threshold = s;
+function clampBet(v){
+  v = Math.floor(Number(v)||0);
+  if(v < 1) v = 1;
+  if(v > wallet.coins) v = wallet.coins;
+  return v;
+}
+
+function setMsg(text, kind=""){
+  minesState.msg = text;
+  minesState.msgKind = kind;
+}
+
+function resetRound(){
+  minesState.running = false;
+  minesState.over = false;
+  minesState.mines = new Set();
+  minesState.opened = new Set();
+  minesState.safeOpened = 0;
+  minesState.mult = 1.00;
+  setMsg("Выбери ставку и количество мин, затем Start.");
+}
+
+function startRound(){
+  minesState.bet = clampBet(minesState.bet);
+  if(minesState.bet > wallet.coins){
+    setMsg("Недостаточно монет.", "bad");
+    return;
+  }
+  if(minesState.minesCount < 1) minesState.minesCount = 1;
+  if(minesState.minesCount > 24) minesState.minesCount = 24;
+
+  addCoins(-minesState.bet);
+
+  minesState.running = true;
+  minesState.over = false;
+  minesState.mines = buildMines(minesState.minesCount);
+  minesState.opened = new Set();
+  minesState.safeOpened = 0;
+  minesState.mult = 1.00;
+
+  setMsg("Игра началась. Открывай клетки ✅", "");
+  if(app.sfx) SFX.start();
+}
+
+function cashout(){
+  if(!minesState.running || minesState.over) return;
+  const payout = Math.floor(minesState.bet * minesState.mult);
+  addCoins(payout);
+
+  minesState.over = true;
+  minesState.running = false;
+  setMsg(`💰 Забрал +${payout} 🪙 (x${minesState.mult.toFixed(2)})`, "ok");
+  if(app.sfx) SFX.cash();
+}
+
+function revealAll(){
+  // открыть всё (только визуально)
+  for(let i=0;i<minesState.gridSize;i++){
+    minesState.opened.add(i);
   }
 }
 
-// кубик html (грани 1..6)
-function facePips(n){
-  const map = {
-    1:[0,0,0,0,1,0,0,0,0],
-    2:[1,0,0,0,0,0,0,0,1],
-    3:[1,0,0,0,1,0,0,0,1],
-    4:[1,0,1,0,0,0,1,0,1],
-    5:[1,0,1,0,1,0,1,0,1],
-    6:[1,0,1,1,0,1,1,0,1],
-  };
-  return map[n];
-}
-function renderCubeFace(n){
-  const arr = facePips(n);
-  return `
-    <div class="face f${n}">
-      <div class="pipGrid">
-        ${arr.map(v=>`<div class="pip ${v?"":"off"}"></div>`).join("")}
-      </div>
-    </div>
-  `;
-}
+function openCell(i){
+  if(!minesState.running || minesState.over) return;
+  if(minesState.opened.has(i)) return;
 
-function playClick(){ if(app.sfx) SFX.click(); }
+  minesState.opened.add(i);
+
+  if(minesState.mines.has(i)){
+    // boom
+    minesState.over = true;
+    minesState.running = false;
+    revealAll();
+    setMsg("💥 Мина! Раунд проигран.", "bad");
+    if(app.sfx) SFX.mine();
+    return;
+  }
+
+  minesState.safeOpened += 1;
+  minesState.mult = calcMult(minesState.safeOpened, minesState.minesCount);
+
+  if(app.sfx) SFX.gem();
+
+  const maxSafe = minesState.gridSize - minesState.minesCount;
+  if(minesState.safeOpened >= maxSafe){
+    // очистил поле
+    const payout = Math.floor(minesState.bet * minesState.mult);
+    addCoins(payout);
+    minesState.over = true;
+    minesState.running = false;
+    setMsg(`🏆 Поле очищено! +${payout} 🪙 (x${minesState.mult.toFixed(2)})`, "ok");
+    if(app.sfx) SFX.cash();
+  }
+}
 
 // ===============================
 // Render
 // ===============================
-function renderDice(){
-  diceClampThreshold();
+function render(){
+  const potential = minesState.running && !minesState.over
+    ? Math.floor(minesState.bet * minesState.mult)
+    : 0;
 
-  // clamp bet
-  diceState.bet = Math.floor(Number(diceState.bet)||1);
-  if(diceState.bet < 1) diceState.bet = 1;
-  if(diceState.bet > wallet.coins) diceState.bet = wallet.coins;
+  const maxSafe = minesState.gridSize - minesState.minesCount;
 
-  const s = diceState.sides;
-  const chance = diceChance(s, diceState.mode, diceState.threshold);
-  const mult = diceMultiplier(chance);
-  const payout = Math.floor(diceState.bet * mult);
+  const cells = [];
+  for(let i=0;i<minesState.gridSize;i++){
+    const opened = minesState.opened.has(i);
+    const isMine = minesState.mines.has(i);
 
-  const winText = (diceState.mode==="below")
-    ? `Выигрыш если выпало ≤ ${diceState.threshold}`
-    : `Выигрыш если выпало ≥ ${diceState.threshold}`;
+    let cls = "tile";
+    let inner = "";
+
+    if(opened) cls += " open";
+    if(opened && isMine) { cls += " mine"; inner = `<span class="icon bomb">💣</span>`; }
+    if(opened && !isMine) { cls += " safe"; inner = `<span class="icon gem">💎</span>`; }
+
+    if(!minesState.running || minesState.over) cls += " locked";
+
+    cells.push(`<button class="${cls}" data-i="${i}" ${(!minesState.running || minesState.over) ? "disabled" : ""}>${inner}</button>`);
+  }
 
   screenEl.innerHTML = `
     <div class="card">
       <div class="row">
         <div>
-          <h2 class="h1">Dice</h2>
-          <div class="hint">Непрозрачный 3D кубик. Выпало число — куб показывает эту грань (100% шанс запрещён).</div>
+          <h2 class="h1">Mines</h2>
+          <div class="hint">Открывай safe клетки. Чем больше мин — тем быстрее растёт x. Можно “Забрать”.</div>
         </div>
         <div class="spacer"></div>
         <button class="chip ${app.sfx ? "active":""}" id="toggleSfx">Звук</button>
       </div>
 
-      <div class="row" style="margin-top:10px;">
-        <button class="chip ${diceState.mode==="below"?"active":""}" data-mode="below">Меньше</button>
-        <button class="chip ${diceState.mode==="above"?"active":""}" data-mode="above">Больше</button>
-        <div class="spacer"></div>
-        <div class="rulePill">${winText}</div>
-      </div>
-
-      <div class="kpis">
-        <div class="kpi"><div class="t">Множитель</div><div class="v">x${mult.toFixed(2)}</div></div>
-        <div class="kpi"><div class="t">Возможный выигрыш</div><div class="v">+${payout} 🪙</div></div>
-        <div class="kpi"><div class="t">Шанс</div><div class="v">${(chance*100).toFixed(1)}%</div></div>
-      </div>
-
-      <div style="margin-top:10px;">
-        <div class="row" style="justify-content:space-between;">
-          <div style="font-weight:950;">Порог: <b id="thLabel">${diceState.threshold}</b> из ${s}</div>
-          <div class="pill">Выпало: <b>${diceState.lastRoll==null ? "—" : diceState.lastRoll}</b></div>
-        </div>
-        <input class="range" id="threshold" type="range" min="1" max="${s}" value="${diceState.threshold}">
-        <div class="hint" id="limitHint" style="margin-top:6px;"></div>
-      </div>
-
-      <div class="diceArena" id="diceArena">
-        <div class="diceShadow"></div>
-        <div class="dice3dWrap">
-          <div class="cube ${diceState.lastRoll ? "show-"+diceState.lastRoll : "show-1"}" id="cube">
-            ${renderCubeFace(1)}
-            ${renderCubeFace(2)}
-            ${renderCubeFace(3)}
-            ${renderCubeFace(4)}
-            ${renderCubeFace(5)}
-            ${renderCubeFace(6)}
+      <div class="grid2" style="margin-top:12px;">
+        <div class="card" style="background:rgba(255,255,255,.03);">
+          <div class="minesWrap">
+            <div class="board" id="board">
+              ${cells.join("")}
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div class="row" style="margin-top:12px;">
-        <div style="min-width:260px; width: 320px;">
+          <div class="kpis">
+            <div class="kpi"><div class="t">Открыто safe</div><div class="v">${minesState.safeOpened} / ${maxSafe}</div></div>
+            <div class="kpi"><div class="t">Множитель</div><div class="v">x${minesState.mult.toFixed(2)}</div></div>
+            <div class="kpi"><div class="t">Забрать сейчас</div><div class="v">${minesState.running && !minesState.over ? potential : "—"} 🪙</div></div>
+          </div>
+
+          <div class="row" style="margin-top:12px;">
+            <button class="btn" id="cashBtn" style="flex:1;" ${(!minesState.running || minesState.over) ? "disabled":""}>Забрать</button>
+            <button class="btnGhost" id="resetBtn">Сброс</button>
+          </div>
+
+          <div class="msg ${minesState.msgKind||""}" id="msg">${minesState.msg||""}</div>
+        </div>
+
+        <div class="card" style="background:rgba(255,255,255,.03);">
           <div class="row" style="justify-content:space-between;">
-            <div class="h1" style="font-size:14px;">Ставка</div>
+            <div class="h1">Ставка</div>
             <button class="btnGhost" id="bonus">+1000 🪙</button>
           </div>
-          <div class="chips" style="margin-top:8px;">
+
+          <div class="chips" style="margin-top:10px;">
             ${[10,50,100,250,500].map(v=>`<button class="chip" data-bet="${v}">${v}</button>`).join("")}
             <button class="chip" data-bet="max">MAX</button>
           </div>
-          <div class="row" style="margin-top:8px;">
+
+          <div class="row" style="margin-top:10px;">
             <button class="btnGhost" id="betMinus">-</button>
-            <input class="input" id="bet" type="number" min="1" step="1" value="${diceState.bet}">
+            <input class="input" id="bet" type="number" min="1" step="1" value="${minesState.bet}">
             <button class="btnGhost" id="betPlus">+</button>
           </div>
+
+          <div style="margin-top:12px;">
+            <div class="row" style="justify-content:space-between;">
+              <div style="font-weight:950;">Mines</div>
+              <span class="badge"><b id="mShow">${minesState.minesCount}</b></span>
+            </div>
+            <input class="range" id="mRange" type="range" min="1" max="24" value="${minesState.minesCount}" ${minesState.running && !minesState.over ? "disabled":""}>
+            <div class="hint">На раунде менять нельзя. Больше мин → выше риск.</div>
+          </div>
+
+          <div class="row" style="margin-top:12px;">
+            <button class="btn" id="startBtn" style="flex:1;" ${minesState.running && !minesState.over ? "disabled":""}>Start</button>
+          </div>
+
+          <div class="hint" style="margin-top:10px;">
+            Ставка списывается при Start. Открыл safe — множитель растёт. Нажми “Забрать”, чтобы зафиксировать выигрыш.
+          </div>
         </div>
-
-        <div class="spacer"></div>
-
-        <button class="btn" id="rollBtn" style="min-width:260px;" ${diceState.rolling?"disabled":""}>
-          Бросить
-        </button>
       </div>
-
-      <div class="msg ${diceState.msgKind||""}" id="msg">${diceState.msg||""}</div>
     </div>
   `;
 
   // bind
-  document.getElementById("toggleSfx").onclick = ()=>{ app.sfx = !app.sfx; renderDice(); };
-
-  document.querySelectorAll("[data-mode]").forEach(b=>{
-    b.onclick = ()=>{
-      playClick();
-      diceState.mode = b.dataset.mode;
-      diceState.lastRoll = null;
-      diceState.msg = "";
-      diceState.msgKind = "";
-      diceClampThreshold();
-      renderDice();
-    };
-  });
-
-  const th = document.getElementById("threshold");
-  const thLabel = document.getElementById("thLabel");
-  const limitHint = document.getElementById("limitHint");
-
-  th.oninput = ()=>{
-    diceState.threshold = Number(th.value);
-    diceClampThreshold();
-    th.value = String(diceState.threshold);
-    thLabel.textContent = String(diceState.threshold);
-
-    if(diceState.mode==="below" && diceState.threshold===diceState.sides-1){
-      limitHint.textContent = "⚠️ 100% шанс запрещён: максимум порога = 5 (для D6).";
-    } else if(diceState.mode==="above" && diceState.threshold===2){
-      limitHint.textContent = "⚠️ 100% шанс запрещён: минимум порога = 2 (для D6).";
-    } else {
-      limitHint.textContent = "";
-    }
-    renderDice();
-  };
+  document.getElementById("toggleSfx").onclick = ()=>{ if(app.sfx) SFX.click(); app.sfx=!app.sfx; render(); };
 
   const betInput = document.getElementById("bet");
-  const clampBet = ()=>{
-    let v = Math.floor(Number(betInput.value)||0);
-    if(v<1) v=1;
-    if(v>wallet.coins) v=wallet.coins;
-    betInput.value = String(v);
-    diceState.bet = v;
+  const syncBet = (play=false)=>{
+    minesState.bet = clampBet(betInput.value);
+    betInput.value = String(minesState.bet);
+    if(play && app.sfx) SFX.click();
   };
-  betInput.oninput = clampBet;
-  document.getElementById("betMinus").onclick = ()=>{ playClick(); betInput.value = String((Number(betInput.value)||1)-10); clampBet(); };
-  document.getElementById("betPlus").onclick  = ()=>{ playClick(); betInput.value = String((Number(betInput.value)||1)+10); clampBet(); };
+  betInput.oninput = ()=>syncBet(false);
+
+  document.getElementById("betMinus").onclick = ()=>{ betInput.value = String((Number(betInput.value)||1)-10); syncBet(true); };
+  document.getElementById("betPlus").onclick = ()=>{ betInput.value = String((Number(betInput.value)||1)+10); syncBet(true); };
 
   document.querySelectorAll("[data-bet]").forEach(b=>{
     b.onclick = ()=>{
-      playClick();
+      if(app.sfx) SFX.click();
       const v = b.dataset.bet;
       betInput.value = (v==="max") ? String(wallet.coins) : String(v);
-      clampBet();
+      syncBet(false);
     };
   });
 
-  document.getElementById("bonus").onclick = ()=>{ playClick(); addCoins(1000); renderDice(); };
-
-  document.getElementById("rollBtn").onclick = async ()=>{
-    await unlockAudio();
-    clampBet();
-    diceClampThreshold();
-
-    // жёсткая защита от 100%
-    const chance = diceChance(diceState.sides, diceState.mode, diceState.threshold);
-    if(chance >= 0.999){
-      alert("Запрещено ставить с шансом 100% (иначе можно багать баланс).");
-      return;
-    }
-
-    if(diceState.rolling) return;
-    if(diceState.bet <= 0) return;
-    if(diceState.bet > wallet.coins){ alert("Недостаточно монет"); return; }
-
-    addCoins(-diceState.bet);
-
-    diceState.rolling = true;
-    diceState.msg = "Бросок...";
-    diceState.msgKind = "";
-    renderTopBar();
-
-    if(app.sfx) SFX.roll();
-
-    const roll = randInt(1, diceState.sides);
-    const win = (diceState.mode==="below")
-      ? (roll <= diceState.threshold)
-      : (roll >= diceState.threshold);
-
-    const arena = document.getElementById("diceArena");
-    const cube = document.getElementById("cube");
-
-    // старт анимации
-    arena.classList.add("throwing");
-
-    // выставляем правильную грань ближе к концу (гарантия совпадения)
-    setTimeout(()=>{
-      cube.className = "cube show-" + roll;
-    }, 860);
-
-    setTimeout(()=>{
-      arena.classList.remove("throwing");
-      finish(roll, win);
-    }, 1120);
+  const mRange = document.getElementById("mRange");
+  const mShow = document.getElementById("mShow");
+  mRange.oninput = ()=>{
+    if(app.sfx) SFX.click();
+    minesState.minesCount = Number(mRange.value);
+    mShow.textContent = String(minesState.minesCount);
   };
 
-  function finish(roll, win){
-    const chance = diceChance(diceState.sides, diceState.mode, diceState.threshold);
-    const mult = diceMultiplier(chance);
-    const payout = Math.floor(diceState.bet * mult);
+  document.getElementById("bonus").onclick = ()=>{ if(app.sfx) SFX.click(); addCoins(1000); render(); };
 
-    diceState.lastRoll = roll;
+  document.getElementById("startBtn").onclick = async ()=>{
+    await unlockAudio();
+    if(app.sfx) SFX.click();
+    startRound();
+    render();
+  };
 
-    if(win){
-      addCoins(payout);
-      diceState.msg = `✅ Выпало ${roll}. Выигрыш +${payout} 🪙 (x${mult.toFixed(2)})`;
-      diceState.msgKind = "ok";
-      if(app.sfx) SFX.win();
-    } else {
-      diceState.msg = `❌ Выпало ${roll}. Проигрыш -${diceState.bet} 🪙`;
-      diceState.msgKind = "bad";
-      if(app.sfx) SFX.lose();
-    }
+  document.getElementById("cashBtn").onclick = async ()=>{
+    await unlockAudio();
+    if(app.sfx) SFX.click();
+    cashout();
+    render();
+  };
 
-    diceState.rolling = false;
-    renderTopBar();
-    renderDice();
-  }
+  document.getElementById("resetBtn").onclick = ()=>{
+    if(app.sfx) SFX.click();
+    resetRound();
+    render();
+  };
+
+  document.getElementById("board").querySelectorAll("[data-i]").forEach(btn=>{
+    btn.onclick = async ()=>{
+      await unlockAudio();
+      const i = Number(btn.dataset.i);
+      openCell(i);
+      render();
+    };
+  });
 }
 
 // init
-renderDice();
-
-// стартуем
-renderCoinFlip();
+resetRound();
+render();
