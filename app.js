@@ -1,3 +1,5 @@
+// app.js — Rocket Crash (night, snow, aurora, 3D rocket, auto rounds)
+
 // ===============================
 // RNG (crypto)
 // ===============================
@@ -11,13 +13,12 @@ function randInt(min, max) {
 }
 
 // ===============================
-// Telegram WebApp
+// Telegram WebApp (optional)
 // ===============================
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
-const screenEl = document.getElementById("screen");
-const userEl = document.getElementById("user");
+const userLine = document.getElementById("userLine");
 const balancePill = document.getElementById("balancePill");
 const user = tg?.initDataUnsafe?.user;
 
@@ -32,46 +33,45 @@ function loadWallet() {
   } catch {}
   return { coins: 1000 };
 }
-function saveWallet(w){ localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
+function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
 
-function setCoins(v){
+function setCoins(v) {
   wallet.coins = Math.max(0, Math.floor(v));
   saveWallet(wallet);
-  renderTopBar();
+  renderTop();
 }
-function addCoins(d){ setCoins(wallet.coins + d); }
+function addCoins(d) { setCoins(wallet.coins + d); }
 
-function renderTopBar(){
-  userEl.textContent = user
+function renderTop() {
+  userLine.textContent = user
     ? `Привет, ${user.first_name} · открыто в Telegram`
     : `Открыто вне Telegram`;
   balancePill.textContent = `🪙 ${wallet.coins}`;
 }
-renderTopBar();
+renderTop();
 
 // ===============================
 // Audio (WebAudio, no files)
 // ===============================
 let _ctx = null;
-function audioCtx(){
+function audioCtx() {
   if (_ctx) return _ctx;
   const Ctx = window.AudioContext || window.webkitAudioContext;
   _ctx = Ctx ? new Ctx() : null;
   return _ctx;
 }
-async function unlockAudio(){
+async function unlockAudio() {
   const ctx = audioCtx();
   if (!ctx) return;
-  if (ctx.state === "suspended") {
-    try { await ctx.resume(); } catch {}
-  }
+  if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
 }
-document.addEventListener("pointerdown", unlockAudio, { passive:true });
+document.addEventListener("pointerdown", unlockAudio, { once: false });
 
-function tone({type="sine", f=440, t=0.08, g=0.06, when=0, detune=0}){
+function tone({ type="sine", f=440, t=0.10, g=0.05, when=0, detune=0 }) {
   const ctx = audioCtx(); if (!ctx) return;
   const now = ctx.currentTime + when;
+
   const o = ctx.createOscillator();
   const gain = ctx.createGain();
   const filt = ctx.createBiquadFilter();
@@ -94,15 +94,15 @@ function tone({type="sine", f=440, t=0.08, g=0.06, when=0, detune=0}){
   o.start(now);
   o.stop(now + t + 0.02);
 }
-function noise({t=0.10, g=0.02, when=0, hp=900}){
+function noise({ t=0.12, g=0.02, when=0, hp=900 }) {
   const ctx = audioCtx(); if (!ctx) return;
   const now = ctx.currentTime + when;
+
   const bufferSize = Math.floor(ctx.sampleRate * t);
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
   const data = buffer.getChannelData(0);
-  for (let i=0;i<bufferSize;i++){
-    data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
-  }
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+
   const src = ctx.createBufferSource();
   src.buffer = buffer;
 
@@ -123,450 +123,557 @@ function noise({t=0.10, g=0.02, when=0, hp=900}){
 }
 
 const SFX = {
-  click(){ tone({type:"triangle", f:520, t:0.05, g:0.035}); tone({type:"triangle", f:320, t:0.06, g:0.02, when:0.01}); },
-  start(){ noise({t:0.10,g:0.014,hp:900}); tone({type:"square", f:240, t:0.07, g:0.03, when:0.02}); },
-  tick(){ tone({type:"sine", f:720, t:0.03, g:0.02}); },
-  cash(){ tone({type:"sine", f:740, t:0.10, g:0.05}); tone({type:"sine", f:932, t:0.12, g:0.045, when:0.05}); tone({type:"sine", f:1244, t:0.14, g:0.04, when:0.10}); },
-  crash(){ noise({t:0.16,g:0.03,hp:550}); tone({type:"sawtooth", f:160, t:0.22, g:0.05, when:0.02}); },
+  click(){
+    tone({type:"triangle", f:520, t:0.05, g:0.035});
+    tone({type:"triangle", f:320, t:0.06, g:0.02, when:0.01});
+  },
+  join(){
+    tone({type:"sine", f:560, t:0.08, g:0.05});
+    tone({type:"sine", f:740, t:0.10, g:0.04, when:0.05});
+  },
+  cash(){
+    tone({type:"sine", f:740, t:0.10, g:0.05});
+    tone({type:"sine", f:932, t:0.12, g:0.045, when:0.06});
+    tone({type:"sine", f:1244, t:0.14, g:0.04, when:0.12});
+  },
+  lose(){
+    tone({type:"sine", f:220, t:0.16, g:0.06});
+    tone({type:"sine", f:165, t:0.18, g:0.05, when:0.07});
+  },
+  countdownTick(){
+    tone({type:"square", f:520, t:0.04, g:0.02});
+  },
+  launch(){
+    noise({t:0.16, g:0.028, hp:500});
+    tone({type:"sawtooth", f:110, t:0.18, g:0.04, when:0.02});
+  },
+  engineLoop(){
+    // called periodically during flight (light)
+    noise({t:0.05, g:0.008, hp:700});
+    tone({type:"sawtooth", f:95, t:0.06, g:0.012, detune: -20});
+  },
+  crash(){
+    noise({t:0.22, g:0.05, hp:250});
+    tone({type:"sawtooth", f:70, t:0.22, g:0.05, when:0.01});
+    tone({type:"sine", f:280, t:0.10, g:0.03, when:0.06});
+  }
 };
 
-const app = { sfx:true };
+// ===============================
+// DOM
+// ===============================
+const multText = document.getElementById("multText");
+const phaseText = document.getElementById("phaseText");
+const roundText = document.getElementById("roundText");
+const betStatus = document.getElementById("betStatus");
+const ticker = document.getElementById("ticker");
+
+const rocketWrap = document.getElementById("rocketWrap");
+const rocket = document.getElementById("rocket");
+const joinBtn = document.getElementById("joinBtn");
+const cashBtn = document.getElementById("cashBtn");
+const bonusBtn = document.getElementById("bonusBtn");
+const betInput = document.getElementById("betInput");
+const betMinus = document.getElementById("betMinus");
+const betPlus = document.getElementById("betPlus");
+const toggleSfx = document.getElementById("toggleSfx");
+
+const note = document.getElementById("note");
 
 // ===============================
-// Crash / Rocket game
+// Settings / State
 // ===============================
-const crash = {
-  phase: "countdown",     // countdown | running | crashed
-  countdown: 10,
-  t0: 0,
+const app = {
+  sfx: true,
+};
+
+const state = {
+  phase: "waiting",      // waiting | flying | crashed
+  waitLeftMs: 10000,     // 10s
   mult: 1.00,
-  crashPoint: 2.00,       // random each round
-  runningTimer: null,
-  cdTimer: null,
-
+  startAt: 0,
+  crashAt: 0,
+  crashMult: 0,
+  // player
+  inRound: false,
   bet: 50,
-  inBet: false,           // placed bet for current round
-  betLocked: 0,
-  cashed: false,
+  joinedBet: 0,
+  cashedOut: false,
   cashMult: 0,
-  msg: "",
-  msgKind: "",
+  // timers
+  lastEngineTick: 0,
 };
 
-function newCrashPoint(){
-  // "честный" распределённый краш: 1/(1-r) даёт длинные хвосты
-  // ограничим сверху для UI
-  const r = randFloat();
-  const raw = 1 / (1 - Math.min(0.9995, r));
-  const p = Math.max(1.05, Math.min(raw, 50));
-  // чуть "красивее" округлим
-  return Math.round(p * 100) / 100;
-}
-
-function resetRoundToCountdown(){
-  crash.phase = "countdown";
-  crash.countdown = 10;
-  crash.mult = 1.00;
-  crash.msg = "Новый раунд скоро…";
-  crash.msgKind = "";
-  crash.cashed = false;
-  crash.cashMult = 0;
-
-  // ставка: если человек НЕ зашёл — можно менять
-  // если зашёл — ставка уже списана/зафиксирована на раунд
-  crash.inBet = false;
-  crash.betLocked = 0;
-
-  crash.crashPoint = newCrashPoint();
-
-  renderCrash();
-  startCountdown();
-}
-
-function startCountdown(){
-  clearInterval(crash.cdTimer);
-  let lastInt = crash.countdown;
-
-  crash.cdTimer = setInterval(()=>{
-    crash.countdown -= 1;
-    if (app.sfx && crash.countdown <= 5 && crash.countdown >= 1) SFX.tick();
-    if (crash.countdown <= 0){
-      clearInterval(crash.cdTimer);
-      startRunning();
-      return;
-    }
-    if (Math.floor(crash.countdown) !== lastInt){
-      lastInt = Math.floor(crash.countdown);
-    }
-    renderCrashHudOnly();
-  }, 1000);
-}
-
-function startRunning(){
-  crash.phase = "running";
-  crash.t0 = performance.now();
-  crash.mult = 1.00;
-  crash.msg = "Раунд начался! Забирай до краша.";
-  crash.msgKind = "";
-  if (app.sfx) SFX.start();
-
-  renderCrash();
-
-  clearInterval(crash.runningTimer);
-  crash.runningTimer = setInterval(()=>{
-    const t = (performance.now() - crash.t0) / 1000;
-    // рост как "краш": плавно + ускорение
-    const m = 1 + t * 0.9 + t * t * 0.16;
-    crash.mult = Math.max(1.00, m);
-
-    // проверка на краш
-    if (crash.mult >= crash.crashPoint){
-      crash.mult = crash.crashPoint;
-      onCrash();
-      return;
-    }
-    renderCrashHudOnly();
-  }, 50);
-}
-
-function onCrash(){
-  clearInterval(crash.runningTimer);
-  crash.phase = "crashed";
-
-  // если человек был в ставке и не успел
-  if (crash.inBet && !crash.cashed){
-    crash.msg = `💥 Краш на x${crash.crashPoint.toFixed(2)} — ты не успел. -${crash.betLocked} 🪙`;
-    crash.msgKind = "bad";
-  } else if (crash.cashed){
-    crash.msg = `✅ Успел на x${crash.cashMult.toFixed(2)}. Новый раунд через 10с.`;
-    crash.msgKind = "ok";
-  } else {
-    crash.msg = `💥 Краш на x${crash.crashPoint.toFixed(2)}. Новый раунд через 10с.`;
-    crash.msgKind = "";
-  }
-
-  renderCrash(true);
-
-  // следующий раунд через 10 сек
-  setTimeout(()=> resetRoundToCountdown(), 1000);
-}
-
-function tryEnterBet(){
-  // можно входить ТОЛЬКО в countdown
-  if (crash.phase !== "countdown") return;
-
-  const bet = Math.floor(Number(crash.bet) || 0);
-  if (bet <= 0) { alert("Ставка должна быть больше 0"); return; }
-  if (bet > wallet.coins) { alert("Недостаточно монет"); return; }
-
-  addCoins(-bet);
-  crash.inBet = true;
-  crash.betLocked = bet;
-  crash.cashed = false;
-  crash.cashMult = 0;
-  crash.msg = `Ты в игре: ставка ${bet} 🪙. Жди старт раунда.`;
-  crash.msgKind = "";
-
-  if (app.sfx) SFX.click();
-  renderCrash();
-}
-
-function tryCashOut(){
-  if (crash.phase !== "running") return;
-  if (!crash.inBet || crash.cashed) return;
-
-  crash.cashed = true;
-  crash.cashMult = crash.mult;
-  const payout = Math.floor(crash.betLocked * crash.cashMult);
-  addCoins(payout);
-
-  crash.msg = `💰 Забрал: +${payout} 🪙 (x${crash.cashMult.toFixed(2)})`;
-  crash.msgKind = "ok";
-  if (app.sfx) SFX.cash();
-
-  renderCrash();
-}
-
-function setBetValue(v){
-  crash.bet = v;
-}
-
 // ===============================
-// Canvas background (snow + aurora)
+// Helpers
 // ===============================
-let sky = null;
-let skyCtx = null;
-let W = 0, H = 0;
-const snow = [];
-const aurora = { t: 0 };
-
-function initSky(canvas){
-  sky = canvas;
-  skyCtx = canvas.getContext("2d", { alpha:true });
-
-  const resize = ()=>{
-    const r = canvas.getBoundingClientRect();
-    canvas.width = Math.max(2, Math.floor(r.width * devicePixelRatio));
-    canvas.height = Math.max(2, Math.floor(r.height * devicePixelRatio));
-    W = canvas.width;
-    H = canvas.height;
-  };
-  resize();
-  window.addEventListener("resize", resize);
-
-  snow.length = 0;
-  for (let i=0;i<140;i++){
-    snow.push({
-      x: randFloat() * W,
-      y: randFloat() * H,
-      r: 0.7 + randFloat()*2.2,
-      v: 0.35 + randFloat()*1.25,
-      drift: (randFloat()*2-1) * 0.35,
-      a: 0.25 + randFloat()*0.65
-    });
-  }
-
-  const loop = ()=>{
-    drawSky();
-    requestAnimationFrame(loop);
-  };
-  requestAnimationFrame(loop);
+function clampBet(v){
+  v = Math.floor(Number(v) || 0);
+  if (v < 1) v = 1;
+  if (v > wallet.coins) v = wallet.coins;
+  return v;
+}
+function fmt2(x){ return "x" + Number(x).toFixed(2); }
+function setRocketPose({ y=0, rot=0, tilt=0, scale=1 }){
+  // y in px (up is negative)
+  rocketWrap.style.transform = `translateX(-50%) translateY(${y}px)`;
+  rocket.style.transform = `translateX(-50%) rotate(${rot}deg) rotateX(${tilt}deg) scale(${scale})`;
 }
 
-function drawSky(){
-  if (!skyCtx) return;
-  const ctx = skyCtx;
+function resetRocketToPad(){
+  rocket.classList.remove("shake");
+  rocketWrap.classList.remove("launching");
+  setRocketPose({ y:0, rot:-8, tilt:18, scale:1 });
+}
+resetRocketToPad();
 
-  // clear
-  ctx.clearRect(0,0,W,H);
+// Crash multiplier distribution (simple “provably fair-like” feel, no server)
+// Heavy tail; max cap to keep UX ok
+function sampleCrashMultiplier(){
+  // classic-style: m = 0.99 / (1 - r) (not exact PF, but similar curve)
+  const r = Math.max(1e-9, randFloat());
+  let m = 0.99 / (1 - r);
+  // cap to avoid insane long rounds
+  m = Math.min(m, 50);
+  // round to 2 decimals
+  return Math.max(1.01, Math.floor(m * 100) / 100);
+}
 
-  // aurora ribbons
-  aurora.t += 0.008;
-  const t = aurora.t;
-
-  // gradient base
-  const g = ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0, "rgba(10,14,40,0.0)");
-  g.addColorStop(0.25, "rgba(10,14,40,0.25)");
-  g.addColorStop(1, "rgba(0,0,0,0.25)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0,0,W,H);
-
-  // aurora curves
-  for (let k=0;k<3;k++){
-    ctx.save();
-    ctx.globalAlpha = 0.16 + 0.06*k;
-
-    const grad = ctx.createLinearGradient(0,0,W,0);
-    grad.addColorStop(0, "rgba(60,255,181,0.00)");
-    grad.addColorStop(0.35, "rgba(60,255,181,0.35)");
-    grad.addColorStop(0.7, "rgba(76,133,255,0.28)");
-    grad.addColorStop(1, "rgba(255,90,106,0.00)");
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = (18 + 10*k) * devicePixelRatio;
-    ctx.lineCap = "round";
-
-    ctx.beginPath();
-    const y0 = (0.22 + k*0.10) * H;
-    for (let x=0; x<=W; x+= Math.max(6, Math.floor(W/30))){
-      const nx = x / W;
-      const y = y0 + Math.sin(nx*4.2 + t*1.8 + k)* (28*devicePixelRatio)
-                  + Math.sin(nx*11.2 + t*1.1 + k*2)* (12*devicePixelRatio);
-      if (x===0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // stars
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  for (let i=0;i<65;i++){
-    const x = (i*131 % 997)/997 * W;
-    const y = (i*271 % 887)/887 * H * 0.55;
-    const tw = 0.35 + 0.65*Math.abs(Math.sin(t*1.7 + i));
-    ctx.fillStyle = `rgba(255,255,255,${0.10 + 0.12*tw})`;
-    ctx.fillRect(x, y, 1.2*devicePixelRatio, 1.2*devicePixelRatio);
-  }
-  ctx.restore();
-
-  // snow
-  for (const s of snow){
-    s.y += s.v * devicePixelRatio;
-    s.x += s.drift * devicePixelRatio;
-    if (s.y > H + 5) { s.y = -10; s.x = randFloat()*W; }
-    if (s.x < -10) s.x = W + 10;
-    if (s.x > W + 10) s.x = -10;
-
-    ctx.beginPath();
-    ctx.fillStyle = `rgba(255,255,255,${s.a})`;
-    ctx.arc(s.x, s.y, s.r*devicePixelRatio, 0, Math.PI*2);
-    ctx.fill();
-  }
+function canJoin(){
+  return state.phase === "waiting" && !state.inRound;
+}
+function canCash(){
+  return state.phase === "flying" && state.inRound && !state.cashedOut;
 }
 
 // ===============================
 // UI render
 // ===============================
-function renderCrash(forceFlash=false){
-  screenEl.innerHTML = `
-    <div class="card">
-      <div class="grid2">
-        <div class="card" style="background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08);">
-          <div class="arena">
-            <canvas id="sky"></canvas>
-            <div class="arenaOverlay"></div>
+function render(){
+  multText.textContent = fmt2(state.mult);
 
-            <div class="hud">
-              <div class="hudBox">
-                <div class="hudBig" id="hudMult">x${crash.mult.toFixed(2)}</div>
-                <div class="hudSmall" id="hudPhase">${phaseText()}</div>
-              </div>
+  if (state.phase === "waiting"){
+    phaseText.textContent = "Ожидание — старт скоро";
+    roundText.textContent = `Старт через ${Math.ceil(state.waitLeftMs/1000)}с`;
+    ticker.textContent = `Новый раунд через ${Math.ceil(state.waitLeftMs/1000)}с…`;
+  }
+  if (state.phase === "flying"){
+    phaseText.textContent = "Ракета набирает высоту…";
+    roundText.textContent = "Раунд идёт";
+    ticker.textContent = `🚀 Летим… текущий множитель ${fmt2(state.mult)}`;
+  }
+  if (state.phase === "crashed"){
+    phaseText.textContent = `Краш на ${fmt2(state.crashMult)}`;
+    roundText.textContent = "Краш";
+    ticker.textContent = `💥 Краш на ${fmt2(state.crashMult)}. Новый раунд через 10с.`;
+  }
 
-              <div class="hudBox">
-                <div class="hudSmall">Раунд</div>
-                <div style="font-weight:1000;font-size:14px;">
-                  ${crash.phase==="countdown"
-                    ? `Старт через <b id="hudCd">${crash.countdown}</b>с`
-                    : (crash.phase==="running" ? `Идёт` : `Краш`)}
-                </div>
-              </div>
+  betStatus.textContent = state.inRound
+    ? (state.cashedOut ? `забрал на ${fmt2(state.cashMult)}` : `${state.joinedBet} 🪙 в раунде`)
+    : "не в раунде";
 
-              <div class="hudBox">
-                <div class="hudSmall">Твоя ставка</div>
-                <div style="font-weight:1000;font-size:14px;">
-                  ${crash.inBet ? `<b>${crash.betLocked} 🪙</b>` : `<span style="opacity:.75">не в раунде</span>`}
-                </div>
-              </div>
-            </div>
+  joinBtn.disabled = !canJoin();
+  cashBtn.disabled = !canCash();
 
-            <div class="rocketWrap ${crash.phase==="running" ? "flying":""}">
-              <div class="smoke"></div>
-              <div class="rocket">
-                <div class="rocketBody">
-                  <div class="window"></div>
-                </div>
-                <div class="flame"></div>
-              </div>
-            </div>
+  toggleSfx.classList.toggle("active", app.sfx);
 
-            <div class="crashFlash ${forceFlash && crash.phase==="crashed" ? "on":""}" id="crashFlash"></div>
-          </div>
+  // keep bet input clamped
+  const v = clampBet(betInput.value);
+  betInput.value = String(v);
+  state.bet = v;
 
-          <div style="padding:12px;">
-            <div class="row">
-              <button class="chip ${app.sfx ? "active":""}" id="toggleSfx">Звук</button>
-              <div class="spacer"></div>
-              <div class="pill">Краш-поинт скрыт (честный RNG)</div>
-            </div>
+  note.textContent = state.inRound
+    ? (state.cashedOut ? "Ты уже забрал. Жди следующий раунд." : "Ты в раунде. Жми “Забрать” до краша.")
+    : "Подсказка: вход только во время ожидания. В раунде можно забрать в любой момент.";
+}
 
-            <div class="msg ${crash.msgKind||""}" id="msg">${crash.msg||""}</div>
-          </div>
-        </div>
+function hardResetPlayer(){
+  state.inRound = false;
+  state.joinedBet = 0;
+  state.cashedOut = false;
+  state.cashMult = 0;
+}
 
-        <div class="card" style="background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); padding:12px;">
-          <div class="row">
-            <h2 class="h1">Ставка</h2>
-            <div class="spacer"></div>
-            <button class="btnGhost" id="bonus">+1000 🪙</button>
-          </div>
+// ===============================
+// Round engine
+// ===============================
+function startWaiting(){
+  state.phase = "waiting";
+  state.waitLeftMs = 10000;
+  state.mult = 1.00;
+  state.crashMult = 0;
+  state.startAt = 0;
+  state.crashAt = 0;
+  state.lastEngineTick = 0;
 
-          <div class="hint" style="margin-top:6px;">
-            Вход в раунд — только во время ожидания (10 секунд).  
-            В раунде жми “Забрать” до краша.
-          </div>
+  resetRocketToPad();
 
-          <div class="chips">
-            ${[10,50,100,250,500].map(v=>`<button class="chip" data-bet="${v}">${v}</button>`).join("")}
-            <button class="chip" data-bet="max">MAX</button>
-          </div>
+  // new crash point prepared
+  state.crashMult = sampleCrashMultiplier();
 
-          <div class="row" style="margin-top:10px;">
-            <button class="btnGhost" id="betMinus">-</button>
-            <input class="input" id="bet" type="number" min="1" step="1" value="${crash.bet}">
-            <button class="btnGhost" id="betPlus">+</button>
-          </div>
+  // allow fresh join
+  hardResetPlayer();
 
-          <div class="row" style="margin-top:12px;">
-            <button class="btn" id="enter" style="flex:1;" ${crash.phase==="countdown" && !crash.inBet ? "" : "disabled"}>
-              Войти в раунд
-            </button>
-            <button class="btnGhost" id="cash" style="flex:1;" ${crash.phase==="running" && crash.inBet && !crash.cashed ? "" : "disabled"}>
-              Забрать
-            </button>
-          </div>
+  render();
+}
 
-          <div class="hint" style="margin-top:10px;">
-            Подсказка: если ты “в раунде”, ставка зафиксирована.  
-            Новый раунд начнётся автоматически.
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+function startFlight(){
+  state.phase = "flying";
+  state.mult = 1.00;
 
-  // init canvas
-  initSky(document.getElementById("sky"));
+  const now = performance.now();
+  state.startAt = now;
 
-  // bind
-  document.getElementById("toggleSfx").onclick = ()=>{ app.sfx = !app.sfx; if(app.sfx) SFX.click(); renderCrash(); };
+  // derive time to crash based on crash multiplier:
+  // growth curve: m(t) = 1 + a*t + b*t^2 (t in seconds)
+  // Solve for t at crashMult
+  const target = state.crashMult;
+  const a = 0.35;   // linear grow
+  const b = 0.045;  // accel grow
+  // b t^2 + a t + (1 - target) = 0
+  const c = (1 - target);
+  let tCrash = 0;
+  if (Math.abs(b) < 1e-9){
+    tCrash = Math.max(0.4, (target-1)/a);
+  } else {
+    const D = a*a - 4*b*c;
+    tCrash = (-a + Math.sqrt(Math.max(0, D))) / (2*b);
+    tCrash = Math.max(0.6, tCrash);
+  }
+  state.crashAt = now + tCrash * 1000;
 
-  const betInput = document.getElementById("bet");
-  const clampBet = ()=>{
-    let v = Math.floor(Number(betInput.value)||0);
-    if (v < 1) v = 1;
-    if (v > wallet.coins) v = wallet.coins;
-    betInput.value = String(v);
-    setBetValue(v);
-  };
-  clampBet();
+  // visuals
+  rocketWrap.classList.add("launching");
+  rocket.classList.add("shake");
 
-  document.querySelectorAll("[data-bet]").forEach(b=>{
-    b.onclick = ()=>{
-      if (app.sfx) SFX.click();
-      const val = b.dataset.bet;
-      betInput.value = (val==="max") ? String(wallet.coins) : String(val);
-      clampBet();
-      renderTopBar();
-    };
+  if (app.sfx) SFX.launch();
+
+  render();
+}
+
+function endCrash(){
+  state.phase = "crashed";
+  state.mult = state.crashMult;
+
+  // if player in round and not cashed out — lose bet (already deducted)
+  if (state.inRound && !state.cashedOut){
+    if (app.sfx) SFX.lose();
+  }
+
+  // stop visuals
+  rocket.classList.remove("shake");
+  rocketWrap.classList.remove("launching");
+
+  // drop rocket slightly and fade flame
+  setRocketPose({ y: 8, rot: 22, tilt: 28, scale: 1 });
+
+  if (app.sfx) SFX.crash();
+
+  render();
+
+  // schedule next waiting
+  setTimeout(startWaiting, 1000); // quick "crash moment"
+}
+
+// Main loop (RAF)
+function tick(now){
+  if (state.phase === "waiting"){
+    const dt = 16; // approx
+    state.waitLeftMs = Math.max(0, state.waitLeftMs - dt);
+
+    // countdown tick sound each second boundary
+    const secLeft = Math.ceil(state.waitLeftMs/1000);
+    if (app.sfx && state.waitLeftMs > 0){
+      // approximate per-second tick
+      if (!tick._lastSecLeft) tick._lastSecLeft = secLeft;
+      if (secLeft !== tick._lastSecLeft){
+        tick._lastSecLeft = secLeft;
+        SFX.countdownTick();
+      }
+    } else {
+      tick._lastSecLeft = secLeft;
+    }
+
+    // idle rocket sway
+    const sway = Math.sin(now/650) * 1.2;
+    const bob = Math.sin(now/900) * 1.5;
+    setRocketPose({ y: bob, rot: -8 + sway, tilt: 18, scale: 1 });
+
+    state.mult = 1.00;
+
+    if (state.waitLeftMs <= 0){
+      tick._lastSecLeft = null;
+      startFlight();
+    }
+    // UI
+    render();
+  }
+
+  if (state.phase === "flying"){
+    const t = Math.max(0, (now - state.startAt) / 1000);
+
+    // growth curve
+    const a = 0.35;
+    const b = 0.045;
+    const m = 1 + a*t + b*t*t;
+    state.mult = Math.min(m, state.crashMult);
+
+    // rocket flight path:
+    // rise with multiplier, also drift slightly
+    const height = Math.min(1, (state.mult-1) / Math.max(0.01, (state.crashMult-1)));
+    const y = - (height * 320);                // up
+    const rot = -12 + height * -10 + Math.sin(now/300)*0.6;
+    const tilt = 18 + height * 20;
+    const scale = 1 + height * 0.08;
+
+    setRocketPose({ y, rot, tilt, scale });
+
+    // engine loop sound
+    if (app.sfx){
+      if (now - state.lastEngineTick > 120){
+        state.lastEngineTick = now;
+        SFX.engineLoop();
+      }
+    }
+
+    // if crash
+    if (now >= state.crashAt - 1){
+      endCrash();
+    } else {
+      render();
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+// ===============================
+// Controls
+// ===============================
+toggleSfx.addEventListener("click", async ()=>{
+  await unlockAudio();
+  app.sfx = !app.sfx;
+  if (app.sfx) SFX.click();
+  render();
+});
+
+bonusBtn.addEventListener("click", async ()=>{
+  await unlockAudio();
+  if (app.sfx) SFX.click();
+  addCoins(1000);
+  render();
+});
+
+document.querySelectorAll("[data-bet]").forEach(b=>{
+  b.addEventListener("click", async ()=>{
+    await unlockAudio();
+    if (app.sfx) SFX.click();
+    const v = b.dataset.bet;
+    const next = (v==="max") ? wallet.coins : Number(v);
+    betInput.value = String(clampBet(next));
+    render();
   });
+});
 
-  document.getElementById("betMinus").onclick = ()=>{ if(app.sfx) SFX.click(); betInput.value = String((Number(betInput.value)||1)-10); clampBet(); };
-  document.getElementById("betPlus").onclick  = ()=>{ if(app.sfx) SFX.click(); betInput.value = String((Number(betInput.value)||1)+10); clampBet(); };
+betMinus.addEventListener("click", async ()=>{
+  await unlockAudio();
+  if (app.sfx) SFX.click();
+  betInput.value = String(clampBet((Number(betInput.value)||1) - 10));
+  render();
+});
+betPlus.addEventListener("click", async ()=>{
+  await unlockAudio();
+  if (app.sfx) SFX.click();
+  betInput.value = String(clampBet((Number(betInput.value)||1) + 10));
+  render();
+});
+betInput.addEventListener("input", ()=> render());
 
-  betInput.oninput = clampBet;
+joinBtn.addEventListener("click", async ()=>{
+  await unlockAudio();
+  if (!canJoin()) return;
 
-  document.getElementById("bonus").onclick = ()=>{ if(app.sfx) SFX.click(); addCoins(1000); renderCrash(); };
+  const bet = clampBet(betInput.value);
+  if (bet <= 0) return;
+  if (bet > wallet.coins){ alert("Недостаточно монет"); return; }
 
-  document.getElementById("enter").onclick = async ()=>{ await unlockAudio(); tryEnterBet(); };
-  document.getElementById("cash").onclick  = async ()=>{ await unlockAudio(); tryCashOut(); };
+  // lock bet: deduct immediately
+  addCoins(-bet);
+  state.inRound = true;
+  state.joinedBet = bet;
+  state.cashedOut = false;
+  state.cashMult = 0;
+
+  if (app.sfx) SFX.join();
+  render();
+});
+
+cashBtn.addEventListener("click", async ()=>{
+  await unlockAudio();
+  if (!canCash()) return;
+
+  // payout = bet * current mult (rounded)
+  const payout = Math.floor(state.joinedBet * state.mult);
+  addCoins(payout);
+
+  state.cashedOut = true;
+  state.cashMult = state.mult;
+
+  if (app.sfx) SFX.cash();
+  render();
+});
+
+// ===============================
+// Background: Aurora (canvas)
+// ===============================
+const aurora = document.getElementById("aurora");
+const snow = document.getElementById("snow");
+const aCtx = aurora.getContext("2d");
+const sCtx = snow.getContext("2d");
+
+function fitCanvas(c){
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const rect = c.getBoundingClientRect();
+  c.width = Math.floor(rect.width * dpr);
+  c.height = Math.floor(rect.height * dpr);
+  return { w: c.width, h: c.height, dpr };
 }
 
-function phaseText(){
-  if (crash.phase === "countdown") return `Ожидание · старт через ${crash.countdown}с`;
-  if (crash.phase === "running") return `Игра идёт · успей забрать`;
-  return `Краш на x${crash.crashPoint.toFixed(2)}`;
+let A = fitCanvas(aurora);
+let S = fitCanvas(snow);
+
+window.addEventListener("resize", ()=>{
+  A = fitCanvas(aurora);
+  S = fitCanvas(snow);
+  initSnow();
+});
+
+function drawAurora(t){
+  const {w,h} = A;
+  const ctx = aCtx;
+  ctx.clearRect(0,0,w,h);
+
+  // sky gradient
+  const g = ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0, "rgba(10,14,35,1)");
+  g.addColorStop(0.45, "rgba(8,10,18,1)");
+  g.addColorStop(1, "rgba(5,6,12,1)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,w,h);
+
+  // aurora ribbons
+  const time = t/1000;
+  for (let k=0;k<3;k++){
+    const baseY = h*0.18 + k*h*0.08;
+    const amp = h*(0.05 + k*0.01);
+    const freq = 1.6 + k*0.4;
+    const phase = time*(0.7 + k*0.25);
+
+    ctx.beginPath();
+    for (let x=0;x<=w;x+=10){
+      const nx = x/w;
+      const y = baseY
+        + Math.sin(nx*freq*6.283 + phase)*amp
+        + Math.sin(nx*(freq+0.7)*6.283 - phase*0.8)*amp*0.45;
+      if (x===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+
+    const col = [
+      ["rgba(90,255,200,.0)","rgba(90,255,200,.22)","rgba(90,255,200,.0)"],
+      ["rgba(120,120,255,.0)","rgba(120,120,255,.16)","rgba(120,120,255,.0)"],
+      ["rgba(180,90,255,.0)","rgba(180,90,255,.14)","rgba(180,90,255,.0)"],
+    ][k];
+
+    ctx.lineWidth = h*0.11;
+    ctx.lineCap = "round";
+    const grad = ctx.createLinearGradient(0, baseY, 0, baseY + amp*2);
+    grad.addColorStop(0, col[0]);
+    grad.addColorStop(0.5, col[1]);
+    grad.addColorStop(1, col[2]);
+    ctx.strokeStyle = grad;
+    ctx.stroke();
+  }
+
+  // stars
+  ctx.globalAlpha = 0.9;
+  for (let i=0;i<60;i++){
+    const x = (i*977) % w;
+    const y = ((i*541) % Math.floor(h*0.55));
+    const tw = (Math.sin(time*2 + i)*0.5+0.5);
+    ctx.fillStyle = `rgba(255,255,255,${0.15 + tw*0.25})`;
+    ctx.fillRect(x,y,2,2);
+  }
+  ctx.globalAlpha = 1;
 }
 
-// лёгкое обновление без пересоздания canvas каждый тик
-function renderCrashHudOnly(){
-  const multEl = document.getElementById("hudMult");
-  if (multEl) multEl.textContent = `x${crash.mult.toFixed(2)}`;
+// ===============================
+// Snow (canvas)
+// ===============================
+let flakes = [];
+function initSnow(){
+  const {w,h} = S;
+  flakes = [];
+  const count = Math.floor((w*h)/45000); // adaptive
+  for (let i=0;i<count;i++){
+    flakes.push({
+      x: randFloat()*w,
+      y: randFloat()*h,
+      r: 0.8 + randFloat()*2.2,
+      v: 0.25 + randFloat()*0.9,
+      dx: -0.15 + randFloat()*0.3,
+      a: 0.25 + randFloat()*0.55,
+      p: randFloat()*Math.PI*2
+    });
+  }
+}
+initSnow();
 
-  const phaseEl = document.getElementById("hudPhase");
-  if (phaseEl) phaseEl.textContent = phaseText();
+function drawSnow(t){
+  const {w,h} = S;
+  const ctx = sCtx;
+  ctx.clearRect(0,0,w,h);
 
-  const cdEl = document.getElementById("hudCd");
-  if (cdEl && crash.phase==="countdown") cdEl.textContent = String(crash.countdown);
+  const wind = Math.sin(t/1400) * 0.35;
+
+  for (const f of flakes){
+    f.p += 0.01;
+    f.x += (f.dx + wind) * (1.0 + f.r*0.08);
+    f.y += f.v * (1.0 + f.r*0.10);
+
+    if (f.x < -10) f.x = w + 10;
+    if (f.x > w + 10) f.x = -10;
+    if (f.y > h + 10){
+      f.y = -10;
+      f.x = randFloat()*w;
+    }
+
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`;
+    ctx.arc(f.x, f.y, f.r + Math.sin(f.p)*0.15, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // low fog near ground
+  const fog = ctx.createLinearGradient(0, h*0.55, 0, h);
+  fog.addColorStop(0, "rgba(255,255,255,0)");
+  fog.addColorStop(1, "rgba(255,255,255,0.06)");
+  ctx.fillStyle = fog;
+  ctx.fillRect(0, h*0.55, w, h*0.45);
 }
 
-// старт
-crash.crashPoint = newCrashPoint();
-crash.msg = "Готово. Входи в раунд во время ожидания.";
-renderCrash();
-startCountdown();
+// ===============================
+// Start
+// ===============================
+function boot(){
+  betInput.value = String(clampBet(betInput.value || 50));
+  startWaiting();
+  requestAnimationFrame(function loop(t){
+    drawAurora(t);
+    drawSnow(t);
+    tick(t);
+  });
+}
 
-// init
-resetRound();
-render();
+// kick
+boot();
