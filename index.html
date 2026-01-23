@@ -2,30 +2,114 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Rocket Crash</title>
-  <link rel="stylesheet" href="styles.css?v=1" />
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app">
-    <header class="top">
-      <div class="brand">
-        <div class="title">Rocket Crash</div>
-        <div id="user" class="sub">Загрузка…</div>
+    <header class="topbar">
+      <div class="title">
+        <div class="h1">Rocket Crash</div>
+        <div class="sub" id="userLine">Открыто вне Telegram</div>
       </div>
-      <div class="rightPills">
-        <div class="pill" id="balancePill">🪙 0</div>
-      </div>
+      <div class="spacer"></div>
+      <div class="pill" id="balancePill">🪙 0</div>
     </header>
 
-    <main id="screen"></main>
+    <main class="layout">
+      <!-- STAGE -->
+      <section class="stageCard">
+        <div class="stageWrap">
+          <canvas id="aurora" class="bgCanvas"></canvas>
+          <canvas id="snow" class="bgCanvas"></canvas>
 
-    <footer class="foot">
-      <div class="hintFoot">Автораунды: игра → краш → 10 секунд → новый раунд.</div>
-    </footer>
+          <div class="ground">
+            <div class="hills"></div>
+            <div class="pad">
+              <div class="tower"></div>
+              <div class="tower2"></div>
+              <div class="padLight"></div>
+            </div>
+          </div>
+
+          <div class="rocketWrap" id="rocketWrap">
+            <div class="rocket" id="rocket">
+              <div class="nose"></div>
+              <div class="body"></div>
+              <div class="window"></div>
+              <div class="fin finL"></div>
+              <div class="fin finR"></div>
+              <div class="engine"></div>
+              <div class="glow"></div>
+              <div class="flame" id="flame"></div>
+              <div class="smoke" id="smoke"></div>
+            </div>
+          </div>
+
+          <div class="hud">
+            <div class="hudLeft">
+              <div class="mult" id="multText">x1.00</div>
+              <div class="hint" id="phaseText">Ожидание… старт скоро</div>
+            </div>
+            <div class="hudMid">
+              <div class="pill2">Раунд</div>
+              <div class="hudBig" id="roundText">Старт через 10с</div>
+            </div>
+            <div class="hudRight">
+              <div class="pill2">Твоя ставка</div>
+              <div class="hudBig" id="betStatus">не в раунде</div>
+            </div>
+          </div>
+
+          <div class="hudBottom">
+            <button class="chip" id="toggleSfx">Звук</button>
+            <div class="spacer"></div>
+            <div class="chip ghost" id="fairText">Краш-поинт скрыт (честный RNG)</div>
+          </div>
+
+          <div class="ticker" id="ticker">Новый раунд скоро…</div>
+        </div>
+      </section>
+
+      <!-- BET PANEL -->
+      <aside class="panelCard">
+        <div class="panelHead">
+          <div class="h2">Ставка</div>
+          <button class="btnGhost" id="bonusBtn">+1000 🪙</button>
+        </div>
+
+        <div class="panelHint">
+          Вход в раунд — только во время ожидания (10 секунд). В раунде жми “Забрать” до краша.
+        </div>
+
+        <div class="chipsRow">
+          <button class="chip" data-bet="10">10</button>
+          <button class="chip" data-bet="50">50</button>
+          <button class="chip" data-bet="100">100</button>
+          <button class="chip" data-bet="250">250</button>
+          <button class="chip" data-bet="500">500</button>
+          <button class="chip" data-bet="max">MAX</button>
+        </div>
+
+        <div class="betRow">
+          <button class="btnGhost sq" id="betMinus">-</button>
+          <input class="input" id="betInput" type="number" min="1" step="1" value="50" />
+          <button class="btnGhost sq" id="betPlus">+</button>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="joinBtn">Войти в раунд</button>
+          <button class="btnDanger" id="cashBtn" disabled>Забрать</button>
+        </div>
+
+        <div class="panelHint small" id="note">
+          Подсказка: если ты “в раунде”, ставка зафиксирована. Новый раунд начнётся автоматически.
+        </div>
+      </aside>
+    </main>
   </div>
 
-  <script src="app.js?v=1"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
