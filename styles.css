@@ -1,7 +1,7 @@
 :root{
   --bg:#070a14;
   --card: rgba(255,255,255,.06);
-  --card2: rgba(255,255,255,.08);
+  --card2: rgba(255,255,255,.09);
   --border: rgba(255,255,255,.10);
   --text:#eaf0ff;
   --muted: rgba(234,240,255,.70);
@@ -16,16 +16,25 @@ html,body{height:100%}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  background: radial-gradient(1100px 700px at 35% 10%, rgba(76,125,255,.18), transparent 55%),
-              radial-gradient(900px 500px at 80% 30%, rgba(255,90,106,.10), transparent 55%),
-              var(--bg);
+  background:
+    radial-gradient(1100px 700px at 35% 10%, rgba(76,125,255,.18), transparent 55%),
+    radial-gradient(900px 500px at 80% 30%, rgba(255,90,106,.10), transparent 55%),
+    var(--bg);
   color:var(--text);
 }
 
-.app{max-width:1200px;margin:0 auto;padding:14px}
+.app{
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 14px;
+}
+
 .topbar{
-  display:flex;align-items:center;justify-content:space-between;
-  gap:12px;margin-bottom:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
 }
 .brand .title{font-weight:900;font-size:18px}
 .brand .subtitle{font-size:12px;color:var(--muted);margin-top:2px}
@@ -46,21 +55,21 @@ body{
 }
 .iconBtn:active{transform:scale(.98)}
 
-.layout{
-  display:grid;
-  grid-template-columns: 1.4fr .9fr;
-  gap:14px;
-}
-@media (max-width: 980px){
-  .layout{grid-template-columns:1fr; }
-}
-
-.stageCard,.betCard{
+.card{
   background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.05));
   border:1px solid var(--border);
   border-radius:18px;
   box-shadow: var(--shadow);
   overflow:hidden;
+}
+
+.layout{
+  display:grid;
+  grid-template-columns: 1.35fr .9fr;
+  gap:14px;
+}
+@media (max-width: 980px){
+  .layout{grid-template-columns:1fr;}
 }
 
 .hud{
@@ -70,10 +79,10 @@ body{
   padding:12px;
 }
 @media (max-width: 980px){
-  .hud{grid-template-columns:1fr; }
+  .hud{grid-template-columns:1fr;}
 }
 .hudBox{
-  padding:12px 12px;
+  padding:12px;
   border-radius:14px;
   background: rgba(0,0,0,.22);
   border:1px solid rgba(255,255,255,.08);
@@ -82,13 +91,25 @@ body{
 .hudValue{font-size:28px;font-weight:950;margin-top:2px}
 .hudSub{font-size:12px;color:rgba(234,240,255,.78);margin-top:4px;min-height:16px}
 
-.stage{position:relative;padding:12px}
+.stageWrap{padding:12px}
+.stage{
+  position:relative;
+  height:420px;
+  border-radius:16px;
+  overflow:hidden;
+  background: rgba(0,0,0,.25);
+  border:1px solid rgba(255,255,255,.08);
+}
+@media (max-width: 980px){
+  .stage{height:380px}
+}
+
 .sky{
   position:absolute;inset:0;
-  background: radial-gradient(900px 420px at 50% 10%, rgba(76,125,255,.22), transparent 60%),
-              radial-gradient(800px 360px at 20% 25%, rgba(255,255,255,.08), transparent 60%),
-              linear-gradient(180deg, rgba(6,10,26,.55), rgba(6,10,26,.92));
-  border-top:1px solid rgba(255,255,255,.06);
+  background:
+    radial-gradient(900px 420px at 50% 10%, rgba(76,125,255,.22), transparent 60%),
+    radial-gradient(800px 360px at 20% 25%, rgba(255,255,255,.08), transparent 60%),
+    linear-gradient(180deg, rgba(6,10,26,.55), rgba(6,10,26,.92));
 }
 .stars{
   position:absolute;inset:-60px;
@@ -99,7 +120,7 @@ body{
     radial-gradient(2px 2px at 82% 52%, rgba(255,255,255,.6), transparent 55%),
     radial-gradient(1px 1px at 33% 78%, rgba(255,255,255,.5), transparent 55%),
     radial-gradient(1px 1px at 10% 60%, rgba(255,255,255,.45), transparent 55%);
-  opacity:.7;
+  opacity:.75;
   animation: starsMove 6s linear infinite;
 }
 @keyframes starsMove{
@@ -108,11 +129,12 @@ body{
 }
 .aurora{
   position:absolute;inset:-30px;
-  background: radial-gradient(600px 220px at 30% 40%, rgba(94,255,200,.10), transparent 70%),
-              radial-gradient(600px 220px at 70% 55%, rgba(160,110,255,.12), transparent 70%),
-              radial-gradient(600px 220px at 60% 20%, rgba(80,160,255,.10), transparent 70%);
+  background:
+    radial-gradient(600px 220px at 30% 40%, rgba(94,255,200,.10), transparent 70%),
+    radial-gradient(600px 220px at 70% 55%, rgba(160,110,255,.12), transparent 70%),
+    radial-gradient(600px 220px at 60% 20%, rgba(80,160,255,.10), transparent 70%);
   filter: blur(18px);
-  opacity:.8;
+  opacity:.85;
   animation: aurora 8s ease-in-out infinite alternate;
 }
 @keyframes aurora{
@@ -120,72 +142,65 @@ body{
   to{transform:translateY(10px) scale(1.02)}
 }
 
-.scene{
-  position:relative;
-  height:420px;
-  border-radius:16px;
-  overflow:hidden;
-  background: rgba(0,0,0,.25);
-  border:1px solid rgba(255,255,255,.08);
-}
-@media (max-width: 980px){
-  .scene{height:380px}
-}
-
 .rocketWrap{
   position:absolute;
   left:50%;
-  bottom:110px;
+  bottom:112px;
   transform:translateX(-50%) translateY(0);
   will-change: transform;
   transition: transform .06s linear;
 }
+
 .rocket{
   width:140px;height:auto;
   filter: drop-shadow(0 16px 25px rgba(0,0,0,.45));
+  user-select:none;
+  pointer-events:none;
 }
+
 .trail{
   position:absolute;
   left:50%;
   top:140px;
   transform:translateX(-50%);
   width:18px;
-  height:140px;
-  background: linear-gradient(180deg, rgba(255,180,90,.0), rgba(255,160,80,.25), rgba(255,80,80,.0));
+  height:150px;
+  background: linear-gradient(180deg, rgba(255,180,90,.0), rgba(255,160,80,.28), rgba(255,80,80,.0));
   filter: blur(2px);
-  opacity:.0;
+  opacity:0;
   transition: opacity .18s ease;
 }
 
 .ground{
   position:absolute;
   left:0;right:0;bottom:0;
-  height:140px;
+  height:150px;
 }
 .ridge{
-  position:absolute;left:-10%;right:-10%;bottom:-40px;
-  height:180px;
-  background: radial-gradient(260px 120px at 20% 30%, rgba(60,90,255,.20), transparent 65%),
-              radial-gradient(260px 120px at 80% 30%, rgba(255,90,106,.14), transparent 65%),
-              linear-gradient(180deg, rgba(16,22,46,.65), rgba(8,10,18,.95));
+  position:absolute;left:-10%;right:-10%;bottom:-48px;
+  height:200px;
+  background:
+    radial-gradient(260px 120px at 20% 30%, rgba(60,90,255,.20), transparent 65%),
+    radial-gradient(260px 120px at 80% 30%, rgba(255,90,106,.14), transparent 65%),
+    linear-gradient(180deg, rgba(16,22,46,.70), rgba(8,10,18,.96));
   transform: skewX(-8deg);
   border-top:1px solid rgba(255,255,255,.06);
 }
 
 .village{
   position:absolute;
-  left:0;right:0;bottom:26px;
+  left:0;right:0;bottom:30px;
   height:90px;
   pointer-events:none;
+  opacity:.95;
 }
 .yurt{
   position:absolute;bottom:0;
   width:110px;height:56px;
-  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
+  background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.04));
   border:1px solid rgba(255,255,255,.10);
   border-radius: 60px 60px 18px 18px;
   box-shadow: 0 10px 20px rgba(0,0,0,.25);
-  opacity:.9;
 }
 .yurt:before{
   content:"";
@@ -201,7 +216,6 @@ body{
   position:absolute;bottom:8px;
   width:14px;height:22px;border-radius: 10px 10px 12px 12px;
   background: radial-gradient(circle at 50% 30%, rgba(255,240,170,.95), rgba(255,150,60,.85), rgba(255,60,60,.3));
-  filter: blur(.2px);
   animation: fire 0.6s ease-in-out infinite alternate;
   box-shadow: 0 0 18px rgba(255,140,60,.35);
 }
@@ -230,8 +244,10 @@ body{
 .p2{left:62%}
 
 .stageBottom{
-  display:flex;justify-content:space-between;align-items:center;
-  padding-top:10px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:10px;
 }
 .pillBtn{
   padding:10px 12px;border-radius:999px;
@@ -246,7 +262,7 @@ body{
 .betCard{padding:14px}
 .betTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .betTitle{font-weight:950;font-size:16px}
-.betRow{margin-top:10px}
+
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{
   padding:8px 10px;border-radius:999px;
@@ -259,7 +275,8 @@ body{
 }
 .chip:active{transform:scale(.98)}
 .chip.ghost{background:rgba(255,255,255,.04)}
-.inputRow{display:flex;gap:8px;align-items:center}
+
+.inputRow{display:flex;gap:8px;align-items:center;margin-top:10px}
 .betInput{
   flex:1;
   padding:10px;
@@ -269,6 +286,7 @@ body{
   color:var(--text);
   outline:none;
 }
+
 .btnSmall{
   width:44px;height:42px;border-radius:12px;
   border:1px solid rgba(255,255,255,.10);
@@ -279,7 +297,7 @@ body{
 }
 .btnSmall:active{transform:scale(.98)}
 
-.actions{display:flex;gap:10px}
+.actions{display:flex;gap:10px;margin-top:12px}
 .btn{
   flex:1;
   padding:12px 12px;
