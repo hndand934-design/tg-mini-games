@@ -2,88 +2,157 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Rocket Crash</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="app">
     <header class="topbar">
-      <div class="title">
-        <div class="h1">Rocket Crash</div>
-        <div class="sub" id="userLine">Открыто вне Telegram</div>
+      <div class="brand">
+        <div class="title">Rocket Crash</div>
+        <div class="subtitle" id="user">Открыто вне Telegram</div>
       </div>
-      <div class="spacer"></div>
-      <div class="pill" id="balancePill">🪙 0</div>
+
+      <div class="topRight">
+        <div class="pill" id="balancePill">🪙 0</div>
+        <button class="iconBtn" id="soundBtn" title="Звук">
+          🔊
+        </button>
+      </div>
     </header>
 
     <main class="layout">
-      <!-- STAGE -->
       <section class="stageCard">
-        <div class="stageWrap">
-          <canvas id="aurora" class="bgCanvas"></canvas>
-          <canvas id="snow" class="bgCanvas"></canvas>
+        <div class="hud">
+          <div class="hudBox">
+            <div class="hudLabel">Множитель</div>
+            <div class="hudValue" id="mult">x1.00</div>
+            <div class="hudSub" id="hint">Ожидание — старт скоро</div>
+          </div>
 
-          <div class="ground">
-            <div class="hills"></div>
-            <div class="pad">
-              <div class="tower"></div>
-              <div class="tower2"></div>
-              <div class="padLight"></div>
+          <div class="hudBox">
+            <div class="hudLabel">Раунд</div>
+            <div class="hudValue" id="roundStatus">Ожидание</div>
+            <div class="hudSub" id="countdown">Старт через 5с</div>
+          </div>
+
+          <div class="hudBox">
+            <div class="hudLabel">Твоя ставка</div>
+            <div class="hudValue" id="myBet">—</div>
+            <div class="hudSub" id="myState">не в раунде</div>
+          </div>
+        </div>
+
+        <div class="stage">
+          <div class="sky">
+            <div class="stars"></div>
+            <div class="aurora"></div>
+          </div>
+
+          <div class="scene">
+            <div class="rocketWrap" id="rocketWrap">
+              <!-- SVG ракета (не прозрачная) -->
+              <svg class="rocket" viewBox="0 0 160 240" aria-hidden="true">
+                <defs>
+                  <linearGradient id="bodyG" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#f2f6ff"/>
+                    <stop offset="1" stop-color="#c9d6f6"/>
+                  </linearGradient>
+                  <linearGradient id="shadowG" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="rgba(0,0,0,0.12)"/>
+                    <stop offset="1" stop-color="rgba(0,0,0,0.35)"/>
+                  </linearGradient>
+                  <radialGradient id="flameG" cx="50%" cy="30%" r="70%">
+                    <stop offset="0" stop-color="#fff2a8"/>
+                    <stop offset="0.45" stop-color="#ff9f3b"/>
+                    <stop offset="1" stop-color="#ff3b3b"/>
+                  </radialGradient>
+                </defs>
+
+                <!-- тень -->
+                <ellipse cx="80" cy="222" rx="38" ry="10" fill="rgba(0,0,0,.35)"/>
+
+                <!-- корпус -->
+                <path d="M80 18
+                         C62 40,52 64,52 94
+                         V166
+                         C52 190,64 206,80 206
+                         C96 206,108 190,108 166
+                         V94
+                         C108 64,98 40,80 18Z"
+                      fill="url(#bodyG)" stroke="rgba(255,255,255,.35)" stroke-width="2"/>
+
+                <!-- боковая тень -->
+                <path d="M80 18
+                         C70 34,64 52,64 74
+                         V170
+                         C64 186,70 198,80 206
+                         C90 198,96 186,96 170
+                         V74
+                         C96 52,90 34,80 18Z"
+                      fill="url(#shadowG)" opacity="0.55"/>
+
+                <!-- иллюминатор -->
+                <circle cx="80" cy="98" r="16" fill="#0b1a3b" stroke="rgba(255,255,255,.35)" stroke-width="3"/>
+                <circle cx="76" cy="94" r="6" fill="rgba(255,255,255,.35)"/>
+
+                <!-- нос -->
+                <path d="M80 18
+                         C70 32,64 46,62 62
+                         C72 58,88 58,98 62
+                         C96 46,90 32,80 18Z"
+                      fill="#e9efff" opacity="0.95"/>
+
+                <!-- крылья -->
+                <path d="M52 138 L26 168 L52 168 Z" fill="#6da3ff" opacity="0.95"/>
+                <path d="M108 138 L134 168 L108 168 Z" fill="#6da3ff" opacity="0.95"/>
+
+                <!-- сопло -->
+                <path d="M64 198 C64 184,96 184,96 198
+                         C96 212,64 212,64 198Z"
+                      fill="#2a3558" opacity="0.95"/>
+
+                <!-- пламя -->
+                <path id="flame"
+                      d="M80 212
+                         C70 226,72 238,80 238
+                         C88 238,90 226,80 212Z"
+                      fill="url(#flameG)" opacity="0.95"/>
+              </svg>
+
+              <div class="trail" id="trail"></div>
+            </div>
+
+            <div class="ground">
+              <div class="ridge"></div>
+              <div class="village">
+                <div class="yurt y1"></div>
+                <div class="yurt y2"></div>
+                <div class="fire f1"></div>
+                <div class="fire f2"></div>
+                <div class="people p1"></div>
+                <div class="people p2"></div>
+              </div>
             </div>
           </div>
 
-          <div class="rocketWrap" id="rocketWrap">
-            <div class="rocket" id="rocket">
-              <div class="nose"></div>
-              <div class="body"></div>
-              <div class="window"></div>
-              <div class="fin finL"></div>
-              <div class="fin finR"></div>
-              <div class="engine"></div>
-              <div class="glow"></div>
-              <div class="flame" id="flame"></div>
-              <div class="smoke" id="smoke"></div>
-            </div>
+          <div class="stageBottom">
+            <button class="pillBtn" id="rngBtn" title="Показать краш-поинт (для теста)">
+              Краш-поинт скрыт (честный RNG)
+            </button>
           </div>
-
-          <div class="hud">
-            <div class="hudLeft">
-              <div class="mult" id="multText">x1.00</div>
-              <div class="hint" id="phaseText">Ожидание… старт скоро</div>
-            </div>
-            <div class="hudMid">
-              <div class="pill2">Раунд</div>
-              <div class="hudBig" id="roundText">Старт через 10с</div>
-            </div>
-            <div class="hudRight">
-              <div class="pill2">Твоя ставка</div>
-              <div class="hudBig" id="betStatus">не в раунде</div>
-            </div>
-          </div>
-
-          <div class="hudBottom">
-            <button class="chip" id="toggleSfx">Звук</button>
-            <div class="spacer"></div>
-            <div class="chip ghost" id="fairText">Краш-поинт скрыт (честный RNG)</div>
-          </div>
-
-          <div class="ticker" id="ticker">Новый раунд скоро…</div>
         </div>
       </section>
 
-      <!-- BET PANEL -->
-      <aside class="panelCard">
-        <div class="panelHead">
-          <div class="h2">Ставка</div>
-          <button class="btnGhost" id="bonusBtn">+1000 🪙</button>
+      <aside class="betCard">
+        <div class="betTop">
+          <div class="betTitle">Ставка</div>
+          <button class="chip ghost" id="bonusBtn">+1000 🪙</button>
         </div>
 
-        <div class="panelHint">
-          Вход в раунд — только во время ожидания (10 секунд). В раунде жми “Забрать” до краша.
-        </div>
-
-        <div class="chipsRow">
+        <div class="betRow chips">
           <button class="chip" data-bet="10">10</button>
           <button class="chip" data-bet="50">50</button>
           <button class="chip" data-bet="100">100</button>
@@ -92,19 +161,20 @@
           <button class="chip" data-bet="max">MAX</button>
         </div>
 
-        <div class="betRow">
-          <button class="btnGhost sq" id="betMinus">-</button>
-          <input class="input" id="betInput" type="number" min="1" step="1" value="50" />
-          <button class="btnGhost sq" id="betPlus">+</button>
+        <div class="betRow inputRow">
+          <button class="btnSmall" id="betMinus">-</button>
+          <input class="betInput" id="betInput" type="number" min="1" step="1" value="50" />
+          <button class="btnSmall" id="betPlus">+</button>
         </div>
 
-        <div class="actions">
-          <button class="btn" id="joinBtn">Войти в раунд</button>
-          <button class="btnDanger" id="cashBtn" disabled>Забрать</button>
+        <div class="betRow actions">
+          <button class="btn primary" id="joinBtn">Войти в раунд</button>
+          <button class="btn danger" id="cashBtn" disabled>Забрать</button>
         </div>
 
-        <div class="panelHint small" id="note">
-          Подсказка: если ты “в раунде”, ставка зафиксирована. Новый раунд начнётся автоматически.
+        <div class="betHelp">
+          Вход в раунд — только во время ожидания (несколько секунд). В полёте можно забрать в любой момент.  
+          <span class="muted">Монеты виртуальные, без вывода.</span>
         </div>
       </aside>
     </main>
