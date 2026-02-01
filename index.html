@@ -1,83 +1,81 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Rocket Crash</title>
-
-  <!-- Telegram WebApp (если открыто в TG) -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Твой CSS (ВАЖНО: файл называется style.css) -->
   <link rel="stylesheet" href="./style.css" />
 </head>
-
 <body>
-  <div class="app">
-    <!-- TOP -->
-    <div class="topbar">
-      <div class="top-left">
+  <div class="bg-snow"></div>
+
+  <div class="wrap">
+    <header class="topbar">
+      <div>
         <div class="title">Rocket Crash</div>
-        <div class="subtitle" id="userText">Открыто вне Telegram</div>
+        <div class="subtitle">Открыто вне Telegram</div>
       </div>
 
-      <div class="top-right">
+      <div class="balance">
         <div class="balanceLabel">Баланс</div>
-        <div class="balanceValue" id="balanceText">🪙 0</div>
+        <div class="balanceValue"><span id="balanceCoins">0</span> 🪙</div>
       </div>
-    </div>
+    </header>
 
-    <div class="layout">
-      <!-- LEFT: GAME -->
-      <div class="panel gamePanel">
+    <main class="grid">
+      <!-- LEFT: chart -->
+      <section class="card chartCard">
         <div class="statsRow">
-          <div class="statCard">
-            <div class="statTitle">Множитель</div>
-            <div class="statValue" id="multText">x1.00</div>
-            <div class="statHint" id="phaseHint">Новый раунд скоро</div>
+          <div class="stat">
+            <div class="statLabel">Множитель</div>
+            <div class="statValue" id="multTop">x1.00</div>
+            <div class="statHint" id="multHint">Новый раунд скоро</div>
           </div>
 
-          <div class="statCard">
-            <div class="statTitle">Статус</div>
-            <div class="statValue" id="statusText">Ожидание</div>
-            <div class="statHint" id="countText">Старт через 3с</div>
+          <div class="stat">
+            <div class="statLabel">Статус</div>
+            <div class="statValue" id="statusTop">Ожидание</div>
+            <div class="statHint" id="statusHint">Старт через 3с</div>
           </div>
 
-          <div class="statCard">
-            <div class="statTitle">Твоя ставка</div>
-            <div class="statValue" id="myBetText">—</div>
-            <div class="statHint" id="myStateText">не в раунде</div>
+          <div class="stat">
+            <div class="statLabel">Твоя ставка</div>
+            <div class="statValue" id="myBetTop">—</div>
+            <div class="statHint" id="myBetHint">не в раунде</div>
           </div>
         </div>
 
-        <div class="chartWrap">
-          <canvas id="chart" class="chart"></canvas>
+        <div class="chartBox" id="chartBox">
+          <canvas id="chart"></canvas>
 
-          <!-- Center overlay text -->
-          <div class="centerOverlay">
-            <div class="centerBig" id="centerBig">1.00x</div>
-            <div class="centerSmall" id="centerSmall">Ожидание следующего раунда (3с)</div>
+          <!-- rocket overlay (always inside chart) -->
+          <div id="rocket" class="rocket hidden" aria-hidden="true">
+            <div class="rocketBody"></div>
+            <div class="rocketFlame"></div>
           </div>
 
-          <!-- Bottom-left sound toggle -->
-          <button class="soundBtn" id="soundBtn" type="button">Звук: off</button>
+          <div class="centerText">
+            <div class="bigMult" id="multCenter">1.00x</div>
+            <div class="centerSub" id="centerSub">Ожидание следующего раунда (3с)</div>
+          </div>
 
-          <!-- Bottom-right fair note -->
-          <div class="fairNote">Краш-поинт скрыт (честный RNG)</div>
-
-          <!-- Bottom hint (без истории, просто подсказка) -->
-          <div class="bottomHint" id="betHint">Вход в раунд — только до старта (ожидание). В полёте можно “Забрать” в любой момент.</div>
+          <button class="soundToggle" id="soundBtn" type="button">Звук: off</button>
+          <div class="fairBadge">Краш-поинт скрыт (честный RNG)</div>
         </div>
-      </div>
 
-      <!-- RIGHT: BET -->
-      <div class="panel betPanel">
+        <div class="footNote">
+          Вход в раунд — только до старта (ожидание). В полёте можно “Забрать” в любой момент.
+        </div>
+      </section>
+
+      <!-- RIGHT: bet -->
+      <aside class="card betCard">
         <div class="betHeader">
           <div class="betTitle">Ставка</div>
-          <button class="bonusBtn" id="bonusBtn" type="button">+1000 🪙</button>
+          <button class="chip bonus" id="bonusBtn" type="button">+1000 🪙</button>
         </div>
 
-        <div class="chipsRow">
+        <div class="chips">
           <button class="chip" data-bet="10" type="button">10</button>
           <button class="chip" data-bet="50" type="button">50</button>
           <button class="chip" data-bet="100" type="button">100</button>
@@ -87,23 +85,25 @@
         </div>
 
         <div class="betRow">
-          <button class="betStep" id="betMinus" type="button">−</button>
-          <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
-          <button class="betStep" id="betPlus" type="button">+</button>
+          <button class="miniBtn" id="betMinus" type="button">−</button>
+          <input class="betInput" id="betInput" type="number" min="1" step="1" value="100" />
+          <button class="miniBtn" id="betPlus" type="button">+</button>
         </div>
 
-        <div class="btnRow">
-          <button class="primaryBtn" id="joinBtn" type="button">Войти в раунд</button>
-          <button class="dangerBtn" id="cashBtn" type="button" disabled>Забрать</button>
+        <div class="actionRow">
+          <button class="btn primary" id="joinBtn" type="button">Войти в раунд</button>
+          <button class="btn danger" id="cashBtn" type="button" disabled>Забрать</button>
         </div>
 
-        <div class="smallNote">Монеты виртуальные, без вывода.</div>
-        <div class="smallNote2">v2 · только режим Crash</div>
-      </div>
-    </div>
+        <div class="rightHint" id="rightHint">
+          Монеты виртуальные, без вывода.
+        </div>
+
+        <div class="version">v3 · только режим Crash</div>
+      </aside>
+    </main>
   </div>
 
-  <!-- Твой JS -->
-  <script src="./app.js" defer></script>
+  <script src="./app.js"></script>
 </body>
 </html>
