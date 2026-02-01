@@ -2,132 +2,82 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Rocket Crash</title>
-  <link rel="stylesheet" href="./style.css?v=7" />
-</head>
 
+  <!-- важно: пути относительные (для GitHub Pages) -->
+  <link rel="stylesheet" href="./style.css?v=10" />
+</head>
 <body>
   <div class="app">
-    <!-- Header -->
-    <header class="topbar">
-      <div class="brand">
-        <div class="brandTitle">Rocket Crash</div>
-        <div class="brandSub" id="userLine">Открыто вне Telegram</div>
+    <div class="topbar">
+      <div>
+        <div class="title">Rocket Crash</div>
+        <div class="subtitle" id="tgState">Открыто вне Telegram</div>
+      </div>
+      <div class="balance">
+        Баланс<br />
+        <b id="bal">0</b>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- ЛЕВО: ГРАФИК -->
+      <div class="panel chartPanel">
+        <div class="miniCards">
+          <div class="miniCard">
+            <div class="miniLabel">Множитель</div>
+            <div class="miniValue" id="multTop">x1.00</div>
+            <div class="miniHint" id="phaseTop">Ожидание…</div>
+          </div>
+          <div class="miniCard">
+            <div class="miniLabel">Раунд</div>
+            <div class="miniValue" id="roundTop">1</div>
+            <div class="miniHint" id="roundHint">Старт скоро</div>
+          </div>
+          <div class="miniCard">
+            <div class="miniLabel">Твоя ставка</div>
+            <div class="miniValue" id="myBetTop">—</div>
+            <div class="miniHint" id="myStateTop">не в раунде</div>
+          </div>
+        </div>
+
+        <div class="chartWrap" id="chartWrap">
+          <!-- canvas = график -->
+          <canvas id="chart"></canvas>
+
+          <!-- ракета поверх canvas (движется внутри chartWrap) -->
+          <div class="rocket" id="rocket" aria-hidden="true"></div>
+
+          <!-- крупный множитель по центру -->
+          <div class="centerMult">
+            <div class="centerMultVal" id="multCenter">1.00x</div>
+            <div class="centerMultSub" id="centerSub">Ожидание следующего раунда</div>
+          </div>
+
+          <!-- подпись "честный RNG" -->
+          <div class="fairTag">Краш-поинт скрыт (честный RNG)</div>
+
+          <!-- управление звуком -->
+          <button class="soundBtn" id="soundBtn" type="button">Звук: off</button>
+        </div>
+
+        <div class="chartFooter">
+          <div class="footerHint" id="footerHint">
+            Вход в раунд — только до старта (ожидание). В полёте можно “Забрать” в любой момент.
+          </div>
+          <div class="ver">v10 · только режим Crash</div>
+        </div>
       </div>
 
-      <div class="wallet">
-        <div class="walletLabel">Баланс</div>
-        <div class="walletValue"><span class="coin">🪙</span> <span id="balance">0</span></div>
-      </div>
-    </header>
-
-    <!-- Main -->
-    <main class="main">
-      <!-- LEFT: Scene + chart -->
-      <section class="stage">
-        <div class="stageTop">
-          <div class="statCard">
-            <div class="statTitle">Множитель</div>
-            <div class="statValue" id="multText">x1.00</div>
-            <div class="statHint" id="phaseText">Ожидание — старт скоро</div>
-          </div>
-
-          <div class="statCard">
-            <div class="statTitle">Раунд</div>
-            <div class="statValue" id="roundText">—</div>
-            <div class="statHint" id="countdownText">Старт через 3с</div>
-          </div>
-
-          <div class="statCard">
-            <div class="statTitle">Твоя ставка</div>
-            <div class="statValue" id="myBetText">—</div>
-            <div class="statHint" id="myStatusText">не в раунде</div>
-          </div>
+      <!-- ПРАВО: СТАВКА -->
+      <div class="panel betPanel">
+        <div class="betHeader">
+          <div class="betTitle">Ставка</div>
+          <button class="chip ghost" id="bonusBtn" type="button">+1000</button>
         </div>
 
-        <div class="scene">
-          <!-- winter background layers -->
-          <div class="sky"></div>
-          <div class="stars"></div>
-          <div class="snow" aria-hidden="true"></div>
-
-          <!-- ground + village -->
-          <div class="hills back"></div>
-          <div class="hills mid"></div>
-          <div class="hills front"></div>
-
-          <div class="village">
-            <div class="hut h1"></div>
-            <div class="hut h2"></div>
-            <div class="hut h3"></div>
-            <div class="campfire"></div>
-            <div class="smoke"></div>
-          </div>
-
-          <!-- chart area -->
-          <div class="chartWrap">
-            <svg class="chart" viewBox="0 0 1000 520" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="fillRed" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stop-color="rgba(255,70,70,.40)"/>
-                  <stop offset="100%" stop-color="rgba(255,70,70,0)"/>
-                </linearGradient>
-              </defs>
-
-              <!-- grid -->
-              <g class="grid">
-                <line x1="0" y1="520" x2="1000" y2="520"></line>
-                <line x1="0" y1="390" x2="1000" y2="390"></line>
-                <line x1="0" y1="260" x2="1000" y2="260"></line>
-                <line x1="0" y1="130" x2="1000" y2="130"></line>
-                <line x1="200" y1="0" x2="200" y2="520"></line>
-                <line x1="400" y1="0" x2="400" y2="520"></line>
-                <line x1="600" y1="0" x2="600" y2="520"></line>
-                <line x1="800" y1="0" x2="800" y2="520"></line>
-              </g>
-
-              <!-- dynamic path -->
-              <path id="areaPath" class="area" d=""></path>
-              <path id="linePath" class="line" d=""></path>
-            </svg>
-
-            <!-- rocket (2D) -->
-            <div class="rocket" id="rocket">
-              <div class="rocketBody">
-                <div class="rocketWindow"></div>
-              </div>
-              <div class="rocketFin left"></div>
-              <div class="rocketFin right"></div>
-              <div class="flame"></div>
-            </div>
-
-            <!-- center overlay text like 1.31x -->
-            <div class="centerOverlay">
-              <div class="centerMult" id="centerMult">1.00x</div>
-              <div class="centerMsg" id="centerMsg">Ожидание следующего раунда</div>
-            </div>
-
-            <!-- fair label -->
-            <div class="fairTag">Краш-поинт скрыт (честный RNG)</div>
-          </div>
-
-          <!-- bottom status -->
-          <div class="bottomBar">
-            <button class="btnGhost" id="soundBtn" type="button">Звук: <span id="soundState">off</span></button>
-            <div class="bottomNote" id="bottomNote">Вход в раунд — только до старта. В полёте можно “Забрать” в любой момент.</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- RIGHT: Bet panel -->
-      <aside class="panel">
-        <div class="panelHead">
-          <div class="panelTitle">Ставка</div>
-          <button class="btnGhost" id="bonusBtn" type="button">+1000 🪙</button>
-        </div>
-
-        <div class="chips" id="chips">
+        <div class="chipsRow" id="chipsRow">
           <button class="chip" data-bet="10" type="button">10</button>
           <button class="chip" data-bet="50" type="button">50</button>
           <button class="chip" data-bet="100" type="button">100</button>
@@ -137,28 +87,23 @@
         </div>
 
         <div class="betRow">
-          <button class="btnMini" id="betMinus" type="button">−</button>
+          <button class="btnSmall" id="betMinus" type="button">−</button>
           <input class="betInput" id="betInput" type="number" min="1" step="1" value="50" />
-          <button class="btnMini" id="betPlus" type="button">+</button>
+          <button class="btnSmall" id="betPlus" type="button">+</button>
         </div>
 
-        <div class="panelActions">
-          <button class="btnPrimary" id="joinBtn" type="button">Войти в раунд</button>
-          <button class="btnDanger" id="cashBtn" type="button" disabled>Забрать</button>
+        <div class="actions">
+          <button class="btn primary" id="joinBtn" type="button">Войти в раунд</button>
+          <button class="btn danger" id="cashBtn" type="button" disabled>Забрать</button>
         </div>
 
-        <div class="panelHint" id="panelHint">
-          Войти можно только до старта (ожидание). В полёте можно забрать в любой момент.
+        <div class="rightHint" id="rightHint">
+          Монеты виртуальные, без вывода.
         </div>
-
-        <div class="panelFooter">
-          <div class="tiny">Монеты виртуальные, без вывода.</div>
-          <div class="tiny muted">v7 · только режим Crash</div>
-        </div>
-      </aside>
-    </main>
+      </div>
+    </div>
   </div>
 
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js?v=10"></script>
 </body>
 </html>
