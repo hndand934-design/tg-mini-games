@@ -1,256 +1,285 @@
 :root{
-  --bg1:#050712;
-  --bg2:#0b1030;
-  --card: rgba(255,255,255,.06);
-  --card2: rgba(255,255,255,.04);
-  --stroke: rgba(255,255,255,.10);
-  --text:#eaf0ff;
-  --muted: rgba(234,240,255,.70);
+  --bg1:#070b16;
+  --bg2:#0a1022;
+  --panel:#101a2d;
+  --panel2:#0f172a;
+  --stroke:rgba(255,255,255,.08);
+  --text:#e9f0ff;
+  --muted:rgba(233,240,255,.68);
   --blue:#4c7dff;
-  --red:#ff5b6e;
-  --green:#2ef2a3;
+  --blue2:#2a66ff;
+  --red:#ff4d4d;
+  --red2:#ff2d2d;
+  --shadow: 0 18px 60px rgba(0,0,0,.55);
 }
 
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
   margin:0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
   color:var(--text);
   background:
-    radial-gradient(900px 500px at 20% 20%, rgba(76,125,255,.18), transparent 60%),
-    radial-gradient(900px 500px at 80% 20%, rgba(255,91,110,.10), transparent 60%),
-    radial-gradient(800px 600px at 50% 90%, rgba(46,242,163,.08), transparent 60%),
-    linear-gradient(180deg, var(--bg2), var(--bg1));
-  overflow-x:hidden;
-}
-
-/* снежинки (легко, без лагов) */
-body:before{
-  content:"";
-  position:fixed; inset:0;
-  pointer-events:none;
-  background-image:
-    radial-gradient(circle at 10% 10%, rgba(255,255,255,.10) 0 1px, transparent 2px),
-    radial-gradient(circle at 30% 40%, rgba(255,255,255,.10) 0 1px, transparent 2px),
-    radial-gradient(circle at 70% 20%, rgba(255,255,255,.08) 0 1px, transparent 2px),
-    radial-gradient(circle at 90% 60%, rgba(255,255,255,.10) 0 1px, transparent 2px),
-    radial-gradient(circle at 40% 80%, rgba(255,255,255,.08) 0 1px, transparent 2px);
-  opacity:.55;
-  filter: blur(.2px);
+    radial-gradient(900px 600px at 18% 18%, rgba(76,125,255,.18), transparent 55%),
+    radial-gradient(900px 600px at 82% 24%, rgba(255,90,90,.12), transparent 55%),
+    radial-gradient(1200px 900px at 60% 80%, rgba(76,125,255,.08), transparent 60%),
+    linear-gradient(180deg, var(--bg1), var(--bg2));
 }
 
 .app{
-  width:min(1100px, 96vw);
-  margin:24px auto;
-  display:grid;
-  grid-template-columns: 1fr 340px;
-  gap:16px;
+  max-width: 1180px;
+  margin: 28px auto;
+  padding: 0 16px 22px;
 }
 
-@media (max-width: 980px){
-  .app{grid-template-columns:1fr; margin:14px auto;}
-  .panel{order:2}
-}
-
-.top{
-  grid-column:1/-1;
+.topbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:14px 16px;
-  border-radius:16px;
-  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
   border:1px solid var(--stroke);
-  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  box-shadow: var(--shadow);
 }
 
-.top h1{
-  margin:0;
-  font-size:16px;
-  font-weight:900;
+.brandTitle{
+  font-weight: 900;
+  letter-spacing: .2px;
 }
-.top span{
-  display:block;
-  margin-top:2px;
-  font-size:12px;
-  opacity:.75;
-}
-.balance{
-  padding:10px 12px;
-  border-radius:14px;
-  background: var(--card2);
-  border:1px solid var(--stroke);
-  font-weight:900;
+.brandSub{
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
-.game{
-  border-radius:18px;
-  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+.topRight .pill{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.05);
   border:1px solid var(--stroke);
-  box-shadow: 0 24px 80px rgba(0,0,0,.35);
+}
+.muted{color:var(--muted); font-size:12px}
+
+.layout{
+  display:grid;
+  grid-template-columns: 1.55fr .95fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.panel{
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  border:1px solid var(--stroke);
+  box-shadow: var(--shadow);
   overflow:hidden;
 }
 
-.stats{
-  display:grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap:10px;
-  padding:12px;
-}
+.gamePanel{padding: 14px}
+.betPanel{padding: 14px}
 
-.stats > div{
-  padding:10px 12px;
-  border-radius:14px;
-  background: var(--card2);
+.statsRow{
+  display:grid;
+  grid-template-columns: repeat(3,1fr);
+  gap:10px;
+  margin-bottom: 12px;
+}
+.stat{
+  padding: 12px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.04);
   border:1px solid var(--stroke);
 }
-.stats small{
-  display:block;
-  font-size:11px;
-  opacity:.7;
-}
-.stats b{
-  display:block;
-  margin-top:4px;
-  font-size:18px;
-  font-weight:900;
-}
+.statLabel{font-size:12px;color:var(--muted)}
+.statValue{margin-top:6px;font-size:18px;font-weight:900}
+.statHint{margin-top:4px;font-size:12px;color:rgba(233,240,255,.6)}
 
-.graphWrap{
+.chartWrap{
   position:relative;
-  height:420px;
-  margin:0 12px 12px;
-  border-radius:16px;
+  border-radius: 16px;
   background:
-    radial-gradient(600px 300px at 50% 110%, rgba(76,125,255,.14), transparent 60%),
-    linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.20));
+    radial-gradient(600px 380px at 30% 30%, rgba(76,125,255,.12), transparent 55%),
+    radial-gradient(700px 450px at 70% 70%, rgba(255,80,80,.10), transparent 60%),
+    rgba(0,0,0,.15);
   border:1px solid rgba(255,255,255,.08);
   overflow:hidden;
 }
 
-/* canvas строго в блоке, НЕ на весь экран */
 #chart{
   width:100%;
-  height:100%;
+  height:auto;
   display:block;
 }
 
-/* ракета летит ВНУТРИ графика */
-.rocket{
-  position:absolute;
-  left:0; top:0;
-  transform: translate(-9999px,-9999px);
-  font-size:22px;
-  filter: drop-shadow(0 10px 18px rgba(0,0,0,.45));
-  opacity:.95;
-  transition: opacity .15s ease;
-}
-.rocket.hide{ opacity:0; }
-
-.centerText{
-  position:absolute;
-  inset:0;
+.chartOverlay{
+  position:absolute; inset:0;
   display:flex;
   align-items:center;
   justify-content:center;
   flex-direction:column;
-  gap:6px;
-  font-size:42px;
-  font-weight:1000;
-  letter-spacing:.5px;
-  text-shadow: 0 20px 40px rgba(0,0,0,.55);
+  pointer-events:none;
 }
-.centerText small{
+.centerBig{
+  font-size:48px;
+  font-weight:900;
+  letter-spacing:.3px;
+  text-shadow: 0 10px 24px rgba(0,0,0,.55);
+}
+.centerSmall{
+  margin-top:6px;
   font-size:13px;
-  opacity:.8;
-  font-weight:700;
+  color:rgba(233,240,255,.7);
 }
 
-.panel{
-  border-radius:18px;
-  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
-  border:1px solid var(--stroke);
-  box-shadow: 0 24px 80px rgba(0,0,0,.35);
-  overflow:hidden;
-}
-
-.betBox{
-  padding:14px;
-}
-
-.row{
+.chartFooter{
+  position:absolute;
+  left:10px; right:10px; bottom:10px;
   display:flex;
-  gap:8px;
-  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  pointer-events:auto;
 }
 
+.hintRight{
+  font-size:12px;
+  color:rgba(233,240,255,.62);
+  padding:8px 10px;
+  border-radius:999px;
+  background: rgba(0,0,0,.25);
+  border:1px solid rgba(255,255,255,.08);
+}
+
+.chipBtn{
+  padding:8px 10px;
+  border-radius:999px;
+  background: rgba(0,0,0,.25);
+  border:1px solid rgba(255,255,255,.10);
+  color:var(--text);
+  cursor:pointer;
+  font-weight:800;
+  font-size:12px;
+}
+.chipBtn:active{transform:scale(.98)}
+
+.footNote{
+  margin-top: 10px;
+  font-size:12px;
+  color:rgba(233,240,255,.62);
+}
+
+.betHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom: 10px;
+}
+.betTitle{font-weight:900}
+
+.presetRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom: 10px;
+}
 .chip{
   padding:8px 10px;
   border-radius:999px;
   border:1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.06);
+  background:rgba(255,255,255,.05);
   color:var(--text);
-  font-weight:900;
-  font-size:12px;
   cursor:pointer;
-  transition: transform .08s ease, background .12s ease;
+  font-weight:800;
+  font-size:12px;
 }
-.chip:active{ transform:scale(.98); }
+.chip:active{transform:scale(.98)}
 
-.betBox input{
+.betRow{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-bottom: 12px;
+}
+.betStep{
+  width:42px;
+  height:42px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.05);
+  color:var(--text);
+  cursor:pointer;
+  font-weight:900;
+  font-size:18px;
+}
+.betInput{
   flex:1;
-  padding:10px 12px;
+  height:42px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.05);
+  color:var(--text);
+  padding: 0 12px;
+  font-weight:900;
+  outline:none;
+}
+
+.actions{
+  display:flex;
+  gap:10px;
+  margin-bottom: 10px;
+}
+.btn{
+  flex:1;
+  height:44px;
   border-radius:12px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.06);
   color:var(--text);
-  outline:none;
+  cursor:pointer;
   font-weight:900;
 }
+.btn:active{transform:scale(.99)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
 
-.betBox #minus,
-.betBox #plus{
-  width:44px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.06);
-  color:var(--text);
-  font-weight:1000;
-  cursor:pointer;
+.btn.primary{
+  background: linear-gradient(180deg, rgba(76,125,255,.95), rgba(42,102,255,.85));
+  border-color: rgba(76,125,255,.35);
+}
+.btn.danger{
+  background: linear-gradient(180deg, rgba(255,80,80,.50), rgba(255,45,45,.30));
+  border-color: rgba(255,80,80,.25);
 }
 
-.join{
-  width:100%;
-  margin-top:10px;
-  padding:12px 14px;
-  border-radius:14px;
-  border:0;
-  background: linear-gradient(180deg, rgba(76,125,255,.95), rgba(76,125,255,.75));
-  color:white;
-  font-weight:1000;
-  cursor:pointer;
-}
-
-.cash{
-  width:100%;
-  margin-top:8px;
-  padding:12px 14px;
-  border-radius:14px;
-  border:0;
-  background: linear-gradient(180deg, rgba(255,91,110,.85), rgba(255,91,110,.55));
-  color:white;
-  font-weight:1000;
-  cursor:pointer;
-}
-.cash:disabled{
-  opacity:.45;
-  cursor:not-allowed;
-}
-
-.betBox small{
-  display:block;
-  margin-top:10px;
-  opacity:.65;
+.betHint{
   font-size:12px;
+  color:rgba(233,240,255,.62);
+}
+
+.miniLog{
+  margin-top: 12px;
+  min-height: 70px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.18);
+  border:1px solid rgba(255,255,255,.08);
+  font-size:12px;
+  color:rgba(233,240,255,.72);
+  line-height:1.35;
+  white-space:pre-line;
+}
+
+.version{
+  margin-top: 10px;
+  font-size:12px;
+  color:rgba(233,240,255,.45);
+  text-align:right;
+}
+
+@media (max-width: 980px){
+  .layout{grid-template-columns:1fr}
+  .centerBig{font-size:40px}
 }
