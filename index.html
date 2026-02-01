@@ -1,109 +1,71 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
   <title>Rocket Crash</title>
-
-  <!-- важно: пути относительные (для GitHub Pages) -->
-  <link rel="stylesheet" href="./style.css?v=10" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app">
-    <div class="topbar">
+
+<div class="app">
+  <header class="top">
+    <div>
+      <h1>Rocket Crash</h1>
+      <span>Открыто вне Telegram</span>
+    </div>
+    <div class="balance">🪙 <span id="balance">1000</span></div>
+  </header>
+
+  <main class="game">
+    <div class="stats">
       <div>
-        <div class="title">Rocket Crash</div>
-        <div class="subtitle" id="tgState">Открыто вне Telegram</div>
+        <small>Множитель</small>
+        <b id="mult">1.00x</b>
       </div>
-      <div class="balance">
-        Баланс<br />
-        <b id="bal">0</b>
+      <div>
+        <small>Раунд</small>
+        <b id="round">Ожидание</b>
       </div>
-    </div>
-
-    <div class="layout">
-      <!-- ЛЕВО: ГРАФИК -->
-      <div class="panel chartPanel">
-        <div class="miniCards">
-          <div class="miniCard">
-            <div class="miniLabel">Множитель</div>
-            <div class="miniValue" id="multTop">x1.00</div>
-            <div class="miniHint" id="phaseTop">Ожидание…</div>
-          </div>
-          <div class="miniCard">
-            <div class="miniLabel">Раунд</div>
-            <div class="miniValue" id="roundTop">1</div>
-            <div class="miniHint" id="roundHint">Старт скоро</div>
-          </div>
-          <div class="miniCard">
-            <div class="miniLabel">Твоя ставка</div>
-            <div class="miniValue" id="myBetTop">—</div>
-            <div class="miniHint" id="myStateTop">не в раунде</div>
-          </div>
-        </div>
-
-        <div class="chartWrap" id="chartWrap">
-          <!-- canvas = график -->
-          <canvas id="chart"></canvas>
-
-          <!-- ракета поверх canvas (движется внутри chartWrap) -->
-          <div class="rocket" id="rocket" aria-hidden="true"></div>
-
-          <!-- крупный множитель по центру -->
-          <div class="centerMult">
-            <div class="centerMultVal" id="multCenter">1.00x</div>
-            <div class="centerMultSub" id="centerSub">Ожидание следующего раунда</div>
-          </div>
-
-          <!-- подпись "честный RNG" -->
-          <div class="fairTag">Краш-поинт скрыт (честный RNG)</div>
-
-          <!-- управление звуком -->
-          <button class="soundBtn" id="soundBtn" type="button">Звук: off</button>
-        </div>
-
-        <div class="chartFooter">
-          <div class="footerHint" id="footerHint">
-            Вход в раунд — только до старта (ожидание). В полёте можно “Забрать” в любой момент.
-          </div>
-          <div class="ver">v10 · только режим Crash</div>
-        </div>
-      </div>
-
-      <!-- ПРАВО: СТАВКА -->
-      <div class="panel betPanel">
-        <div class="betHeader">
-          <div class="betTitle">Ставка</div>
-          <button class="chip ghost" id="bonusBtn" type="button">+1000</button>
-        </div>
-
-        <div class="chipsRow" id="chipsRow">
-          <button class="chip" data-bet="10" type="button">10</button>
-          <button class="chip" data-bet="50" type="button">50</button>
-          <button class="chip" data-bet="100" type="button">100</button>
-          <button class="chip" data-bet="250" type="button">250</button>
-          <button class="chip" data-bet="500" type="button">500</button>
-          <button class="chip" data-bet="max" type="button">MAX</button>
-        </div>
-
-        <div class="betRow">
-          <button class="btnSmall" id="betMinus" type="button">−</button>
-          <input class="betInput" id="betInput" type="number" min="1" step="1" value="50" />
-          <button class="btnSmall" id="betPlus" type="button">+</button>
-        </div>
-
-        <div class="actions">
-          <button class="btn primary" id="joinBtn" type="button">Войти в раунд</button>
-          <button class="btn danger" id="cashBtn" type="button" disabled>Забрать</button>
-        </div>
-
-        <div class="rightHint" id="rightHint">
-          Монеты виртуальные, без вывода.
-        </div>
+      <div>
+        <small>Твоя ставка</small>
+        <b id="myBet">—</b>
       </div>
     </div>
-  </div>
 
-  <script src="./app.js?v=10"></script>
+    <div class="graphWrap">
+      <canvas id="chart"></canvas>
+      <div class="rocket" id="rocket">🚀</div>
+      <div class="centerText" id="centerText">Ожидание…</div>
+    </div>
+  </main>
+
+  <aside class="panel">
+    <div class="betBox">
+      <div class="row">
+        <button class="chip" data-v="10">10</button>
+        <button class="chip" data-v="50">50</button>
+        <button class="chip" data-v="100">100</button>
+        <button class="chip" data-v="250">250</button>
+        <button class="chip" data-v="500">500</button>
+        <button class="chip" data-v="max">MAX</button>
+      </div>
+
+      <div class="row">
+        <button id="minus">-</button>
+        <input id="bet" type="number" value="50">
+        <button id="plus">+</button>
+      </div>
+
+      <button id="join" class="join">Войти в раунд</button>
+      <button id="cash" class="cash" disabled>Забрать</button>
+
+      <small>Монеты виртуальные, без вывода</small>
+    </div>
+  </aside>
+
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
