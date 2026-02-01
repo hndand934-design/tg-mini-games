@@ -2,26 +2,103 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Rocket Crash</title>
-  <link rel="stylesheet" href="./style.css" />
+
+  <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <div class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="title">Rocket Crash</div>
-        <div class="subtitle" id="user">Открыто вне Telegram</div>
+    <div class="topbar">
+      <div class="title">
+        <div class="name">Rocket Crash</div>
+        <div class="sub" id="tgStatus">Открыто вне Telegram</div>
       </div>
 
-      <div class="topRight">
-        <div class="pill" id="balancePill">🪙 0</div>
-        <button class="iconBtn" id="soundBtn" title="Звук">🔊</button>
+      <div class="right">
+        <div class="pill">
+          <span class="dot"></span>
+          <span>🪙</span>
+          <b id="coins">0</b>
+        </div>
       </div>
-    </header>
+    </div>
 
-    <main id="screen"></main>
+    <div class="layout">
+      <!-- LEFT: chart -->
+      <section class="card chartCard">
+        <div class="hud">
+          <div class="hudBox">
+            <div class="label">Множитель</div>
+            <div class="value" id="multText">x1.00</div>
+            <div class="hint" id="phaseHint">Ожидание — старт скоро</div>
+          </div>
+
+          <div class="hudBox">
+            <div class="label">Раунд</div>
+            <div class="value" id="roundText">Старт через 5s</div>
+          </div>
+
+          <div class="hudBox">
+            <div class="label">Твоя ставка</div>
+            <div class="value" id="myBetText">—</div>
+            <div class="hint" id="myStateText">не в раунде</div>
+          </div>
+        </div>
+
+        <div class="chartBox" id="chartBox">
+          <canvas id="chart"></canvas>
+
+          <!-- rocket sprite (2D) -->
+          <div class="rocket" id="rocket" aria-hidden="true"></div>
+
+          <!-- overlay message -->
+          <div class="overlay" id="overlayMsg" style="display:none;">Ожидание…</div>
+
+          <button class="soundBtn" id="soundBtn">Звук: off</button>
+        </div>
+
+        <div class="bottomHint">
+          <span class="badge">Краш-поинт (честный RNG)</span>
+          <span class="muted">В демо — виртуальные монеты, без вывода.</span>
+        </div>
+      </section>
+
+      <!-- RIGHT: controls -->
+      <aside class="card controlCard">
+        <div class="controlTop">
+          <div class="labelBig">Ставка</div>
+          <button class="ghost" id="bonusBtn">+1000 🪙</button>
+        </div>
+
+        <div class="chips">
+          <button class="chip" data-bet="10">10</button>
+          <button class="chip" data-bet="50">50</button>
+          <button class="chip" data-bet="100">100</button>
+          <button class="chip" data-bet="250">250</button>
+          <button class="chip" data-bet="500">500</button>
+          <button class="chip" data-bet="max">MAX</button>
+        </div>
+
+        <div class="betRow">
+          <button class="btn small" id="betMinus">-</button>
+          <input class="betInput" id="betInput" type="number" min="1" step="1" value="50" />
+          <button class="btn small" id="betPlus">+</button>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="joinBtn">Войти в раунд</button>
+          <button class="btn danger" id="cashBtn">Забрать</button>
+        </div>
+
+        <div class="help">
+          Войти можно только до старта (ожидание). В полёте можно забрать в любой момент.
+        </div>
+      </aside>
+    </div>
   </div>
 
   <script src="./app.js"></script>
