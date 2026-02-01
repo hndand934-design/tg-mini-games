@@ -1,130 +1,108 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0a1020" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rocket Crash</title>
 
-  <!-- Telegram WebApp -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Your styles -->
+  <!-- ВАЖНО: именно style.css -->
   <link rel="stylesheet" href="./style.css" />
 </head>
-<body>
-  <div class="bg"></div>
 
+<body>
   <div class="app">
-    <!-- Top bar -->
+    <!-- TOP BAR -->
     <header class="topbar">
       <div class="topbar__left">
-        <div class="brand">
-          <div class="brand__title">Rocket Crash</div>
-          <div class="brand__sub" id="userLine">Открыто вне Telegram</div>
-        </div>
+        <div class="topbar__title" id="title">Rocket Crash</div>
+        <div class="topbar__sub">Открыто вне Telegram</div>
       </div>
-
       <div class="topbar__right">
-        <div class="balanceBox">
-          <div class="balanceBox__label">Баланс</div>
-          <div class="balanceBox__value"><span id="balance">0</span> 🪙</div>
-        </div>
+        <div class="pill">Баланс <b><span id="balance">0</span> 🪙</b></div>
       </div>
     </header>
 
+    <!-- MAIN GRID -->
     <main class="grid">
-      <!-- LEFT: game panel -->
-      <section class="panel gamePanel">
-        <!-- small stats row -->
+      <!-- LEFT: GAME -->
+      <section class="left">
         <div class="stats">
           <div class="stat">
             <div class="stat__label">Множитель</div>
-            <div class="stat__value" id="statMult">x1.00</div>
-            <div class="stat__hint" id="statHint">Новый раунд скоро</div>
+            <div class="stat__value" id="multSmall">x1.00</div>
+            <div class="stat__hint" id="statusSmall">Ожидание</div>
           </div>
 
           <div class="stat">
             <div class="stat__label">Статус</div>
-            <div class="stat__value" id="statStatus">Ожидание</div>
-            <div class="stat__hint" id="statCountdown">Старт через 3с</div>
+            <div class="stat__value" id="phaseText">Ожидание</div>
+            <div class="stat__hint" id="hint">Старт через 3s</div>
           </div>
 
           <div class="stat">
             <div class="stat__label">Твоя ставка</div>
-            <div class="stat__value" id="statMyBet">—</div>
-            <div class="stat__hint" id="statMyState">не в раунде</div>
+            <div class="stat__value" id="betSmall">—</div>
+            <div class="stat__hint">не в раунде</div>
           </div>
         </div>
 
-        <!-- chart area -->
-        <div class="chartCard">
-          <div class="chart">
-            <!-- grid -->
-            <div class="chart__grid" aria-hidden="true"></div>
+        <div class="board card">
+          <div class="board__inner">
+            <!-- Важно: canvas в ограниченном блоке -->
+            <canvas id="crashCanvas"></canvas>
 
-            <!-- canvas for curve -->
-            <canvas id="chartCanvas" class="chart__canvas" width="900" height="520"></canvas>
-
-            <!-- rocket (2d sprite / emoji / svg) -->
-            <div id="rocket" class="rocket" aria-hidden="true">🚀</div>
-
-            <!-- center multiplier -->
-            <div class="chart__center">
-              <div id="centerMult" class="centerMult">1.00x</div>
-              <div id="centerText" class="centerText">Ожидание следующего раунда</div>
-            </div>
-
-            <!-- bottom labels -->
-            <div class="chart__bottom">
-              <button id="soundBtn" class="pill" type="button">Звук: off</button>
-              <div class="fairPill">Краш-поинт скрыт (честный RNG)</div>
+            <!-- нижние кнопки внутри квадрата -->
+            <div class="board__footer">
+              <button class="chip chip--muted" id="soundToggle" type="button">Звук: on</button>
+              <div class="board__note">Краш-поинт скрыт (честный RNG)</div>
             </div>
           </div>
+        </div>
 
-          <div class="underHint">
-            Вход в раунд — только до старта (ожидание). В полёте можно “Забрать” в любой момент.
-          </div>
+        <div class="underNote">
+          Вход в раунд — только до старта (ожидание). В полёте можно “Забрать” в любой момент.
         </div>
       </section>
 
-      <!-- RIGHT: bet panel -->
-      <aside class="panel betPanel">
-        <div class="betPanel__head">
-          <div class="betTitle">Ставка</div>
-          <button id="bonusBtn" class="bonusBtn" type="button">+1000 🪙</button>
+      <!-- RIGHT: BET PANEL -->
+      <aside class="right card">
+        <div class="panelHead">
+          <div class="panelTitle">Ставка</div>
+          <button class="chip" id="bonusBtn" type="button">+1000 🪙</button>
         </div>
 
-        <div class="chips" id="chipRow">
-          <button class="chip" data-bet="10" type="button">10</button>
-          <button class="chip" data-bet="50" type="button">50</button>
-          <button class="chip" data-bet="100" type="button">100</button>
-          <button class="chip" data-bet="250" type="button">250</button>
-          <button class="chip" data-bet="500" type="button">500</button>
-          <button class="chip" data-bet="max" type="button">MAX</button>
+        <div class="presetRow">
+          <button class="chip" data-preset="10" type="button">10</button>
+          <button class="chip" data-preset="50" type="button">50</button>
+          <button class="chip" data-preset="100" type="button">100</button>
+          <button class="chip" data-preset="250" type="button">250</button>
+          <button class="chip" data-preset="500" type="button">500</button>
+          <button class="chip" data-preset="max" type="button">MAX</button>
         </div>
 
         <div class="betRow">
-          <button id="betMinus" class="betBtn" type="button">-</button>
+          <button class="btnSquare" id="betMinus" type="button">−</button>
           <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
-          <button id="betPlus" class="betBtn" type="button">+</button>
+          <button class="btnSquare" id="betPlus" type="button">+</button>
         </div>
 
-        <div class="actions">
-          <button id="joinBtn" class="primary" type="button">Войти в раунд</button>
-          <button id="cashBtn" class="danger" type="button" disabled>Забрать</button>
+        <div class="actionRow">
+          <button class="btnPrimary" id="enterBtn" type="button">Войти в раунд</button>
+          <button class="btnDanger" id="cashBtn" type="button" disabled>Забрать</button>
         </div>
 
-        <div class="note">
+        <div class="panelFoot">
           Монеты виртуальные, без вывода.
+          <span class="ver">v4 · только режим Crash</span>
         </div>
-
-        <div class="version" id="versionText">v3 · только режим Crash</div>
       </aside>
     </main>
   </div>
 
-  <!-- Your app logic -->
+  <!-- Telegram SDK (не обязателен, но пусть будет) -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- app.js -->
   <script src="./app.js"></script>
 </body>
 </html>
