@@ -2,75 +2,74 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Rocket Crash</title>
-  <link rel="stylesheet" href="./style.css" />
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brandTitle">Rocket Crash</div>
-        <div class="brandSub" id="userText">Открыто вне Telegram</div>
-      </div>
+  <div class="bg"></div>
 
-      <div class="topRight">
-        <div class="pill">
-          <span class="muted">Баланс</span>
-          <b id="balanceText">🪙 1000</b>
-        </div>
+  <div class="wrap">
+    <div class="topbar card">
+      <div class="topbarLeft">
+        <div class="title">Rocket Crash</div>
+        <div class="subtitle" id="userText">Открыто вне Telegram</div>
       </div>
-    </header>
+      <div class="topbarRight">
+        <div class="badge">Баланс</div>
+        <div class="balance" id="balanceText">🪙 0</div>
+      </div>
+    </div>
 
-    <main class="layout">
-      <!-- LEFT: GAME -->
-      <section class="panel gamePanel">
+    <div class="grid">
+      <!-- LEFT -->
+      <div class="left card">
         <div class="statsRow">
-          <div class="stat">
-            <div class="statLabel">Множитель</div>
-            <div class="statValue" id="multText">x1.00</div>
-            <div class="statHint" id="phaseHint">Ожидание…</div>
+          <div class="stat cardInset">
+            <div class="label">Множитель</div>
+            <div class="value" id="multText">x1.00</div>
+            <div class="hint" id="phaseHint">Новый раунд скоро</div>
           </div>
-          <div class="stat">
-            <div class="statLabel">Статус</div>
-            <div class="statValue" id="statusText">Ожидание</div>
-            <div class="statHint" id="countText">Старт через 5с</div>
+
+          <div class="stat cardInset">
+            <div class="label">Статус</div>
+            <div class="value" id="statusText">Ожидание</div>
+            <div class="hint" id="countText">Старт через 5с</div>
           </div>
-          <div class="stat">
-            <div class="statLabel">Твоя ставка</div>
-            <div class="statValue" id="myBetText">—</div>
-            <div class="statHint" id="myStateText">не в раунде</div>
+
+          <div class="stat cardInset">
+            <div class="label">Твоя ставка</div>
+            <div class="value" id="myBetText">—</div>
+            <div class="hint" id="myStateText">не в раунде</div>
           </div>
         </div>
 
-        <div class="chartWrap">
-          <canvas id="chart" width="1100" height="620"></canvas>
+        <div class="chartWrap cardInset">
+          <canvas id="chart"></canvas>
 
-          <div class="chartOverlay">
-            <div class="centerBig" id="centerBig">Ожидание…</div>
-            <div class="centerSmall" id="centerSmall">Следующий раунд через 5с</div>
+          <div class="centerText">
+            <div class="centerBig" id="centerBig"></div>
+            <div class="centerSmall" id="centerSmall"></div>
           </div>
 
-          <div class="chartFooter">
-            <button class="chipBtn" id="soundBtn" type="button">Звук: off</button>
-            <div class="hintRight">Краш-поинт скрыт (честный RNG)</div>
-          </div>
+          <button class="soundBtn" id="soundBtn">Звук: off</button>
+
+          <div class="watermark">Краш-поинт скрыт (честный RNG)</div>
         </div>
 
         <div class="footNote">
           Вход в раунд — только до старта (ожидание). В полёте можно “Забрать” в любой момент.
         </div>
-      </section>
+      </div>
 
-      <!-- RIGHT: BET -->
-      <aside class="panel betPanel">
-        <div class="betHead">
-          <div class="betTitle">Ставка</div>
-          <button class="chipBtn" id="bonusBtn" type="button">+1000 🪙</button>
+      <!-- RIGHT -->
+      <div class="right card">
+        <div class="rightHeader">
+          <div class="rightTitle">Ставка</div>
+          <button class="chip ghost" id="bonusBtn">+1000 🪙</button>
         </div>
 
-        <div class="presetRow">
+        <div class="chips">
           <button class="chip" data-bet="10">10</button>
           <button class="chip" data-bet="50">50</button>
           <button class="chip" data-bet="100">100</button>
@@ -80,27 +79,22 @@
         </div>
 
         <div class="betRow">
-          <button class="betStep" id="betMinus" type="button">−</button>
+          <button class="btnSquare" id="betMinus">-</button>
           <input class="betInput" id="betInput" type="number" min="1" step="1" value="100" />
-          <button class="betStep" id="betPlus" type="button">+</button>
+          <button class="btnSquare" id="betPlus">+</button>
         </div>
 
         <div class="actions">
-          <button class="btn primary" id="joinBtn" type="button">Войти в раунд</button>
-          <button class="btn danger" id="cashBtn" type="button" disabled>Забрать</button>
+          <button class="btn primary" id="joinBtn">Войти в раунд</button>
+          <button class="btn danger" id="cashBtn" disabled>Забрать</button>
         </div>
 
-        <div class="betHint" id="betHint">
-          Монеты виртуальные, без вывода.
-        </div>
-
-        <div class="miniLog" id="miniLog"></div>
-
-        <div class="version">v1 · только режим Crash</div>
-      </aside>
-    </main>
+        <div class="hintText" id="betHint">Монеты виртуальные, без вывода.</div>
+        <div class="version">v2 · только режим Crash</div>
+      </div>
+    </div>
   </div>
 
-  <script src="./app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
