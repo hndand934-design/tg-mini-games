@@ -1,27 +1,34 @@
-// ===============================
-// Rocket Crash — ONLY режим (GitHub Pages)
-// - Ракета ВСЕГДА внутри графика (автоскейл)
-// - Без истории/логов
-// - Приятный звук: взлёт / полёт / краш (WebAudio)
-// ===============================
+/* =========================
+   Rocket Crash — Crash only
+   GitHub Pages friendly
+   ========================= */
 
-// ---------- RNG ----------
+/* ---------- RNG (crypto) ---------- */
 function randFloat() {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
   return a[0] / 2 ** 32;
 }
 
-// ---------- Telegram ----------
+/* Provably-fair-ish crash point (simple, client-side demo):
+   crash = max(1.01, floor( (0.99/(1-u)) * 100 ) / 100 )
+   This gives rare big multipliers. */
+function rollCrashPoint() {
+  const u = randFloat();
+  const v = 0.99 / (1 - u);
+  const cp = Math.floor(v * 100) / 100;
+  return Math.max(1.01, Math.min(cp, 500)); // cap for sanity
+}
+
+/* ---------- Telegram WebApp ---------- */
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
 }
-const user = tg?.initDataUnsafe?.user;
 
-// ---------- Wallet (local) ----------
-const WALLET_KEY = "rocket_wallet_v2";
+/* ---------- Wallet (local) ---------- */
+const WALLET_KEY = "rocket_wallet_v3";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -33,824 +40,742 @@ function saveWallet(w) {
   localStorage.setItem(WALLET_KEY, JSON.stringify(w));
 }
 let wallet = loadWallet();
+
 function setCoins(v) {
   wallet.coins = Math.max(0, Math.floor(v));
   saveWallet(wallet);
-  renderTop();
+  renderBalance();
 }
-function addCoins(d) { setCoins(wallet.coins + d); }
+function addCoins(d) {
+  setCoins(wallet.coins + d);
+}
 
-// ---------- DOM ----------
+/* ---------- DOM helpers ---------- */
 const $ = (id) => document.getElementById(id);
 
-const userText = $("userText");
-const balanceText = $("balanceText");
+const elBalance = $("balanceValue");
+const elMult = $("multValue");
+const elStatus = $("statusValue");
+const elMyBet = $("myBetValue");
 
-const multText = $("multText");
-const phaseHint = $("phaseHint");
-const statusText = $("statusText");
-const countText = $("countText");
-const myBetText = $("myBetText");
-const myStateText = $("myStateText");
+const elCenterBig = $("centerBig");
+const elCenterSmall = $("centerSmall");
 
-const centerBig = $("centerBig");
-const centerSmall = $("centerSmall");
+const elBetInput = $("betInput");
+const elJoin = $("joinBtn");
+const elCash = $("cashBtn");
+const elPlus = $("plusBtn");
+const elMinus = $("minusBtn");
+const elBonus = $("bonusBtn");
+const elSound = $("soundBtn");
+const elChips = $("chipsRow");
 
-const betInput = $("betInput");
-const joinBtn = $("joinBtn");
-const cashBtn = $("cashBtn");
-const bonusBtn = $("bonusBtn");
-const soundBtn = $("soundBtn");
+const canvas = $("chartCanvas");
+const ctx = canvas?.getContext?.("2d");
 
-const canvas = $("chart");
-const ctx = canvas.getContext("2d");
-
-// ---------- UI ----------
-function renderTop() {
-  balanceText.textContent = `🪙 ${wallet.coins}`;
-  userText.textContent = user
-    ? `Привет, ${user.first_name}`
-    : `Открыто вне Telegram`;
+/* If something missing — fail gracefully */
+function mustHave() {
+  const ids = [
+    "balanceValue","multValue","statusValue","myBetValue",
+    "centerBig","centerSmall","betInput","joinBtn","cashBtn",
+    "plusBtn","minusBtn","bonusBtn","soundBtn","chipsRow","chartCanvas"
+  ];
+  const missing = ids.filter((x) => !$(x));
+  if (missing.length) {
+    console.warn("Missing elements:", missing.join(", "));
+  }
 }
-renderTop();
+mustHave();
 
-// ---------- Resize canvas (HiDPI) ----------
-function resizeCanvas() {
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
+/* ---------- UI render ---------- */
+function renderBalance() {
+  if (!elBalance) return;
+  elBalance.textContent = `🪙 ${wallet.coins}`;
+}
+renderBalance();
+
+/* ---------- Canvas sizing ---------- */
+function fitCanvasToCSS() {
+  if (!canvas || !ctx) return;
   const rect = canvas.getBoundingClientRect();
-  const w = Math.max(300, Math.floor(rect.width));
-  const h = Math.max(220, Math.floor(rect.height));
-  canvas.width = Math.floor(w * dpr);
-  canvas.height = Math.floor(h * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", () => {
-  resizeCanvas();
-  draw();
+  fitCanvasToCSS();
 });
+fitCanvasToCSS();
 
-// ---------- Game state ----------
-const PHASE = {
-  WAIT: "wait",   // ожидание/отсчёт
-  FLY: "fly",     // полёт
-  CRASH: "crash"  // краш/итог
+/* ---------- Game state ---------- */
+const STATE = {
+  WAIT: "wait",
+  FLY: "fly",
+  CRASH: "crash",
 };
 
-let state = {
-  phase: PHASE.WAIT,
-  waitLeft: 3,        // секунды до старта
-  startAt: 0,
+let game = {
+  state: STATE.WAIT,
+  countdownMs: 3500,
+  waitLeftMs: 3500,
 
-  t: 0,               // время полёта, сек
-  mult: 1.0,
-  crashPoint: 1.5,    // будет пересчитан
-  crashed: false,
-
-  // ставка игрока
+  inRound: false,
   bet: 100,
-  joined: false,
-  joinedBet: 0,
   cashed: false,
 
-  // график
-  points: [],         // {t, m}
+  crashPoint: 1.5,
+  mult: 1.0,
+  t0: 0,
+  raf: 0,
+
+  // stored real points (time, mult)
+  points: [],
+
+  // dynamic scaling so rocket stays inside
+  scale: {
+    yMax: 4,     // max multiplier visible on chart
+    xMax: 6.0,   // max seconds visible on chart
+    yMaxTarget: 4,
+    xMaxTarget: 6.0,
+  },
+
+  // rocket visual
+  rocket: {
+    visible: true,
+    x: 0,
+    y: 0,
+    angle: 0,
+  },
+
+  soundOn: true,
 };
 
-function clampBetToBalance() {
-  let v = Math.floor(Number(betInput.value) || 0);
-  if (v < 1) v = 1;
-  if (v > wallet.coins) v = wallet.coins;
-  betInput.value = String(v);
-  return v;
-}
+const BET_PRESETS = [10, 50, 100, 250, 500];
 
-// ---------- Fair-ish crash point (скрыто) ----------
-function genCrashPoint() {
-  // классическая формула ~ 1/(1-r), ограничим разумно
-  const r = Math.max(0.000001, Math.min(0.999999, randFloat()));
-  const raw = 1 / (1 - r);
-  // слегка "приземлим" редкие огромные значения
-  const capped = Math.min(raw, 200);
-  return Math.max(1.05, capped);
-}
-
-// ---------- WebAudio (Sound) ----------
-let audio = {
-  enabled: false,
-  ctx: null,
-  master: null,
-  engineOsc: null,
-  engineGain: null,
-  windOsc: null,
-  windGain: null,
-  _started: false,
-};
+/* ---------- Sounds (WebAudio, no files) ---------- */
+let audioCtx = null;
+let master = null;
+let engineOsc = null;
+let engineGain = null;
+let windOsc = null;
+let windGain = null;
 
 function ensureAudio() {
-  if (audio.ctx) return;
-  const AC = window.AudioContext || window.webkitAudioContext;
-  audio.ctx = new AC();
-  audio.master = audio.ctx.createGain();
-  audio.master.gain.value = 0.0; // включим при enabled
-  audio.master.connect(audio.ctx.destination);
-}
-
-function setSoundEnabled(on) {
-  ensureAudio();
-  audio.enabled = on;
-  audio.master.gain.setTargetAtTime(on ? 0.8 : 0.0, audio.ctx.currentTime, 0.03);
-  soundBtn.textContent = `Звук: ${on ? "on" : "off"}`;
-}
-
-function beepLaunch() {
-  if (!audio.enabled) return;
-  const t0 = audio.ctx.currentTime;
-
-  const o = audio.ctx.createOscillator();
-  const g = audio.ctx.createGain();
-  o.type = "sawtooth";
-  o.frequency.setValueAtTime(140, t0);
-  o.frequency.exponentialRampToValueAtTime(480, t0 + 0.25);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.05);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
-
-  // лёгкий фильтр (приятнее)
-  const lp = audio.ctx.createBiquadFilter();
-  lp.type = "lowpass";
-  lp.frequency.setValueAtTime(900, t0);
-  lp.frequency.exponentialRampToValueAtTime(1800, t0 + 0.25);
-
-  o.connect(lp);
-  lp.connect(g);
-  g.connect(audio.master);
-
-  o.start(t0);
-  o.stop(t0 + 0.36);
-}
-
-function startEngine() {
-  if (!audio.enabled) return;
-  const t0 = audio.ctx.currentTime;
-
-  // Основной "двигатель"
-  const osc = audio.ctx.createOscillator();
-  const gain = audio.ctx.createGain();
-  const lp = audio.ctx.createBiquadFilter();
-
-  osc.type = "triangle";
-  osc.frequency.setValueAtTime(90, t0);
-
-  lp.type = "lowpass";
-  lp.frequency.setValueAtTime(600, t0);
-
-  gain.gain.setValueAtTime(0.0001, t0);
-  gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.25);
-
-  osc.connect(lp);
-  lp.connect(gain);
-  gain.connect(audio.master);
-
-  osc.start(t0);
-
-  // "Ветер" (мягкий шум через osc+filter как псевдо-noise)
-  const wind = audio.ctx.createOscillator();
-  const wg = audio.ctx.createGain();
-  const hp = audio.ctx.createBiquadFilter();
-
-  wind.type = "sawtooth";
-  wind.frequency.setValueAtTime(40, t0);
-
-  hp.type = "highpass";
-  hp.frequency.setValueAtTime(180, t0);
-
-  wg.gain.setValueAtTime(0.0001, t0);
-  wg.gain.exponentialRampToValueAtTime(0.09, t0 + 0.3);
-
-  wind.connect(hp);
-  hp.connect(wg);
-  wg.connect(audio.master);
-
-  wind.start(t0);
-
-  audio.engineOsc = osc;
-  audio.engineGain = gain;
-  audio.windOsc = wind;
-  audio.windGain = wg;
-}
-
-function updateEngine(mult) {
-  if (!audio.enabled) return;
-  if (!audio.engineOsc || !audio.engineGain) return;
-
-  const t = audio.ctx.currentTime;
-  // чем больше множитель — тем выше тон и громкость, но мягко
-  const f = 90 + Math.min(260, (mult - 1) * 18);
-  audio.engineOsc.frequency.setTargetAtTime(f, t, 0.08);
-
-  const engVol = 0.22 + Math.min(0.16, (mult - 1) * 0.012);
-  audio.engineGain.gain.setTargetAtTime(engVol, t, 0.12);
-
-  const windF = 40 + Math.min(120, (mult - 1) * 6);
-  audio.windOsc.frequency.setTargetAtTime(windF, t, 0.12);
-
-  const windVol = 0.09 + Math.min(0.11, (mult - 1) * 0.006);
-  audio.windGain.gain.setTargetAtTime(windVol, t, 0.18);
+  if (!game.soundOn) return false;
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    master = audioCtx.createGain();
+    master.gain.value = 0.7;
+    master.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return true;
 }
 
 function stopEngine() {
-  if (!audio.engineOsc) return;
-  const t = audio.ctx.currentTime;
-  audio.engineGain.gain.setTargetAtTime(0.0001, t, 0.05);
-  audio.windGain.gain.setTargetAtTime(0.0001, t, 0.05);
-
-  // стоп чуть позже, чтобы не щёлкало
-  audio.engineOsc.stop(t + 0.12);
-  audio.windOsc.stop(t + 0.12);
-
-  audio.engineOsc = null;
-  audio.engineGain = null;
-  audio.windOsc = null;
-  audio.windGain = null;
+  try {
+    if (engineOsc) engineOsc.stop();
+  } catch {}
+  try {
+    if (windOsc) windOsc.stop();
+  } catch {}
+  engineOsc = null;
+  windOsc = null;
+  engineGain = null;
+  windGain = null;
 }
 
-function crashBoom() {
-  if (!audio.enabled) return;
-  const t0 = audio.ctx.currentTime;
+function startEngine() {
+  if (!ensureAudio()) return;
+  stopEngine();
 
-  const o = audio.ctx.createOscillator();
-  const g = audio.ctx.createGain();
-  const lp = audio.ctx.createBiquadFilter();
+  // Engine tone (saw) + wind (triangle)
+  engineOsc = audioCtx.createOscillator();
+  engineOsc.type = "sawtooth";
+  engineGain = audioCtx.createGain();
+  engineGain.gain.value = 0.0001;
 
-  o.type = "square";
-  o.frequency.setValueAtTime(180, t0);
-  o.frequency.exponentialRampToValueAtTime(60, t0 + 0.28);
+  windOsc = audioCtx.createOscillator();
+  windOsc.type = "triangle";
+  windGain = audioCtx.createGain();
+  windGain.gain.value = 0.0001;
 
+  // filters for nicer sound
+  const lp = audioCtx.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.setValueAtTime(700, t0);
+  lp.frequency.value = 900;
 
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(0.45, t0 + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32);
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 80;
 
-  o.connect(lp);
-  lp.connect(g);
-  g.connect(audio.master);
+  engineOsc.connect(engineGain);
+  windOsc.connect(windGain);
 
-  o.start(t0);
-  o.stop(t0 + 0.34);
+  engineGain.connect(lp);
+  windGain.connect(hp);
+
+  lp.connect(master);
+  hp.connect(master);
+
+  engineOsc.frequency.value = 90;
+  windOsc.frequency.value = 220;
+
+  engineOsc.start();
+  windOsc.start();
+
+  // Fade-in
+  const now = audioCtx.currentTime;
+  engineGain.gain.setValueAtTime(0.0001, now);
+  engineGain.gain.exponentialRampToValueAtTime(0.10, now + 0.25);
+
+  windGain.gain.setValueAtTime(0.0001, now);
+  windGain.gain.exponentialRampToValueAtTime(0.03, now + 0.30);
 }
 
-// ---------- Controls ----------
-document.querySelectorAll(".chip").forEach((b) => {
-  b.addEventListener("click", () => {
-    const val = b.dataset.bet;
-    if (val === "max") {
-      betInput.value = String(wallet.coins);
+function updateEngine(mult) {
+  if (!audioCtx || !engineOsc || !windOsc || !engineGain || !windGain) return;
+
+  const now = audioCtx.currentTime;
+  // scale frequencies with multiplier (pleasant)
+  const eFreq = Math.min(520, 90 + Math.log(mult + 1) * 140);
+  const wFreq = Math.min(900, 220 + Math.log(mult + 1) * 220);
+
+  engineOsc.frequency.setTargetAtTime(eFreq, now, 0.06);
+  windOsc.frequency.setTargetAtTime(wFreq, now, 0.08);
+
+  const eGain = Math.min(0.16, 0.09 + Math.log(mult + 1) * 0.03);
+  const wGain = Math.min(0.06, 0.03 + Math.log(mult + 1) * 0.02);
+
+  engineGain.gain.setTargetAtTime(eGain, now, 0.10);
+  windGain.gain.setTargetAtTime(wGain, now, 0.12);
+}
+
+function playCrash() {
+  if (!ensureAudio()) return;
+
+  // quick burst noise-like crash using square + filter sweep
+  const osc = audioCtx.createOscillator();
+  osc.type = "square";
+  const g = audioCtx.createGain();
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 1400;
+  bp.Q.value = 1.2;
+
+  osc.connect(g);
+  g.connect(bp);
+  bp.connect(master);
+
+  const now = audioCtx.currentTime;
+  osc.frequency.setValueAtTime(180, now);
+  osc.frequency.exponentialRampToValueAtTime(60, now + 0.25);
+
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.20, now + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+
+  bp.frequency.setValueAtTime(1800, now);
+  bp.frequency.exponentialRampToValueAtTime(500, now + 0.28);
+
+  osc.start(now);
+  osc.stop(now + 0.40);
+}
+
+/* ---------- Controls wiring ---------- */
+function clampBet() {
+  if (!elBetInput) return 0;
+  let v = Math.floor(Number(elBetInput.value) || 0);
+  if (v < 1) v = 1;
+  if (v > wallet.coins) v = wallet.coins;
+  elBetInput.value = String(v);
+  return v;
+}
+
+function setBet(v) {
+  if (!elBetInput) return;
+  elBetInput.value = String(v);
+  clampBet();
+}
+
+function renderBetUI() {
+  const b = clampBet();
+  game.bet = b;
+
+  if (elMyBet) {
+    elMyBet.textContent = game.inRound ? `${game.bet} 🪙` : "—";
+  }
+
+  // button states
+  if (elJoin) {
+    if (game.state === STATE.WAIT) {
+      elJoin.disabled = false;
+      elJoin.textContent = game.inRound ? "В раунде (ждёшь)" : "Войти в раунд";
     } else {
-      betInput.value = String(val);
+      elJoin.disabled = true;
+      elJoin.textContent = "Вход закрыт";
     }
-    clampBetToBalance();
-    syncBetStateText();
+  }
+
+  if (elCash) {
+    elCash.disabled = !(game.state === STATE.FLY && game.inRound && !game.cashed);
+  }
+}
+
+if (elBetInput) {
+  elBetInput.addEventListener("input", () => {
+    clampBet();
+    renderBetUI();
   });
-});
+}
 
-$("betMinus").onclick = () => {
-  betInput.value = String((Number(betInput.value) || 1) - 10);
-  clampBetToBalance();
-  syncBetStateText();
-};
-$("betPlus").onclick = () => {
-  betInput.value = String((Number(betInput.value) || 1) + 10);
-  clampBetToBalance();
-  syncBetStateText();
-};
-betInput.oninput = () => {
-  clampBetToBalance();
-  syncBetStateText();
-};
+if (elMinus) elMinus.onclick = () => { setBet((Number(elBetInput.value)||1) - 10); renderBetUI(); };
+if (elPlus)  elPlus.onclick  = () => { setBet((Number(elBetInput.value)||1) + 10); renderBetUI(); };
 
-bonusBtn.onclick = () => addCoins(1000);
+if (elBonus) elBonus.onclick = () => addCoins(1000);
 
-soundBtn.onclick = async () => {
-  ensureAudio();
-  // важно: резюм контекста только по клику
-  if (audio.ctx.state === "suspended") await audio.ctx.resume();
-  setSoundEnabled(!audio.enabled);
-};
+if (elSound) {
+  elSound.onclick = () => {
+    game.soundOn = !game.soundOn;
+    elSound.textContent = game.soundOn ? "Звук: on" : "Звук: off";
+    if (!game.soundOn) stopEngine();
+    else ensureAudio();
+  };
+  elSound.textContent = game.soundOn ? "Звук: on" : "Звук: off";
+}
 
-// ---------- Betting logic ----------
-function syncBetStateText() {
-  const bet = clampBetToBalance();
-  state.bet = bet;
+if (elChips) {
+  elChips.innerHTML = BET_PRESETS.map(v => `<button class="chip" data-v="${v}">${v}</button>`).join("") +
+    `<button class="chip" data-v="max">MAX</button>`;
 
-  if (!state.joined) {
-    myBetText.textContent = "—";
-    myStateText.textContent = "не в раунде";
+  elChips.querySelectorAll(".chip").forEach((btn) => {
+    btn.onclick = () => {
+      const dv = btn.getAttribute("data-v");
+      if (dv === "max") setBet(wallet.coins);
+      else setBet(Number(dv));
+      renderBetUI();
+    };
+  });
+}
+
+if (elJoin) {
+  elJoin.onclick = () => {
+    // must be in WAIT
+    if (game.state !== STATE.WAIT) return;
+
+    const b = clampBet();
+    if (b <= 0) return;
+    if (b > wallet.coins) return alert("Недостаточно монет");
+
+    game.inRound = true;
+    game.cashed = false;
+    game.bet = b;
+    renderBetUI();
+  };
+}
+
+if (elCash) {
+  elCash.onclick = () => {
+    if (!(game.state === STATE.FLY && game.inRound && !game.cashed)) return;
+
+    game.cashed = true;
+    const payout = Math.floor(game.bet * game.mult);
+    addCoins(payout);
+
+    // show small message in center
+    if (elCenterSmall) elCenterSmall.textContent = `✅ Забрал: +${payout} 🪙`;
+    renderBetUI();
+  };
+}
+
+/* ---------- Multiplier growth model ---------- */
+function multAtTime(t) {
+  // smooth growth; feels like crash games
+  // (t in seconds)
+  return 1 + (t * 0.90) + (t * t * 0.18);
+}
+
+/* ---------- Dynamic scaling (keeps rocket inside) ---------- */
+function updateScaleTargets(t, mult) {
+  // target yMax around crashPoint, but also follow current mult
+  const desiredY = Math.max(3.0, Math.min(500, Math.max(mult * 1.15, game.crashPoint * 1.08)));
+  game.scale.yMaxTarget = desiredY;
+
+  // time window: make sure x doesn't run away
+  // estimate crash time roughly by solving multAtTime(t)=crashPoint
+  // for our polynomial 1 + 0.9t + 0.18t^2 = cp
+  const cp = game.crashPoint;
+  const A = 0.18, B = 0.90, C = 1 - cp;
+  const disc = Math.max(0, B*B - 4*A*C);
+  const tCrash = (-B + Math.sqrt(disc)) / (2*A);
+  const desiredX = Math.max(3.8, Math.min(14, tCrash * 1.10));
+  game.scale.xMaxTarget = desiredX;
+
+  // smooth lerp
+  game.scale.yMax += (game.scale.yMaxTarget - game.scale.yMax) * 0.06;
+  game.scale.xMax += (game.scale.xMaxTarget - game.scale.xMax) * 0.06;
+}
+
+/* ---------- Drawing ---------- */
+function clearChart() {
+  if (!ctx || !canvas) return;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+}
+
+function drawCurveAndRocket() {
+  if (!ctx || !canvas) return;
+
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+
+  // margins inside chart
+  const padL = 18, padR = 18, padT = 18, padB = 22;
+  const X0 = padL, Y0 = padT;
+  const X1 = w - padR, Y1 = h - padB;
+  const CW = X1 - X0, CH = Y1 - Y0;
+
+  // background vignette inside canvas (soft)
+  ctx.save();
+  const g = ctx.createRadialGradient(w*0.5, h*0.25, 10, w*0.5, h*0.25, w*0.9);
+  g.addColorStop(0, "rgba(76,125,255,0.10)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,w,h);
+  ctx.restore();
+
+  // build points (recompute based on current scale)
+  const xMax = game.scale.xMax;
+  const yMax = game.scale.yMax;
+
+  const pts = game.points.map(p => {
+    const xn = Math.min(1, p.t / xMax);
+    const yn = Math.min(1, p.m / yMax);
+    const x = X0 + xn * CW;
+    const y = Y1 - yn * CH; // invert
+    return { x, y, t: p.t, m: p.m };
+  });
+
+  // curve
+  if (pts.length >= 2) {
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    // glow
+    ctx.strokeStyle = "rgba(255,91,102,.18)";
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+
+    // main line
+    ctx.strokeStyle = "rgba(255,91,102,.92)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+
+    // rocket at last point
+    const last = pts[pts.length - 1];
+    const prev = pts[pts.length - 2];
+
+    // direction vector -> angle
+    const dx = last.x - prev.x;
+    const dy = last.y - prev.y;
+    const ang = Math.atan2(dy, dx); // canvas angle
+
+    // keep inside bounds
+    const rx = Math.min(X1, Math.max(X0, last.x));
+    const ry = Math.min(Y1, Math.max(Y0, last.y));
+
+    game.rocket.x = rx;
+    game.rocket.y = ry;
+    game.rocket.angle = ang;
+
+    drawRocket(rx, ry, ang);
   } else {
-    myBetText.textContent = `${state.joinedBet} 🪙`;
-    myStateText.textContent = state.phase === PHASE.FLY ? "в раунде" : "ждёшь старт";
+    // initial rocket position near bottom-left (waiting)
+    const rx = X0 + 6;
+    const ry = Y1 - 6;
+    drawRocket(rx, ry, -0.2);
   }
 }
 
-joinBtn.onclick = () => {
-  const bet = clampBetToBalance();
-  if (bet <= 0) return;
+function drawRocket(x, y, ang) {
+  if (!ctx) return;
 
-  if (state.phase !== PHASE.WAIT) {
-    // Вход только в ожидании
-    pulseHint("Вход закрыт. Жди следующий раунд.");
-    return;
-  }
-  if (state.joined) {
-    pulseHint("Ты уже в раунде.");
-    return;
-  }
-  if (bet > wallet.coins) {
-    pulseHint("Недостаточно монет.");
-    return;
-  }
+  // style: simple 2D rocket (opaque)
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
 
-  addCoins(-bet);
-  state.joined = true;
-  state.joinedBet = bet;
-  state.cashed = false;
+  // trail glow behind
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = "rgba(76,125,255,.55)";
+  ctx.beginPath();
+  ctx.ellipse(-18, 0, 22, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
-  syncBetStateText();
-  pulseHint(`Вошёл в раунд: ставка ${bet} 🪙`);
-};
+  // flame
+  ctx.save();
+  ctx.fillStyle = "rgba(255,170,60,.95)";
+  ctx.beginPath();
+  ctx.moveTo(-16, 0);
+  ctx.quadraticCurveTo(-28, -6, -34, 0);
+  ctx.quadraticCurveTo(-28, 6, -16, 0);
+  ctx.fill();
 
-cashBtn.onclick = () => {
-  if (state.phase !== PHASE.FLY) return;
-  if (!state.joined || state.cashed) return;
+  ctx.fillStyle = "rgba(255,70,70,.85)";
+  ctx.beginPath();
+  ctx.moveTo(-18, 0);
+  ctx.quadraticCurveTo(-26, -4, -30, 0);
+  ctx.quadraticCurveTo(-26, 4, -18, 0);
+  ctx.fill();
+  ctx.restore();
 
-  state.cashed = true;
-  state.phase = PHASE.CRASH; // фиксируем раунд как завершенный для игрока
+  // body
+  ctx.save();
+  ctx.fillStyle = "rgba(240,245,255,.98)";
+  ctx.strokeStyle = "rgba(255,255,255,.22)";
+  ctx.lineWidth = 1;
+
+  // main capsule
+  ctx.beginPath();
+  ctx.moveTo(10, 0);
+  ctx.quadraticCurveTo(6, -10, -6, -10);
+  ctx.lineTo(-10, -6);
+  ctx.lineTo(-10, 6);
+  ctx.lineTo(-6, 10);
+  ctx.quadraticCurveTo(6, 10, 10, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // window
+  ctx.fillStyle = "rgba(30,60,120,.95)";
+  ctx.beginPath();
+  ctx.arc(1, -2, 3.4, 0, Math.PI*2);
+  ctx.fill();
+
+  // fin
+  ctx.fillStyle = "rgba(200,210,230,.95)";
+  ctx.beginPath();
+  ctx.moveTo(-6, 8);
+  ctx.lineTo(-14, 12);
+  ctx.lineTo(-10, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.restore();
+}
+
+/* ---------- UI status updates ---------- */
+function setStatus(status, hint) {
+  if (elStatus) elStatus.textContent = status;
+  if (elCenterSmall) elCenterSmall.textContent = hint || "";
+}
+
+function setMult(v) {
+  if (elMult) elMult.textContent = `x${v.toFixed(2)}`;
+  if (elCenterBig) elCenterBig.textContent = `${v.toFixed(2)}x`;
+}
+
+/* ---------- Round loop ---------- */
+function startNewWait() {
+  cancelAnimationFrame(game.raf);
   stopEngine();
 
-  const payout = Math.floor(state.joinedBet * state.mult);
-  addCoins(payout);
+  game.state = STATE.WAIT;
+  game.waitLeftMs = game.countdownMs;
 
-  statusText.textContent = "Забрал";
-  countText.textContent = `+${payout} 🪙`;
-  myStateText.textContent = "вышел";
-  cashBtn.disabled = true;
-  joinBtn.disabled = true;
+  game.inRound = false;
+  game.cashed = false;
+  game.mult = 1.0;
+  game.points = [{ t: 0, m: 1.0 }];
 
-  // через чуть-чуть перейдём к ожиданию следующего раунда
-  setTimeout(() => newRound(), 900);
-};
+  game.crashPoint = rollCrashPoint();
 
-// ---------- Hints (без истории) ----------
-let hintTimer = null;
-function pulseHint(msg) {
-  const el = $("betHint");
-  el.textContent = msg;
-  if (hintTimer) clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => (el.textContent = "Монеты виртуальные, без вывода."), 1800);
+  // reset scale (but not too jumpy)
+  game.scale.yMax = 4;
+  game.scale.xMax = 6.0;
+  game.scale.yMaxTarget = 4;
+  game.scale.xMaxTarget = 6.0;
+
+  setMult(1.0);
+  setStatus("Ожидание", `Старт через ${(game.waitLeftMs/1000).toFixed(0)}с`);
+  renderBetUI();
+  renderBalance();
+  drawFrameStatic();
+  waitTick();
 }
 
-// ---------- Round flow ----------
-let rafId = null;
-let lastFrame = 0;
+function waitTick() {
+  const start = performance.now();
 
-function newRound() {
-  state.phase = PHASE.WAIT;
-  state.waitLeft = 3; // коротко, чтобы не бесило
-  state.startAt = performance.now();
+  const step = () => {
+    const now = performance.now();
+    const dt = now - start;
 
-  state.t = 0;
-  state.mult = 1.0;
-  state.crashPoint = genCrashPoint();
-  state.crashed = false;
+    // compute left based on time since first tick call
+    // to avoid drift, we keep decrement by animation delta
+  };
+}
 
-  state.points = [{ t: 0, m: 1.0 }];
+function drawFrameStatic() {
+  clearChart();
+  drawCurveAndRocket();
+}
 
-  // игрок остаётся joined, если вошёл — иначе нет
-  if (state.joined) {
-    // он уже оплатил ставку, ждёт старт
-    state.cashed = false;
-  } else {
-    state.joinedBet = 0;
+/* Countdown uses RAF so it's smooth */
+function runCountdown() {
+  const tStart = performance.now();
+
+  const loop = (t) => {
+    const elapsed = t - tStart;
+    const left = Math.max(0, game.countdownMs - elapsed);
+    game.waitLeftMs = left;
+
+    setMult(1.0);
+    setStatus("Ожидание", `Старт через ${Math.ceil(left/1000)}с`);
+    renderBetUI();
+
+    drawFrameStatic();
+
+    if (left <= 0) {
+      startFlight();
+      return;
+    }
+    game.raf = requestAnimationFrame(loop);
+  };
+
+  game.raf = requestAnimationFrame(loop);
+}
+
+function startFlight() {
+  cancelAnimationFrame(game.raf);
+
+  game.state = STATE.FLY;
+  game.mult = 1.0;
+  game.t0 = performance.now();
+  game.points = [{ t: 0, m: 1.0 }];
+
+  // if user joined — take bet now
+  if (game.inRound) {
+    // validate again
+    const b = Math.floor(Number(elBetInput?.value) || game.bet || 0);
+    if (b > 0 && b <= wallet.coins) {
+      game.bet = b;
+      addCoins(-b);
+    } else {
+      // can't afford => kicked from round
+      game.inRound = false;
+      game.cashed = false;
+    }
   }
 
-  joinBtn.disabled = false;
-  cashBtn.disabled = true;
+  setStatus("Полёт", game.inRound ? "Можно забрать" : "Ты не в раунде");
+  setMult(1.0);
+  renderBetUI();
+  renderBalance();
 
-  renderTexts();
-  draw();
+  // start engine sound (needs user gesture sometimes; but sound toggle click counts)
+  startEngine();
+
+  flightLoop();
 }
 
-function startFly() {
-  state.phase = PHASE.FLY;
-  state.t = 0;
-  state.mult = 1.0;
-  state.points = [{ t: 0, m: 1.0 }];
-  lastFrame = performance.now();
-
-  if (audio.enabled) {
-    beepLaunch();
-    startEngine();
-  }
-
-  renderTexts();
-  loop();
-}
-
-function crashEnd() {
-  state.phase = PHASE.CRASH;
-  state.crashed = true;
+function startCrash(finalMult) {
+  game.state = STATE.CRASH;
 
   stopEngine();
-  crashBoom();
+  playCrash();
 
-  // если игрок был в раунде и НЕ успел забрать — проигрыш
-  if (state.joined && !state.cashed) {
-    myStateText.textContent = "проиграл";
-  }
+  setMult(finalMult);
+  setStatus("Краш", "💥 Ракета улетела");
 
-  renderTexts();
-  draw();
+  // if user was in round and not cashed => lose bet (already deducted)
+  // just lock cash button
+  renderBetUI();
+  drawFrameStatic();
 
+  // small pause then next wait
   setTimeout(() => {
-    // после краша игрок выходит из раунда автоматически
-    state.joined = false;
-    state.joinedBet = 0;
-    state.cashed = false;
-    syncBetStateText();
-    newRound();
+    startNewWait();
+    runCountdown();
   }, 1400);
 }
 
-// ---------- Multiplier curve ----------
-function computeMultiplier(t) {
-  // мягкая кривая роста (как crash-игры)
-  // mult = 1 + a*t + b*t^2
-  const a = 0.75;
-  const b = 0.12;
-  return 1 + a * t + b * t * t;
-}
+function flightLoop() {
+  const loop = (t) => {
+    const dt = (t - game.t0) / 1000; // seconds
+    const m = multAtTime(dt);
 
-// ---------- Main loop ----------
-function loop() {
-  cancelAnimationFrame(rafId);
+    game.mult = m;
 
-  rafId = requestAnimationFrame(() => {
-    if (state.phase !== PHASE.FLY) return;
+    updateScaleTargets(dt, m);
 
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - lastFrame) / 1000);
-    lastFrame = now;
-
-    state.t += dt;
-    state.mult = computeMultiplier(state.t);
-
-    // добавляем точки реже, чтобы красиво и не тяжело
-    const last = state.points[state.points.length - 1];
-    if (!last || state.t - last.t >= 0.06) {
-      state.points.push({ t: state.t, m: state.mult });
+    // store point
+    const last = game.points[game.points.length - 1];
+    // avoid too many points
+    if (!last || dt - last.t >= 0.05) {
+      game.points.push({ t: dt, m });
+      if (game.points.length > 400) game.points.shift();
     }
 
-    if (audio.enabled) updateEngine(state.mult);
+    // update UI
+    setMult(m);
+    setStatus("Полёт", game.inRound ? (game.cashed ? "✅ Уже забрал" : "Можно забрать") : "Ты не в раунде");
+    renderBetUI();
 
-    // crash?
-    if (state.mult >= state.crashPoint) {
-      state.mult = state.crashPoint;
-      state.points.push({ t: state.t, m: state.mult });
-      crashEnd();
+    // update sound
+    updateEngine(m);
+
+    // draw
+    clearChart();
+    drawCurveAndRocket();
+
+    // crash check
+    if (m >= game.crashPoint) {
+      // freeze at crash point
+      const finalMult = game.crashPoint;
+
+      // push final point for clean end
+      const tFinal = dt;
+      game.points.push({ t: tFinal, m: finalMult });
+
+      startCrash(finalMult);
       return;
     }
 
-    renderTexts();
-    draw();
-    loop();
-  });
+    game.raf = requestAnimationFrame(loop);
+  };
+
+  game.raf = requestAnimationFrame(loop);
 }
 
-// ---------- Render texts/buttons ----------
-function renderTexts() {
-  multText.textContent = `x${state.mult.toFixed(2)}`;
-
-  if (state.phase === PHASE.WAIT) {
-    statusText.textContent = "Ожидание";
-    const elapsed = (performance.now() - state.startAt) / 1000;
-    const left = Math.max(0, state.waitLeft - elapsed);
-    countText.textContent = `Старт через ${Math.ceil(left)}с`;
-    phaseHint.textContent = "Новый раунд скоро";
-
-    centerBig.textContent = "1.00x";
-    centerSmall.textContent = `Ожидание следующего раунда (${Math.ceil(left)}с)`;
-
-    joinBtn.textContent = state.joined ? "В раунде (ждёшь)" : "Войти в раунд";
-    joinBtn.disabled = false;
-    cashBtn.disabled = true;
-
-  } else if (state.phase === PHASE.FLY) {
-    statusText.textContent = "Полёт";
-    countText.textContent = "Можно забрать";
-    phaseHint.textContent = "Ракета летит…";
-
-    centerBig.textContent = `${state.mult.toFixed(2)}x`;
-    centerSmall.textContent = state.joined ? "Ты в раунде" : "Ты не в раунде";
-
-    joinBtn.textContent = "Вход закрыт";
-    joinBtn.disabled = true;
-
-    cashBtn.disabled = !(state.joined && !state.cashed);
-    cashBtn.textContent = state.joined && !state.cashed ? "Забрать" : "—";
-
-  } else {
-    statusText.textContent = "Краш";
-    countText.textContent = `x${state.mult.toFixed(2)}`;
-    phaseHint.textContent = "Раунд завершён";
-
-    centerBig.textContent = `${state.mult.toFixed(2)}x`;
-    centerSmall.textContent = "Ракета улетела";
-
-    joinBtn.disabled = true;
-    cashBtn.disabled = true;
-  }
-
-  if (!state.joined) {
-    myBetText.textContent = "—";
-    myStateText.textContent = "не в раунде";
-  } else {
-    myBetText.textContent = `${state.joinedBet} 🪙`;
-    myStateText.textContent =
-      state.phase === PHASE.FLY ? (state.cashed ? "вышел" : "в раунде") : "ждёшь старт";
-  }
+/* ---------- Start ---------- */
+function initDefaults() {
+  if (elBetInput && !elBetInput.value) elBetInput.value = "100";
+  clampBet();
+  renderBetUI();
+  renderBalance();
+  setMult(1.0);
+  setStatus("Ожидание", "Старт скоро");
+  drawFrameStatic();
 }
 
-// ---------- Drawing helpers ----------
-function roundedRectPath(ctx, x, y, w, h, r) {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-
-// ---------- Rocket sprite (2D) ----------
-function drawRocket(ctx, x, y, angleRad, scale = 1) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angleRad);
-  ctx.scale(scale, scale);
-
-  // корпус
-  ctx.globalAlpha = 0.95;
-  ctx.fillStyle = "rgba(245,248,255,0.92)";
-  ctx.strokeStyle = "rgba(255,255,255,0.20)";
-  ctx.lineWidth = 1;
-
-  // тело
-  roundedRectPath(ctx, -10, -22, 20, 44, 10);
-  ctx.fill();
-  ctx.stroke();
-
-  // иллюминатор
-  ctx.fillStyle = "rgba(30,80,170,0.35)";
-  ctx.beginPath();
-  ctx.arc(0, -4, 6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // нос
-  ctx.fillStyle = "rgba(235,240,255,0.95)";
-  ctx.beginPath();
-  ctx.moveTo(-10, -22);
-  ctx.lineTo(0, -36);
-  ctx.lineTo(10, -22);
-  ctx.closePath();
-  ctx.fill();
-
-  // крылья
-  ctx.fillStyle = "rgba(255,90,90,0.55)";
-  ctx.beginPath();
-  ctx.moveTo(-10, 6);
-  ctx.lineTo(-22, 16);
-  ctx.lineTo(-10, 16);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(10, 6);
-  ctx.lineTo(22, 16);
-  ctx.lineTo(10, 16);
-  ctx.closePath();
-  ctx.fill();
-
-  // огонь
-  ctx.globalAlpha = 0.85;
-  const flame = ctx.createLinearGradient(0, 22, 0, 44);
-  flame.addColorStop(0, "rgba(255,230,140,0.95)");
-  flame.addColorStop(0.5, "rgba(255,130,60,0.75)");
-  flame.addColorStop(1, "rgba(255,60,60,0.0)");
-  ctx.fillStyle = flame;
-  ctx.beginPath();
-  ctx.moveTo(-6, 22);
-  ctx.quadraticCurveTo(0, 34, 6, 22);
-  ctx.quadraticCurveTo(0, 48, -6, 22);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.restore();
-}
-
-// ---------- Draw chart ----------
-function draw() {
-  resizeCanvas();
-
-  const w = canvas.getBoundingClientRect().width;
-  const h = canvas.getBoundingClientRect().height;
-
-  // panel background
-  ctx.clearRect(0, 0, w, h);
-
-  // background gradient
-  const bg = ctx.createLinearGradient(0, 0, w, h);
-  bg.addColorStop(0, "rgba(10,18,40,0.85)");
-  bg.addColorStop(1, "rgba(7,12,28,0.85)");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, w, h);
-
-  // grid area padding
-  const pad = 16;
-  const gx = pad, gy = pad, gw = w - pad * 2, gh = h - pad * 2;
-
-  // inner border
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
-  ctx.lineWidth = 1;
-  roundedRectPath(ctx, gx, gy, gw, gh, 12);
-  ctx.stroke();
-
-  // grid
-  ctx.save();
-  ctx.beginPath();
-  roundedRectPath(ctx, gx, gy, gw, gh, 12);
-  ctx.clip();
-
-  const gridCols = 7;
-  const gridRows = 5;
-  ctx.strokeStyle = "rgba(255,255,255,0.07)";
-  for (let i = 1; i < gridCols; i++) {
-    const x = gx + (gw * i) / gridCols;
-    ctx.beginPath();
-    ctx.moveTo(x, gy);
-    ctx.lineTo(x, gy + gh);
-    ctx.stroke();
-  }
-  for (let j = 1; j < gridRows; j++) {
-    const y = gy + (gh * j) / gridRows;
-    ctx.beginPath();
-    ctx.moveTo(gx, y);
-    ctx.lineTo(gx + gw, y);
-    ctx.stroke();
-  }
-
-  // ---------- autoscale so rocket never leaves chart ----------
-  const pts = state.points.length ? state.points : [{ t: 0, m: 1 }];
-  const maxT = Math.max(1.6, pts[pts.length - 1].t); // по времени
-  const maxM = Math.max(2.2, pts[pts.length - 1].m); // по множителю
-
-  // даём "воздух", чтобы не прижималось к краю
-  const tMax = maxT * 1.05;
-  const mMax = maxM * 1.08;
-
-  // mapping: t -> x ; m -> y (inverted)
-  function X(t) {
-    return gx + (t / tMax) * gw;
-  }
-  function Y(m) {
-    const clamped = Math.min(mMax, Math.max(1, m));
-    const norm = (clamped - 1) / (mMax - 1);
-    return gy + gh - norm * gh;
-  }
-
-  // line path
-  ctx.lineWidth = 3;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  const grad = ctx.createLinearGradient(gx, gy + gh, gx + gw, gy);
-  grad.addColorStop(0, "rgba(255,80,80,0.0)");
-  grad.addColorStop(0.25, "rgba(255,90,90,0.65)");
-  grad.addColorStop(1, "rgba(255,110,110,0.95)");
-  ctx.strokeStyle = grad;
-
-  ctx.beginPath();
-  for (let i = 0; i < pts.length; i++) {
-    const p = pts[i];
-    const x = X(p.t);
-    const y = Y(p.m);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-
-  // soft fill under curve (like crash games)
-  ctx.globalAlpha = 0.22;
-  const fillGrad = ctx.createLinearGradient(gx, gy, gx, gy + gh);
-  fillGrad.addColorStop(0, "rgba(255,90,90,0.45)");
-  fillGrad.addColorStop(1, "rgba(255,90,90,0.0)");
-  ctx.fillStyle = fillGrad;
-  ctx.beginPath();
-  ctx.moveTo(X(pts[0].t), gy + gh);
-  for (let i = 0; i < pts.length; i++) {
-    ctx.lineTo(X(pts[i].t), Y(pts[i].m));
-  }
-  ctx.lineTo(X(pts[pts.length - 1].t), gy + gh);
-  ctx.closePath();
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // rocket at last point (ALWAYS inside square)
-  const last = pts[pts.length - 1];
-  const rx = X(last.t);
-  const ry = Y(last.m);
-
-  // angle based on recent slope
-  let ang = -Math.PI / 6;
-  if (pts.length >= 2) {
-    const p0 = pts[Math.max(0, pts.length - 6)];
-    const dx = X(last.t) - X(p0.t);
-    const dy = Y(last.m) - Y(p0.m);
-    ang = Math.atan2(dy, dx);
-  }
-
-  // clamp rocket position to inside padding (so it never clips)
-  const margin = 22;
-  const crx = Math.min(gx + gw - margin, Math.max(gx + margin, rx));
-  const cry = Math.min(gy + gh - margin, Math.max(gy + margin, ry));
-
-  // small glow
-  ctx.save();
-  ctx.globalAlpha = 0.55;
-  ctx.fillStyle = "rgba(255,160,120,0.35)";
-  ctx.beginPath();
-  ctx.arc(crx, cry, 14, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  drawRocket(ctx, crx, cry, ang, 0.95);
-
-  ctx.restore();
-}
-
-// ---------- Timer for WAIT phase ----------
-let waitTimer = null;
-
-function tickWait() {
-  const elapsed = (performance.now() - state.startAt) / 1000;
-  const left = Math.max(0, state.waitLeft - elapsed);
-
-  // обновляем текст и рисуем
-  renderTexts();
-  draw();
-
-  if (left <= 0) {
-    clearInterval(waitTimer);
-    waitTimer = null;
-    startFly();
-  }
-}
-
-// ---------- Init / start ----------
-function start() {
-  // init bet
-  clampBetToBalance();
-  syncBetStateText();
-
-  resizeCanvas();
-
-  // стартуем первый раунд
-  newRound();
-
-  // запускаем таймер ожидания
-  if (waitTimer) clearInterval(waitTimer);
-  waitTimer = setInterval(tickWait, 200);
-}
-
-function newRound() {
-  state.phase = PHASE.WAIT;
-  state.waitLeft = 3;
-  state.startAt = performance.now();
-
-  state.t = 0;
-  state.mult = 1.0;
-  state.crashPoint = genCrashPoint();
-  state.crashed = false;
-
-  state.points = [{ t: 0, m: 1.0 }];
-
-  joinBtn.disabled = false;
-  cashBtn.disabled = true;
-
-  renderTexts();
-  draw();
-}
-
-// ---------- Boot ----------
-start();
+/* IMPORTANT:
+   Autostart countdown immediately */
+initDefaults();
+startNewWait();
+runCountdown();
