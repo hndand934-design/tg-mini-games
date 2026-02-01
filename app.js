@@ -1,6 +1,7 @@
-// =====================================================
-// Rocket Crash — ONLY MODE (никаких других режимов)
-// =====================================================
+// ===============================
+// Rocket Crash — ONLY Crash mode
+// webapp/app.js
+// ===============================
 
 // --- RNG (честный) ---
 function randFloat() {
@@ -8,28 +9,23 @@ function randFloat() {
   crypto.getRandomValues(a);
   return a[0] / 2 ** 32;
 }
-function sampleCrashPoint() {
-  // длинный хвост (как демо), режем верх чтобы UI не улетал
+
+// heavy-tail crash point (demo fair RNG). later можем сделать provably-fair seed/hash
+function genCrashPoint() {
   const r = randFloat();
-  const raw = 1 / (1 - r);
-  return Math.max(1.05, Math.min(raw, 50));
+  const cp = 1 / (1 - r);
+  return Math.min(Math.max(1.05, cp), 60);
 }
 
-// --- Telegram ---
+// --- Telegram WebApp init ---
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
 }
 
-// --- Elements ---
-const userEl = document.getElementById("user");
-const balancePill = document.getElementById("balancePill");
-const soundBtn = document.getElementById("soundBtn");
-const screenEl = document.getElementById("screen");
-
-// --- Virtual coins ---
-const WALLET_KEY = "wallet_crash_only_v1";
+// --- Wallet (virtual coins, local) ---
+const WALLET_KEY = "rocket_wallet_v1";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -47,184 +43,18 @@ function setCoins(v) {
   saveWallet(wallet);
   renderTop();
 }
-function addCoins(d) { setCoins(wallet.coins + d); }
-
-function renderTop() {
-  const user = tg?.initDataUnsafe?.user;
-  userEl.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
-  balancePill.textContent = `🪙 ${wallet.coins}`;
+function addCoins(d) {
+  setCoins(wallet.coins + d);
 }
-renderTop();
 
-// --- Sound toggle (UI only) ---
-let soundOn = true;
-soundBtn.onclick = () => {
-  soundOn = !soundOn;
-  soundBtn.textContent = soundOn ? "🔊" : "🔇";
-};
-
-// --- Render Crash UI into #screen ---
-function renderCrashUI() {
-  screenEl.innerHTML = `
-    <div class="card">
-      <div class="layout">
-        <section>
-          <div class="hud">
-            <div class="hudBox">
-              <div class="hudLabel">Множитель</div>
-              <div class="hudValue" id="mult">x1.00</div>
-              <div class="hudSub" id="hint">Ожидание — старт скоро</div>
-            </div>
-
-            <div class="hudBox">
-              <div class="hudLabel">Раунд</div>
-              <div class="hudValue" id="roundStatus">Ожидание</div>
-              <div class="hudSub" id="countdown">Старт через 5с</div>
-            </div>
-
-            <div class="hudBox">
-              <div class="hudLabel">Твоя ставка</div>
-              <div class="hudValue" id="myBet">—</div>
-              <div class="hudSub" id="myState">не в раунде</div>
-            </div>
-          </div>
-
-          <div class="stageWrap">
-            <div class="stage">
-              <div class="sky">
-                <div class="stars"></div>
-                <div class="aurora"></div>
-              </div>
-
-              <div class="rocketWrap" id="rocketWrap">
-                <svg class="rocket" viewBox="0 0 160 240" aria-hidden="true">
-                  <defs>
-                    <linearGradient id="bodyG" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0" stop-color="#f2f6ff"/>
-                      <stop offset="1" stop-color="#c9d6f6"/>
-                    </linearGradient>
-                    <linearGradient id="shadowG" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stop-color="rgba(0,0,0,0.12)"/>
-                      <stop offset="1" stop-color="rgba(0,0,0,0.35)"/>
-                    </linearGradient>
-                    <radialGradient id="flameG" cx="50%" cy="30%" r="70%">
-                      <stop offset="0" stop-color="#fff2a8"/>
-                      <stop offset="0.45" stop-color="#ff9f3b"/>
-                      <stop offset="1" stop-color="#ff3b3b"/>
-                    </radialGradient>
-                  </defs>
-
-                  <ellipse cx="80" cy="222" rx="38" ry="10" fill="rgba(0,0,0,.35)"/>
-
-                  <path d="M80 18
-                           C62 40,52 64,52 94
-                           V166
-                           C52 190,64 206,80 206
-                           C96 206,108 190,108 166
-                           V94
-                           C108 64,98 40,80 18Z"
-                        fill="url(#bodyG)" stroke="rgba(255,255,255,.35)" stroke-width="2"/>
-
-                  <path d="M80 18
-                           C70 34,64 52,64 74
-                           V170
-                           C64 186,70 198,80 206
-                           C90 198,96 186,96 170
-                           V74
-                           C96 52,90 34,80 18Z"
-                        fill="url(#shadowG)" opacity="0.55"/>
-
-                  <circle cx="80" cy="98" r="16" fill="#0b1a3b" stroke="rgba(255,255,255,.35)" stroke-width="3"/>
-                  <circle cx="76" cy="94" r="6" fill="rgba(255,255,255,.35)"/>
-
-                  <path d="M80 18
-                           C70 32,64 46,62 62
-                           C72 58,88 58,98 62
-                           C96 46,90 32,80 18Z"
-                        fill="#e9efff" opacity="0.95"/>
-
-                  <path d="M52 138 L26 168 L52 168 Z" fill="#6da3ff" opacity="0.95"/>
-                  <path d="M108 138 L134 168 L108 168 Z" fill="#6da3ff" opacity="0.95"/>
-
-                  <path d="M64 198 C64 184,96 184,96 198
-                           C96 212,64 212,64 198Z"
-                        fill="#2a3558" opacity="0.95"/>
-
-                  <path d="M80 212
-                           C70 226,72 238,80 238
-                           C88 238,90 226,80 212Z"
-                        fill="url(#flameG)" opacity="0.95"/>
-                </svg>
-
-                <div class="trail" id="trail"></div>
-              </div>
-
-              <div class="ground">
-                <div class="ridge"></div>
-                <div class="village">
-                  <div class="yurt y1"></div>
-                  <div class="yurt y2"></div>
-                  <div class="fire f1"></div>
-                  <div class="fire f2"></div>
-                  <div class="people p1"></div>
-                  <div class="people p2"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="stageBottom">
-              <button class="pillBtn" id="rngBtn">Краш-поинт скрыт (честный RNG)</button>
-            </div>
-          </div>
-        </section>
-
-        <aside class="betCard">
-          <div class="betTop">
-            <div class="betTitle">Ставка</div>
-            <button class="chip ghost" id="bonusBtn">+1000 🪙</button>
-          </div>
-
-          <div class="chips">
-            <button class="chip" data-bet="10">10</button>
-            <button class="chip" data-bet="50">50</button>
-            <button class="chip" data-bet="100">100</button>
-            <button class="chip" data-bet="250">250</button>
-            <button class="chip" data-bet="500">500</button>
-            <button class="chip" data-bet="max">MAX</button>
-          </div>
-
-          <div class="inputRow">
-            <button class="btnSmall" id="betMinus">-</button>
-            <input class="betInput" id="betInput" type="number" min="1" step="1" value="50" />
-            <button class="btnSmall" id="betPlus">+</button>
-          </div>
-
-          <div class="actions">
-            <button class="btn primary" id="joinBtn">Войти в раунд</button>
-            <button class="btn danger" id="cashBtn" disabled>Забрать</button>
-          </div>
-
-          <div class="betHelp">
-            Войти можно только до старта (ожидание). В полёте можно забрать в любой момент.
-            <div class="muted" style="margin-top:6px;">Монеты виртуальные, без вывода.</div>
-          </div>
-        </aside>
-      </div>
-    </div>
-  `;
-}
-renderCrashUI();
-
-// --- Grab UI refs after render ---
-const multEl = document.getElementById("mult");
-const hintEl = document.getElementById("hint");
-const roundStatusEl = document.getElementById("roundStatus");
-const countdownEl = document.getElementById("countdown");
-const myBetEl = document.getElementById("myBet");
-const myStateEl = document.getElementById("myState");
-
-const rocketWrap = document.getElementById("rocketWrap");
-const trail = document.getElementById("trail");
+// --- DOM ---
+const elCoins = document.getElementById("coins");
+const elTgStatus = document.getElementById("tgStatus");
+const elMultText = document.getElementById("multText");
+const elPhaseHint = document.getElementById("phaseHint");
+const elRoundText = document.getElementById("roundText");
+const elMyBetText = document.getElementById("myBetText");
+const elMyStateText = document.getElementById("myStateText");
 
 const betInput = document.getElementById("betInput");
 const joinBtn = document.getElementById("joinBtn");
@@ -232,9 +62,62 @@ const cashBtn = document.getElementById("cashBtn");
 const bonusBtn = document.getElementById("bonusBtn");
 const betMinus = document.getElementById("betMinus");
 const betPlus = document.getElementById("betPlus");
-const rngBtn = document.getElementById("rngBtn");
+const soundBtn = document.getElementById("soundBtn");
 
-// --- Bet helpers ---
+const overlayMsg = document.getElementById("overlayMsg");
+
+const canvas = document.getElementById("chart");
+const ctx = canvas.getContext("2d");
+const rocketEl = document.getElementById("rocket");
+const chartBox = document.getElementById("chartBox");
+
+// --- UI Top ---
+function renderTop() {
+  elCoins.textContent = String(wallet.coins);
+  const user = tg?.initDataUnsafe?.user;
+  elTgStatus.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
+}
+renderTop();
+
+// --- Responsive canvas (retina) ---
+function resizeCanvas() {
+  const rect = chartBox.getBoundingClientRect();
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", () => {
+  resizeCanvas();
+  drawChart(); // перерисовать при ресайзе
+});
+resizeCanvas();
+
+// --- Sound (optional) ---
+let soundOn = false;
+let audioCtx = null;
+function beep(freq = 440, dur = 0.06, vol = 0.05) {
+  if (!soundOn) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + dur);
+  } catch {}
+}
+soundBtn.onclick = () => {
+  soundOn = !soundOn;
+  soundBtn.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+  beep(660, 0.05, 0.05);
+};
+
+// --- Bet controls ---
 function clampBet() {
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
@@ -242,187 +125,389 @@ function clampBet() {
   betInput.value = String(v);
   return v;
 }
+betInput.addEventListener("input", clampBet);
 
-document.querySelectorAll(".chip[data-bet]").forEach((b) => {
+document.querySelectorAll(".chip").forEach((b) => {
   b.onclick = () => {
-    const val = b.dataset.bet;
-    if (val === "max") betInput.value = String(wallet.coins || 1);
-    else betInput.value = String(val);
+    const v = b.dataset.bet;
+    if (v === "max") betInput.value = String(wallet.coins);
+    else betInput.value = String(v);
     clampBet();
   };
 });
-betMinus.onclick = () => { betInput.value = String((Number(betInput.value) || 1) - 10); clampBet(); };
-betPlus.onclick = () => { betInput.value = String((Number(betInput.value) || 1) + 10); clampBet(); };
-betInput.oninput = clampBet;
+betMinus.onclick = () => {
+  betInput.value = String((Number(betInput.value) || 1) - 10);
+  clampBet();
+};
+betPlus.onclick = () => {
+  betInput.value = String((Number(betInput.value) || 1) + 10);
+  clampBet();
+};
+
 bonusBtn.onclick = () => addCoins(1000);
 
-// --- Crash engine ---
-const ROUND = { WAIT:"wait", COUNTDOWN:"countdown", FLY:"fly", CRASHED:"crashed" };
-
-let debugReveal = false;
-
-let state = {
-  phase: ROUND.WAIT,
-  mult: 1.0,
-  crashPoint: sampleCrashPoint(),
-  countdown: 5,
-
-  inRound: false,
-  bet: 0,
-  cashed: false,
-  cashMult: 0,
-
-  startTs: 0,
-  timer: null,
-};
-
-rngBtn.onclick = () => {
-  debugReveal = !debugReveal;
-  rngBtn.textContent = debugReveal
-    ? `Краш-поинт (тест): x${state.crashPoint.toFixed(2)}`
-    : "Краш-поинт скрыт (честный RNG)";
-};
-
-function setRocketByMult(mult) {
-  // 1..20 => 0..-240px
-  const capped = Math.min(mult, 20);
-  const y = -(capped - 1) * 13;
-  rocketWrap.style.transform = `translateX(-50%) translateY(${y}px)`;
-  trail.style.opacity = (state.phase === ROUND.FLY) ? "1" : "0";
+// --- Overlay helpers ---
+function showOverlay(text) {
+  overlayMsg.textContent = text;
+  overlayMsg.style.display = "block";
+}
+function hideOverlay() {
+  overlayMsg.style.display = "none";
+}
+function setRocketVisible(v) {
+  rocketEl.style.opacity = v ? "1" : "0";
+}
+function moveRocket(px, py, rotDeg) {
+  rocketEl.style.transform = `translate(${px}px, ${py}px) rotate(${rotDeg}deg)`;
 }
 
-function renderHUD() {
-  multEl.textContent = `x${state.mult.toFixed(2)}`;
+// --- Curve mapping for 2D flight ---
+function curveXY(p, w, h) {
+  // p: 0..1 along curve
+  const x0 = 60;
+  const y0 = h - 140;
+  const x1 = w - 90;
+  const y1 = 95;
 
-  if (state.phase === ROUND.WAIT) {
-    roundStatusEl.textContent = "Ожидание";
-    countdownEl.textContent = `Старт через ${state.countdown}s`;
-    hintEl.textContent = "Ожидание — старт скоро";
-  }
-  if (state.phase === ROUND.COUNTDOWN) {
-    roundStatusEl.textContent = "Раунд";
-    countdownEl.textContent = `Старт через ${state.countdown}s`;
-    hintEl.textContent = "Можно войти в раунд";
-  }
-  if (state.phase === ROUND.FLY) {
-    roundStatusEl.textContent = "Раунд";
-    countdownEl.textContent = "В полёте";
-    hintEl.textContent = "Жми “Забрать” в любой момент";
-  }
-  if (state.phase === ROUND.CRASHED) {
-    roundStatusEl.textContent = "Раунд";
-    countdownEl.textContent = "Краш";
-    hintEl.textContent = "Новый раунд скоро";
-  }
+  const t = Math.min(1, Math.max(0, p));
+  const e = 1 - Math.pow(1 - t, 2.2);
 
-  myBetEl.textContent = state.inRound ? `${state.bet} 🪙` : "—";
-  if (!state.inRound) myStateEl.textContent = "не в раунде";
-  else if (state.cashed) myStateEl.textContent = `забрал на x${state.cashMult.toFixed(2)}`;
-  else if (state.phase === ROUND.CRASHED) myStateEl.textContent = "не успел";
-  else myStateEl.textContent = "в раунде";
+  const x = x0 + (x1 - x0) * e;
+  const y = y0 - (y0 - y1) * Math.pow(e, 1.65);
 
-  joinBtn.disabled = !(state.phase === ROUND.WAIT || state.phase === ROUND.COUNTDOWN);
-  cashBtn.disabled = !(state.phase === ROUND.FLY && state.inRound && !state.cashed);
+  // derivative
+  const dt = 0.002;
+  const t2 = Math.min(1, t + dt);
+  const e2 = 1 - Math.pow(1 - t2, 2.2);
+  const x2 = x0 + (x1 - x0) * e2;
+  const y2 = y0 - (y0 - y1) * Math.pow(e2, 1.65);
+  const ang = Math.atan2(y2 - y, x2 - x) * 180 / Math.PI;
+
+  return { x, y, ang };
 }
 
-joinBtn.onclick = () => {
-  const bet = clampBet();
-  if (!(state.phase === ROUND.WAIT || state.phase === ROUND.COUNTDOWN)) {
-    alert("Войти можно только до старта (в ожидании).");
-    return;
-  }
-  if (state.inRound) { alert("Ты уже в раунде."); return; }
-  if (bet > wallet.coins) { alert("Недостаточно монет."); return; }
-
-  addCoins(-bet);
-  state.inRound = true;
-  state.bet = bet;
-  state.cashed = false;
-  state.cashMult = 0;
-  renderHUD();
+// --- Game state ---
+const PHASE = {
+  BETTING: "BETTING",
+  FLYING: "FLYING",
+  CRASHED: "CRASHED",
 };
 
-cashBtn.onclick = () => {
-  if (!(state.phase === ROUND.FLY && state.inRound && !state.cashed)) return;
-  state.cashed = true;
-  state.cashMult = state.mult;
-  const payout = Math.floor(state.bet * state.cashMult);
-  addCoins(payout);
-  renderHUD();
-};
+let phase = PHASE.BETTING;
+let countdown = 5;          // sec
+let lastTs = performance.now();
 
-function resetRound() {
-  state.phase = ROUND.WAIT;
-  state.mult = 1.0;
-  state.crashPoint = sampleCrashPoint();
-  state.countdown = 5;
+let crashPoint = genCrashPoint();
+let startAt = 0;
+let mult = 1.0;
 
-  state.inRound = false;
-  state.bet = 0;
-  state.cashed = false;
-  state.cashMult = 0;
+let inRound = false;
+let myBet = 0;
+let cashed = false;
+let myCashMult = 0;
 
-  rngBtn.textContent = debugReveal
-    ? `Краш-поинт (тест): x${state.crashPoint.toFixed(2)}`
-    : "Краш-поинт скрыт (честный RNG)";
+let raf = null;
 
-  setRocketByMult(1.0);
-  renderHUD();
+// --- UI render ---
+function renderRightButtons() {
+  // join доступен только в ожидании и если ещё не в раунде
+  joinBtn.disabled = !(phase === PHASE.BETTING && !inRound);
+
+  // cash доступен только в полёте и если в раунде и не забрал
+  cashBtn.disabled = !(phase === PHASE.FLYING && inRound && !cashed);
+
+  // input ставки редактируем только в ожидании
+  betInput.disabled = !(phase === PHASE.BETTING && !inRound);
+  betMinus.disabled = betInput.disabled;
+  betPlus.disabled = betInput.disabled;
 }
 
-function startCountdown() {
-  state.phase = ROUND.COUNTDOWN;
-  renderHUD();
+function renderHeaderTexts() {
+  elMultText.textContent = `x${mult.toFixed(2)}`;
 
-  const tick = () => {
-    state.countdown -= 1;
-    if (state.countdown <= 0) {
-      startFlight();
-      return;
+  if (phase === PHASE.BETTING) {
+    elPhaseHint.textContent = "Ожидание — старт скоро";
+    elRoundText.textContent = `Старт через ${countdown}s`;
+  } else if (phase === PHASE.FLYING) {
+    elPhaseHint.textContent = "Полёт — можно забрать";
+    elRoundText.textContent = "Раунд идёт";
+  } else {
+    elPhaseHint.textContent = "Краш — новый раунд скоро";
+    elRoundText.textContent = `Старт через ${countdown}s`;
+  }
+
+  if (!inRound) {
+    elMyBetText.textContent = "—";
+    elMyStateText.textContent = "не в раунде";
+  } else {
+    elMyBetText.textContent = `${myBet} 🪙`;
+    if (cashed) elMyStateText.textContent = `забрал на x${myCashMult.toFixed(2)}`;
+    else if (phase === PHASE.FLYING) elMyStateText.textContent = "в раунде";
+    else if (phase === PHASE.BETTING) elMyStateText.textContent = "ждём старт";
+    else elMyStateText.textContent = "не успел";
+  }
+}
+
+function renderAll() {
+  renderTop();
+  renderRightButtons();
+  renderHeaderTexts();
+}
+
+// --- Mult growth curve (feel) ---
+function calcMult(t) {
+  // t seconds since start
+  // чуть “ускоряющийся” рост как в crash
+  return 1 + t * 0.75 + t * t * 0.12;
+}
+
+// --- Main drawing ---
+function drawChart() {
+  const rect = chartBox.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // grid
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+
+  const step = 52;
+  for (let x = 0; x < w; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+  for (let y = 0; y < h; y += step) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // progress along curve: p = log(mult)/log(crashPoint)
+  const cp = Math.max(1.05, crashPoint);
+  let p = 0;
+  if (phase === PHASE.FLYING || phase === PHASE.CRASHED) {
+    p = Math.min(1, Math.log(mult) / Math.log(cp));
+    if (!Number.isFinite(p)) p = 0;
+    p = Math.max(0, Math.min(1, p));
+  }
+
+  const start = curveXY(0, w, h);
+  const cur = curveXY(Math.max(0.02, p), w, h);
+
+  // draw curve up to current
+  ctx.save();
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+
+  const samples = 180;
+  const steps = Math.max(2, Math.floor(samples * Math.max(0.02, p)));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / samples;
+    if (t > p) break;
+    const pt = curveXY(t, w, h);
+    ctx.lineTo(pt.x, pt.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // red fill under curve while flying
+  if (phase === PHASE.FLYING) {
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "rgba(255,40,40,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+
+    const samples2 = 140;
+    const steps2 = Math.max(2, Math.floor(samples2 * Math.max(0.02, p)));
+    for (let i = 1; i <= steps2; i++) {
+      const t = i / samples2;
+      if (t > p) break;
+      const pt = curveXY(t, w, h);
+      ctx.lineTo(pt.x, pt.y);
     }
-    renderHUD();
-    state.timer = setTimeout(tick, 1000);
-  };
-  state.timer = setTimeout(tick, 1000);
+    ctx.lineTo(cur.x, h);
+    ctx.lineTo(start.x, h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // rocket position rules:
+  // - BETTING: rocket hidden
+  // - FLYING: rocket follows curve
+  // - CRASHED: rocket hidden (улетела/пропала)
+  if (phase === PHASE.FLYING) {
+    setRocketVisible(true);
+    // convert curve point to rocket element position
+    // rocketEl positioned relative to chartBox
+    const rx = cur.x - 27;
+    const ry = cur.y - 27;
+    moveRocket(rx, ry, cur.ang + 12);
+  } else {
+    setRocketVisible(false);
+    moveRocket(-9999, -9999, 0);
+  }
+
+  // Big center multiplier text (like crash)
+  ctx.save();
+  const big = phase === PHASE.FLYING ? `x${mult.toFixed(2)}` : (phase === PHASE.BETTING ? "Ожидание" : `x${mult.toFixed(2)}`);
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 72px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+  ctx.fillText(big, w * 0.5, h * 0.48);
+  ctx.restore();
 }
 
-function startFlight() {
-  state.phase = ROUND.FLY;
-  state.startTs = performance.now();
-  renderHUD();
+// --- Round transitions ---
+function resetForBetting() {
+  phase = PHASE.BETTING;
+  countdown = 5;
+  mult = 1.0;
+  crashPoint = genCrashPoint();
 
-  const step = () => {
-    if (state.phase !== ROUND.FLY) return;
+  inRound = false;
+  myBet = 0;
+  cashed = false;
+  myCashMult = 0;
 
-    const t = (performance.now() - state.startTs) / 1000;
-    state.mult = 1 + t * 0.85 + t * t * 0.13;
+  hideOverlay();
+  renderAll();
+  drawChart();
+}
 
-    setRocketByMult(state.mult);
-    renderHUD();
+function startFlying() {
+  phase = PHASE.FLYING;
+  startAt = performance.now();
+  mult = 1.0;
+  hideOverlay();
 
-    if (state.mult >= state.crashPoint) {
-      crashNow();
-      return;
-    }
-    state.timer = requestAnimationFrame(step);
-  };
-
-  state.timer = requestAnimationFrame(step);
+  renderAll();
+  drawChart();
+  beep(740, 0.05, 0.05);
 }
 
 function crashNow() {
-  state.phase = ROUND.CRASHED;
-  renderHUD();
+  phase = PHASE.CRASHED;
 
+  // если игрок был в раунде и не забрал — проиграл
+  if (inRound && !cashed) {
+    showOverlay("💥 Краш! Ты не успел — ставка сгорела");
+    beep(220, 0.12, 0.06);
+  } else {
+    showOverlay("🚀 Ракета улетела. Новый раунд скоро…");
+    beep(330, 0.08, 0.04);
+  }
+
+  // rocket must disappear
+  setRocketVisible(false);
+
+  countdown = 5;
+  renderAll();
+  drawChart();
+}
+
+// --- Actions: join & cash ---
+joinBtn.onclick = () => {
+  if (!(phase === PHASE.BETTING && !inRound)) return;
+  const bet = clampBet();
+  if (bet <= 0) return;
+
+  if (bet > wallet.coins) {
+    alert("Недостаточно монет");
+    return;
+  }
+
+  addCoins(-bet);
+  inRound = true;
+  myBet = bet;
+  cashed = false;
+  myCashMult = 0;
+
+  showOverlay(`✅ Вошёл в раунд: ставка ${bet} 🪙`);
   setTimeout(() => {
-    resetRound();
-    setTimeout(() => startCountdown(), 900);
-  }, 1600);
+    if (phase === PHASE.BETTING) hideOverlay();
+  }, 900);
+
+  renderAll();
+};
+
+cashBtn.onclick = () => {
+  if (!(phase === PHASE.FLYING && inRound && !cashed)) return;
+
+  cashed = true;
+  myCashMult = mult;
+
+  const payout = Math.floor(myBet * myCashMult);
+  addCoins(payout);
+
+  showOverlay(`✅ Забрал: +${payout} 🪙 (x${myCashMult.toFixed(2)})`);
+  beep(980, 0.06, 0.05);
+  setTimeout(() => {
+    if (phase === PHASE.FLYING) hideOverlay();
+  }, 900);
+
+  renderAll();
+};
+
+// --- Main loop ---
+function tick(ts) {
+  const dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+
+  if (phase === PHASE.BETTING) {
+    // countdown
+    countdown -= dt;
+    if (countdown <= 0) {
+      startFlying();
+    }
+  } else if (phase === PHASE.FLYING) {
+    const t = (ts - startAt) / 1000;
+    mult = calcMult(t);
+
+    // crash condition
+    if (mult >= crashPoint) {
+      mult = crashPoint;
+      crashNow();
+    } else {
+      // small tick beep each ~0.25 sec if sound on
+      if (soundOn) {
+        // simple: beep rarely based on mult fractional
+        if (Math.floor(mult * 4) !== Math.floor((mult - dt) * 4)) beep(520, 0.02, 0.02);
+      }
+    }
+  } else if (phase === PHASE.CRASHED) {
+    countdown -= dt;
+    if (countdown <= 0) {
+      resetForBetting();
+    }
+  }
+
+  renderAll();
+  drawChart();
+
+  raf = requestAnimationFrame(tick);
 }
 
-function boot() {
-  resetRound();
-  setTimeout(() => startCountdown(), 700);
+function startLoop() {
+  if (raf) cancelAnimationFrame(raf);
+  lastTs = performance.now();
+  raf = requestAnimationFrame(tick);
 }
 
-boot();
+// init
+resetForBetting();
+startLoop();
