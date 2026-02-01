@@ -1,555 +1,633 @@
-/* Rocket Crash v1 (only Crash)
-   - Canvas строго внутри блока (не на весь экран)
-   - Ракета летит по линии графика
-   - При краше: ракета исчезает, надпись "УЛЕТЕЛА" / "КРАШ"
-   - Звук on/off (WebAudio)
-   - Вход в раунд только ДО старта (есть отсчёт)
-   - Кеш-аут в полёте
-   - Виртуальные монеты в localStorage
-*/
+// ===============================
+// Rocket Crash — ONLY (v1 stable)
+// Works with: index.html + style.css (as sent earlier)
+// ===============================
 
-(() => {
-  // --- RNG (честный) ---
-  function randFloat() {
-    const a = new Uint32Array(1);
-    crypto.getRandomValues(a);
-    return a[0] / 2 ** 32;
+// -------- RNG (fair) ----------
+function randFloat() {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] / 2 ** 32;
+}
+
+// -------- Telegram WebApp ----------
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
+
+// -------- DOM ----------
+const $ = (id) => document.getElementById(id);
+
+const userText = $("userText");
+const balanceText = $("balanceText");
+
+const multText = $("multText");
+const phaseHint = $("phaseHint");
+const statusText = $("statusText");
+const countText = $("countText");
+const myBetText = $("myBetText");
+const myStateText = $("myStateText");
+
+const centerBig = $("centerBig");
+const centerSmall = $("centerSmall");
+
+const soundBtn = $("soundBtn");
+const bonusBtn = $("bonusBtn");
+
+const betInput = $("betInput");
+const betMinus = $("betMinus");
+const betPlus = $("betPlus");
+const joinBtn = $("joinBtn");
+const cashBtn = $("cashBtn");
+
+const betHint = $("betHint");
+const miniLog = $("miniLog");
+
+const canvas = $("chart");
+const ctx = canvas.getContext("2d");
+
+// -------- User text ----------
+const user = tg?.initDataUnsafe?.user;
+userText.textContent = user
+  ? `Привет, ${user.first_name}`
+  : `Открыто вне Telegram`;
+
+// -------- Wallet ----------
+const WALLET_KEY = "rocket_wallet_v1";
+function loadWallet() {
+  try {
+    const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
+    if (w && typeof w.coins === "number") return w;
+  } catch {}
+  return { coins: 1000 };
+}
+function saveWallet(w) {
+  localStorage.setItem(WALLET_KEY, JSON.stringify(w));
+}
+let wallet = loadWallet();
+function setCoins(v) {
+  wallet.coins = Math.max(0, Math.floor(v));
+  saveWallet(wallet);
+  balanceText.textContent = `🪙 ${wallet.coins}`;
+}
+function addCoins(d) {
+  setCoins(wallet.coins + d);
+}
+setCoins(wallet.coins);
+
+// -------- Log ----------
+function logLine(s) {
+  const now = new Date();
+  const t = `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes()
+  ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+  miniLog.textContent = `[${t}] ${s}\n` + (miniLog.textContent || "").slice(0, 700);
+}
+
+// -------- Sound (no external files) ----------
+let soundOn = false;
+let audioCtx = null;
+
+function ensureAudio() {
+  if (audioCtx) return audioCtx;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  audioCtx = new Ctx();
+  return audioCtx;
+}
+function beep(freq = 440, dur = 0.08, type = "sine", gain = 0.04) {
+  if (!soundOn) return;
+  const ac = ensureAudio();
+  const o = ac.createOscillator();
+  const g = ac.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.value = gain;
+  o.connect(g);
+  g.connect(ac.destination);
+  o.start();
+  o.stop(ac.currentTime + dur);
+}
+function soundToggle() {
+  soundOn = !soundOn;
+  soundBtn.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+  if (soundOn) {
+    // unlock on gesture
+    ensureAudio();
+    beep(520, 0.06, "triangle", 0.035);
+    beep(660, 0.06, "triangle", 0.03);
   }
-  function randInt(min, max) {
-    return Math.floor(randFloat() * (max - min + 1)) + min;
-  }
+}
 
-  // --- Telegram WebApp ---
-  const tg = window.Telegram?.WebApp;
-  if (tg) {
-    tg.ready();
-    tg.expand();
-  }
+soundBtn.addEventListener("click", soundToggle);
+soundBtn.textContent = `Звук: off`;
 
-  // --- DOM ---
-  const elUser = document.getElementById("user");
-  const elBalance = document.getElementById("balance");
-  const elMultBig = document.getElementById("multBig");
-  const elHint = document.getElementById("hint");
-  const elMultSmall = document.getElementById("multSmall");
-  const elYourBet = document.getElementById("yourBet");
-  const elYourState = document.getElementById("yourState");
+// -------- Bet controls ----------
+function clampBet() {
+  let v = Math.floor(Number(betInput.value) || 0);
+  if (v < 1) v = 1;
+  if (v > wallet.coins) v = wallet.coins;
+  betInput.value = String(v);
+  return v;
+}
+betInput.addEventListener("input", clampBet);
+betMinus.addEventListener("click", () => {
+  betInput.value = String((Number(betInput.value) || 1) - 10);
+  clampBet();
+});
+betPlus.addEventListener("click", () => {
+  betInput.value = String((Number(betInput.value) || 1) + 10);
+  clampBet();
+});
 
-  const canvas = document.getElementById("chart");
-  const ctx = canvas.getContext("2d");
-
-  const rocketEl = document.getElementById("rocket");
-  const btnSound = document.getElementById("soundBtn");
-
-  const betInput = document.getElementById("bet");
-  const btnMinus = document.getElementById("minus");
-  const btnPlus = document.getElementById("plus");
-
-  const btnJoin = document.getElementById("joinBtn");
-  const btnCash = document.getElementById("cashBtn");
-  const btnBonus = document.getElementById("bonusBtn");
-
-  // --- User label ---
-  const user = tg?.initDataUnsafe?.user;
-  if (elUser) {
-    elUser.textContent = user ? `Открыто в Telegram` : `Открыто вне Telegram`;
-  }
-
-  // --- Wallet ---
-  const WALLET_KEY = "rocket_wallet_v1";
-  function loadWallet() {
-    try {
-      const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
-      if (w && typeof w.coins === "number") return w;
-    } catch {}
-    return { coins: 1000 };
-  }
-  function saveWallet(w) {
-    localStorage.setItem(WALLET_KEY, JSON.stringify(w));
-  }
-  let wallet = loadWallet();
-  function setCoins(v) {
-    wallet.coins = Math.max(0, Math.floor(v));
-    saveWallet(wallet);
-    renderBalance();
-  }
-  function addCoins(d) {
-    setCoins(wallet.coins + d);
-  }
-  function renderBalance() {
-    if (elBalance) elBalance.textContent = String(wallet.coins);
-  }
-  renderBalance();
-
-  // --- Resize canvas to container ---
-  function fitCanvas() {
-    const rect = canvas.getBoundingClientRect();
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.floor(rect.width * dpr);
-    canvas.height = Math.floor(rect.height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // рисуем в css-пикселях
-    draw(); // перерисовать
-  }
-  window.addEventListener("resize", () => fitCanvas());
-  fitCanvas();
-
-  // --- Sound (WebAudio) ---
-  let soundOn = true;
-  let audioCtx = null;
-
-  function beep(freq = 880, ms = 80, vol = 0.06) {
-    if (!soundOn) return;
-    try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const t0 = audioCtx.currentTime;
-
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-
-      o.type = "sine";
-      o.frequency.setValueAtTime(freq, t0);
-
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
-
-      o.connect(g);
-      g.connect(audioCtx.destination);
-
-      o.start(t0);
-      o.stop(t0 + ms / 1000 + 0.02);
-    } catch {}
-  }
-
-  function crashSound() {
-    beep(220, 140, 0.08);
-    setTimeout(() => beep(160, 180, 0.08), 80);
-  }
-
-  function winSound() {
-    beep(980, 70, 0.07);
-    setTimeout(() => beep(1320, 90, 0.07), 60);
-  }
-
-  function tickSound() {
-    beep(740, 45, 0.04);
-  }
-
-  function setSoundUI() {
-    btnSound.textContent = soundOn ? "Звук: on" : "Звук: off";
-  }
-  btnSound.addEventListener("click", () => {
-    soundOn = !soundOn;
-    setSoundUI();
-    // на мобилах звук включится после клика — норм
-    if (soundOn) beep(880, 40, 0.04);
-  });
-  setSoundUI();
-
-  // --- Bet input helpers ---
-  function clampBet() {
-    let v = Math.floor(Number(betInput.value) || 0);
-    if (v < 1) v = 1;
-    if (v > wallet.coins) v = wallet.coins;
-    betInput.value = String(v);
-    return v;
-  }
-
-  document.querySelectorAll(".chip").forEach((b) => {
-    b.addEventListener("click", () => {
-      const val = b.dataset.bet;
-      if (val === "max") betInput.value = String(wallet.coins);
-      else betInput.value = String(val);
-      clampBet();
-    });
-  });
-
-  btnMinus.addEventListener("click", () => {
-    betInput.value = String((Number(betInput.value) || 1) - 10);
+document.querySelectorAll(".chip").forEach((b) => {
+  b.addEventListener("click", () => {
+    const val = b.dataset.bet;
+    if (val === "max") betInput.value = String(wallet.coins);
+    else betInput.value = String(val);
     clampBet();
   });
-  btnPlus.addEventListener("click", () => {
-    betInput.value = String((Number(betInput.value) || 1) + 10);
-    clampBet();
-  });
-  betInput.addEventListener("input", clampBet);
+});
 
-  btnBonus.addEventListener("click", () => addCoins(1000));
+bonusBtn.addEventListener("click", () => {
+  addCoins(1000);
+  beep(880, 0.06, "square", 0.03);
+  logLine("Бонус: +1000 🪙");
+  clampBet();
+});
 
-  // --- Game state ---
-  const STATE = {
-    phase: "waiting", // waiting | countdown | flying | crashed
-    countdownLeft: 3.0,
-    mult: 1.0,
-    t: 0,
-    crashPoint: 2.0,
+// -------- Game state ----------
+const PHASE = {
+  WAIT: "wait",
+  FLY: "fly",
+  CRASH: "crash",
+};
 
-    // игрок
-    inRound: false,
-    bet: 0,
-    cashed: false,
-    cashMult: 0,
+const game = {
+  phase: PHASE.WAIT,
+  waitLeft: 5, // seconds
+  // flight
+  t: 0,
+  mult: 1.0,
+  crashPoint: 1.5,
+  // player
+  inRound: false,
+  bet: 0,
+  joinedThisRound: false,
+  cashed: false,
+};
 
-    // анимация
-    lastTs: 0,
-    points: [], // {x,y,mult,t}
-  };
+function resetPlayerRoundFlags() {
+  game.inRound = false;
+  game.bet = 0;
+  game.joinedThisRound = false;
+  game.cashed = false;
+}
 
-  // --- Crash point (tail distribution) ---
-  // 1/(1-r) даёт "хвост". Ограничим верх чтоб не улетало в космос.
-  function generateCrashPoint() {
-    const r = randFloat();
-    const raw = 1 / (1 - r);
-    const capped = Math.min(raw, 40);   // максимум 40x (можешь увеличить)
-    return Math.max(1.05, capped);
+function fairCrashPoint() {
+  // Simple provably-fair-ish style distribution:
+  // x = max(1.05, 1 / (1 - u)) gives heavy tail
+  const u = randFloat();
+  const x = 1 / Math.max(1e-9, (1 - u));
+  return Math.max(1.05, Math.min(300, x));
+}
+
+// -------- UI updates ----------
+function setCenter(big, small) {
+  centerBig.textContent = big || "";
+  centerSmall.textContent = small || "";
+}
+
+function updateTopUI() {
+  multText.textContent = `x${game.mult.toFixed(2)}`;
+
+  if (game.phase === PHASE.WAIT) {
+    statusText.textContent = "Ожидание";
+    phaseHint.textContent = "Новый раунд скоро";
+    countText.textContent = `Старт через ${Math.ceil(game.waitLeft)}с`;
+  }
+  if (game.phase === PHASE.FLY) {
+    statusText.textContent = "Полёт";
+    phaseHint.textContent = "Ракета летит…";
+    countText.textContent = "Можно забрать";
+  }
+  if (game.phase === PHASE.CRASH) {
+    statusText.textContent = "Краш";
+    phaseHint.textContent = "Раунд завершён";
+    countText.textContent = "Скоро новый раунд";
   }
 
-  // --- Mult curve (похоже на краш) ---
-  function multAt(t) {
-    // плавный рост, похожий на кривую; ускорение со временем
-    // t в секундах
-    const a = 0.22;
-    const b = 0.085;
-    return 1 + t * a + (t * t) * b;
+  if (!game.inRound) {
+    myBetText.textContent = "—";
+    myStateText.textContent = "не в раунде";
+  } else {
+    myBetText.textContent = `${game.bet} 🪙`;
+    myStateText.textContent = game.cashed ? "забрал" : "в раунде";
   }
 
-  // --- UI render ---
-  function setCenter(multText, hintText) {
-    elMultBig.textContent = multText;
-    elHint.textContent = hintText;
+  // buttons
+  if (game.phase === PHASE.WAIT) {
+    joinBtn.disabled = game.inRound;      // нельзя дважды
+    cashBtn.disabled = true;
+    joinBtn.textContent = game.inRound ? "В раунде" : "Войти в раунд";
+  } else if (game.phase === PHASE.FLY) {
+    joinBtn.disabled = true;
+    cashBtn.disabled = !game.inRound || game.cashed;
+    joinBtn.textContent = "Вход закрыт";
+  } else {
+    joinBtn.disabled = true;
+    cashBtn.disabled = true;
+    joinBtn.textContent = "Ожидание…";
   }
+}
 
-  function setTopSmall(multSmallText, yourBetText, yourStateText) {
-    elMultSmall.textContent = multSmallText;
-    elYourBet.textContent = yourBetText;
-    elYourState.textContent = yourStateText;
+// -------- Canvas helpers ----------
+function resizeCanvasToCSS() {
+  // Keep canvas resolution sharp
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  const needW = Math.floor(cssW * dpr);
+  const needH = Math.floor(cssH * dpr);
+  if (canvas.width !== needW || canvas.height !== needH) {
+    canvas.width = needW;
+    canvas.height = needH;
   }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+}
 
-  function updateButtons() {
-    if (STATE.phase === "waiting") {
-      btnJoin.disabled = false;
-      btnCash.disabled = true;
-      btnJoin.textContent = STATE.inRound ? "В раунде" : "Войти в раунд";
-    } else if (STATE.phase === "countdown") {
-      // вход только до старта: в отсчёт можно войти (как у многих) — но ты просил ДО старта.
-      // значит во время countdown закрываем вход:
-      btnJoin.disabled = true;
-      btnJoin.textContent = STATE.inRound ? "В раунде" : "Вход закрыт";
-      btnCash.disabled = true;
-    } else if (STATE.phase === "flying") {
-      btnJoin.disabled = true;
-      btnJoin.textContent = STATE.inRound ? "В раунде" : "Вход закрыт";
-      btnCash.disabled = !STATE.inRound || STATE.cashed;
-    } else if (STATE.phase === "crashed") {
-      btnJoin.disabled = true;
-      btnCash.disabled = true;
-    }
-  }
+function drawWinterBackground(w, h) {
+  // dark gradient
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, "rgba(10,16,34,0.0)");
+  g.addColorStop(1, "rgba(0,0,0,0.18)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
 
-  function renderTexts() {
-    const m = STATE.mult;
-    const mStr = `${m.toFixed(2)}x`;
-
-    if (STATE.phase === "waiting") {
-      setCenter("1.00x", "Ожидание — старт скоро");
-    } else if (STATE.phase === "countdown") {
-      setCenter("1.00x", `Ожидание следующего раунда (${Math.ceil(STATE.countdownLeft)}с)`);
-    } else if (STATE.phase === "flying") {
-      setCenter(mStr, STATE.inRound ? "" : "Ты не в раунде");
-    } else if (STATE.phase === "crashed") {
-      setCenter(mStr, m >= STATE.crashPoint ? "💥 Краш!" : "💥 Краш!");
-    }
-
-    const yourBetText = STATE.inRound ? `${STATE.bet} 🪙` : "—";
-    let yourStateText = "не в раунде";
-    if (STATE.inRound && !STATE.cashed && STATE.phase === "flying") yourStateText = "в полёте";
-    if (STATE.inRound && STATE.cashed) yourStateText = `забрал на ${STATE.cashMult.toFixed(2)}x`;
-    if (STATE.inRound && !STATE.cashed && STATE.phase === "crashed") yourStateText = "сгорел";
-
-    setTopSmall(mStr, yourBetText, yourStateText);
-    updateButtons();
-  }
-
-  // --- Coordinate helpers (graph) ---
-  function graphRect() {
-    // рисуем внутри canvas (css px)
-    const w = canvas.getBoundingClientRect().width;
-    const h = canvas.getBoundingClientRect().height;
-    const pad = 18;
-    return {
-      x: pad,
-      y: pad,
-      w: w - pad * 2,
-      h: h - pad * 2,
-      pad
-    };
-  }
-
-  function niceMaxMult() {
-    // чтобы график красиво масштабировался
-    // берём максимум между текущим и crashPoint, округляем
-    const v = Math.max(STATE.mult, STATE.crashPoint, 2);
-    if (v < 3) return 3;
-    if (v < 5) return 5;
-    if (v < 10) return 10;
-    if (v < 20) return 20;
-    return 40;
-  }
-
-  function maxTime() {
-    // время на оси X — по росту multiplier
-    // ограничим чтобы линия не упиралась
-    const target = niceMaxMult();
-    // решим t из multAt(t)=target (приблизительно)
-    // multAt(t)=1 + a t + b t^2 => b t^2 + a t + (1-target)=0
-    const a = 0.22, b = 0.085;
-    const c = 1 - target;
-    const D = a * a - 4 * b * c;
-    const t = (-a + Math.sqrt(Math.max(0, D))) / (2 * b);
-    return Math.max(6, Math.min(18, t + 1)); // 6..18 сек
-  }
-
-  function toXY(t, mult) {
-    const r = graphRect();
-    const tMax = maxTime();
-    const mMax = niceMaxMult();
-
-    const x = r.x + (t / tMax) * r.w;
-    // y: 1.0 внизу, mMax наверху
-    const y = r.y + r.h - ((mult - 1) / (mMax - 1)) * r.h;
-    return { x, y };
-  }
-
-  // --- Draw graph (grid + line + fill) ---
-  function drawGrid() {
-    const r = graphRect();
-
-    // фон
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // grid
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.strokeStyle = "rgba(255,255,255,.18)";
-    ctx.lineWidth = 1;
-
-    const cols = 8;
-    const rows = 6;
-
-    for (let i = 0; i <= cols; i++) {
-      const x = r.x + (r.w * i) / cols;
-      ctx.beginPath();
-      ctx.moveTo(x, r.y);
-      ctx.lineTo(x, r.y + r.h);
-      ctx.stroke();
-    }
-    for (let j = 0; j <= rows; j++) {
-      const y = r.y + (r.h * j) / rows;
-      ctx.beginPath();
-      ctx.moveTo(r.x, y);
-      ctx.lineTo(r.x + r.w, y);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-
-  function drawLine() {
-    const pts = STATE.points;
-    if (pts.length < 2) return;
-
-    // fill under curve
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = "rgba(255,91,110,.35)";
+  // subtle snowflakes
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = "rgba(230,240,255,0.35)";
+  for (let i = 0; i < 40; i++) {
+    const x = (i * 97) % w;
+    const y = (i * 53) % h;
+    const r = 1 + ((i * 13) % 3);
     ctx.beginPath();
-    const p0 = toXY(pts[0].t, pts[0].mult);
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < pts.length; i++) {
-      const p = toXY(pts[i].t, pts[i].mult);
-      ctx.lineTo(p.x, p.y);
-    }
-    // вниз к оси
-    const r = graphRect();
-    const plast = toXY(pts[pts.length - 1].t, pts[pts.length - 1].mult);
-    ctx.lineTo(plast.x, r.y + r.h);
-    ctx.lineTo(p0.x, r.y + r.h);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // "snowy hills"
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = "rgba(220,235,255,0.18)";
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  ctx.bezierCurveTo(w * 0.25, h * 0.82, w * 0.48, h * 0.98, w * 0.7, h * 0.86);
+  ctx.bezierCurveTo(w * 0.85, h * 0.78, w * 0.93, h * 0.88, w, h * 0.82);
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawGrid(w, h, pad, gridX = 8, gridY = 6) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.07)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridX; i++) {
+    const x = pad + (i * (w - pad * 2)) / gridX;
+    ctx.beginPath();
+    ctx.moveTo(x, pad);
+    ctx.lineTo(x, h - pad);
+    ctx.stroke();
+  }
+  for (let j = 0; j <= gridY; j++) {
+    const y = pad + (j * (h - pad * 2)) / gridY;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(w - pad, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function rocketDraw(x, y, size = 18, angleRad = -0.75) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angleRad);
+
+  // body
+  ctx.fillStyle = "rgba(245,250,255,0.95)";
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(-size * 0.55, -size * 0.25, size * 1.1, size * 0.5, size * 0.2);
+  ctx.fill();
+  ctx.stroke();
+
+  // window
+  ctx.fillStyle = "rgba(76,125,255,0.75)";
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+
+  // nose
+  ctx.fillStyle = "rgba(230,240,255,0.98)";
+  ctx.beginPath();
+  ctx.moveTo(size * 0.55, 0);
+  ctx.lineTo(size * 0.82, size * 0.14);
+  ctx.lineTo(size * 0.82, -size * 0.14);
+  ctx.closePath();
+  ctx.fill();
+
+  // flame (only when flying)
+  if (game.phase === PHASE.FLY) {
+    ctx.globalAlpha = 0.9;
+    const flick = 0.7 + (Math.sin(performance.now() / 60) + 1) * 0.15;
+    ctx.fillStyle = "rgba(255,170,60,0.95)";
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.65, 0);
+    ctx.quadraticCurveTo(-size * (1.0 * flick), size * 0.18, -size * 0.9, 0);
+    ctx.quadraticCurveTo(-size * (1.0 * flick), -size * 0.18, -size * 0.65, 0);
     ctx.closePath();
     ctx.fill();
-    ctx.restore();
 
-    // stroke curve
-    ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(255,91,110,.95)";
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = "rgba(255,80,80,0.7)";
     ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < pts.length; i++) {
-      const p = toXY(pts[i].t, pts[i].mult);
-      ctx.lineTo(p.x, p.y);
+    ctx.moveTo(-size * 0.62, 0);
+    ctx.quadraticCurveTo(-size * (0.88 * flick), size * 0.12, -size * 0.78, 0);
+    ctx.quadraticCurveTo(-size * (0.88 * flick), -size * 0.12, -size * 0.62, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawCurve(points) {
+  if (points.length < 2) return;
+
+  ctx.save();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255,90,90,0.85)";
+  ctx.shadowColor = "rgba(255,90,90,0.35)";
+  ctx.shadowBlur = 12;
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// -------- Mapping: time & multiplier -> canvas coords ----------
+function getCurvePoints(w, h, pad) {
+  // We want a nice curve like Stake: grows faster over time
+  // We'll map t (seconds) horizontally and multiplier vertically with log-ish scale.
+
+  const usableW = w - pad * 2;
+  const usableH = h - pad * 2;
+
+  // pick a "view" range based on current phase
+  let tMax = 10;
+  if (game.phase === PHASE.WAIT) tMax = 10;
+  if (game.phase === PHASE.FLY) tMax = Math.max(6, Math.min(14, game.t + 2.5));
+  if (game.phase === PHASE.CRASH) tMax = Math.max(6, Math.min(14, game.t + 2.5));
+
+  // y scale: from 1.0 to maybe up to current*1.2
+  const mMax = Math.max(2.5, Math.min(30, Math.max(game.mult, game.crashPoint) * 1.15));
+
+  const points = [];
+  const steps = 80;
+
+  for (let i = 0; i <= steps; i++) {
+    const tt = (i / steps) * Math.max(0.0001, game.t);
+    const mm = multAtTime(tt);
+
+    const x = pad + (tt / tMax) * usableW;
+
+    // log mapping to compress highs
+    const yNorm = Math.log(mm) / Math.log(mMax);
+    const y = pad + (1 - yNorm) * usableH;
+
+    points.push({ x, y, tt, mm });
+  }
+  return { points, tMax, mMax };
+}
+
+// multiplier curve function (same for drawing and logic)
+function multAtTime(t) {
+  // smooth curve
+  // start at 1.00, grow gradually then faster
+  return 1 + t * 0.55 + t * t * 0.085;
+}
+
+// -------- Main draw ----------
+function render() {
+  resizeCanvasToCSS();
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // bg winter
+  drawWinterBackground(w, h);
+
+  // grid
+  const pad = 22;
+  drawGrid(w, h, pad);
+
+  // curve + rocket position
+  const { points } = getCurvePoints(w, h, pad);
+
+  // curve line
+  drawCurve(points);
+
+  // rocket at end of curve (if in fly or crash show last point)
+  if (game.phase === PHASE.FLY || game.phase === PHASE.CRASH) {
+    const p = points[points.length - 1];
+    // angle from last segment
+    let ang = -0.8;
+    if (points.length > 2) {
+      const a = points[points.length - 2];
+      ang = Math.atan2(p.y - a.y, p.x - a.x);
     }
-    ctx.stroke();
-    ctx.restore();
+    rocketDraw(p.x, p.y, 20, ang);
   }
 
-  function placeRocket() {
-    // ракета только в полёте (и если есть точки)
-    if (STATE.phase !== "flying" || STATE.points.length < 2) {
-      rocketEl.classList.add("hide");
-      return;
+  // overlay text
+  if (game.phase === PHASE.WAIT) {
+    setCenter("Ожидание…", `Следующий раунд через ${Math.ceil(game.waitLeft)}с`);
+  } else if (game.phase === PHASE.FLY) {
+    setCenter(`${game.mult.toFixed(2)}x`, game.inRound ? (game.cashed ? "Ты забрал" : "Ты в раунде") : "Ты не в раунде");
+  } else {
+    setCenter(`${game.mult.toFixed(2)}x`, "Краш! Ракета улетела 🚀");
+  }
+
+  updateTopUI();
+}
+
+// -------- Round flow ----------
+let lastTs = performance.now();
+let loopId = null;
+
+function startLoop() {
+  if (loopId) return;
+  lastTs = performance.now();
+  const tick = (ts) => {
+    const dt = Math.min(0.05, (ts - lastTs) / 1000);
+    lastTs = ts;
+
+    step(dt);
+    render();
+
+    loopId = requestAnimationFrame(tick);
+  };
+  loopId = requestAnimationFrame(tick);
+}
+
+function stopLoop() {
+  if (!loopId) return;
+  cancelAnimationFrame(loopId);
+  loopId = null;
+}
+
+function newRound() {
+  game.phase = PHASE.WAIT;
+  game.waitLeft = 5;
+  game.t = 0;
+  game.mult = 1.0;
+  game.crashPoint = fairCrashPoint();
+
+  // important: reset player for NEW round (but keep wallet)
+  resetPlayerRoundFlags();
+
+  logLine("Новый раунд: ожидание");
+  beep(520, 0.05, "triangle", 0.03);
+}
+
+function startFlight() {
+  game.phase = PHASE.FLY;
+  game.t = 0;
+  game.mult = 1.0;
+  // crashPoint already chosen in newRound()
+  logLine("Старт полёта");
+  beep(740, 0.05, "triangle", 0.03);
+  beep(980, 0.05, "triangle", 0.025);
+}
+
+function crashNow() {
+  game.phase = PHASE.CRASH;
+
+  // if player is in round and didn't cash -> lost
+  if (game.inRound && !game.cashed) {
+    logLine(`Краш на x${game.mult.toFixed(2)} — ставка сгорела (${game.bet} 🪙)`);
+    beep(220, 0.12, "sawtooth", 0.05);
+    beep(160, 0.14, "sawtooth", 0.05);
+  } else {
+    logLine(`Краш на x${game.mult.toFixed(2)}`);
+    beep(240, 0.10, "square", 0.03);
+  }
+
+  // after crash go to wait again
+  setTimeout(() => {
+    newRound();
+  }, 1400);
+}
+
+function step(dt) {
+  if (game.phase === PHASE.WAIT) {
+    game.waitLeft -= dt;
+    game.mult = 1.0;
+
+    if (game.waitLeft <= 0) {
+      startFlight();
     }
-    rocketEl.classList.remove("hide");
-
-    const last = STATE.points[STATE.points.length - 1];
-    const p = toXY(last.t, last.mult);
-
-    // Поворот по направлению линии
-    const prev = STATE.points[Math.max(0, STATE.points.length - 6)];
-    const p2 = toXY(prev.t, prev.mult);
-    const ang = Math.atan2(p.y - p2.y, p.x - p2.x);
-
-    // 🧊 зимняя "ракетка" — можно заменить на SVG позже
-    rocketEl.textContent = "🚀";
-    rocketEl.style.left = `${p.x}px`;
-    rocketEl.style.top = `${p.y}px`;
-    rocketEl.style.transform = `translate(-12px, -18px) rotate(${ang}rad)`;
+    return;
   }
 
-  function draw() {
-    drawGrid();
-    drawLine();
-    placeRocket();
-  }
+  if (game.phase === PHASE.FLY) {
+    game.t += dt;
+    game.mult = multAtTime(game.t);
 
-  // --- Round flow ---
-  function resetRound() {
-    STATE.phase = "countdown";
-    STATE.countdownLeft = 3.0;
-
-    STATE.mult = 1.0;
-    STATE.t = 0;
-    STATE.crashPoint = generateCrashPoint();
-
-    STATE.points = [{ t: 0, mult: 1.0 }];
-
-    // игрок на новый раунд:
-    STATE.inRound = false;
-    STATE.cashed = false;
-    STATE.cashMult = 0;
-
-    renderTexts();
-    draw();
-  }
-
-  // стартуем с ожидания
-  resetRound();
-
-  // --- Enter round (bet) ---
-  btnJoin.addEventListener("click", () => {
-    if (STATE.phase !== "waiting") {
-      // В текущей версии waiting не используется (мы сразу в countdown),
-      // поэтому разрешим вход только до окончания countdown? но ты просил ДО старта.
-      // Значит: разрешаем вход ТОЛЬКО когда countdownLeft > 0 и ещё не было "lock".
-      // Чтобы проще: разрешаем вход в самом начале countdown, пока > 1.5с.
-    }
-
-    if (STATE.phase !== "countdown") return;
-
-    // вход разрешён только если ещё далеко до старта
-    if (STATE.countdownLeft < 2.0) return;
-
-    const bet = clampBet();
-    if (bet <= 0) return;
-    if (bet > wallet.coins) return alert("Недостаточно монет");
-
-    addCoins(-bet);
-
-    STATE.inRound = true;
-    STATE.bet = bet;
-    STATE.cashed = false;
-    STATE.cashMult = 0;
-
-    tickSound();
-    renderTexts();
-  });
-
-  // --- Cash out ---
-  btnCash.addEventListener("click", () => {
-    if (STATE.phase !== "flying") return;
-    if (!STATE.inRound || STATE.cashed) return;
-
-    STATE.cashed = true;
-    STATE.cashMult = STATE.mult;
-
-    const payout = Math.floor(STATE.bet * STATE.cashMult);
-    addCoins(payout);
-
-    winSound();
-    renderTexts();
-  });
-
-  // --- Main loop ---
-  function loop(ts) {
-    const dt = Math.min(0.05, (ts - (STATE.lastTs || ts)) / 1000);
-    STATE.lastTs = ts;
-
-    if (STATE.phase === "countdown") {
-      STATE.countdownLeft -= dt;
-      if (STATE.countdownLeft <= 0) {
-        STATE.phase = "flying";
-        STATE.t = 0;
-        STATE.mult = 1.0;
-        STATE.points = [{ t: 0, mult: 1.0 }];
-        renderTexts();
-        draw();
-      } else {
-        // обновляем текст таймера раз в кадр, но без перерисовки линии
-        renderTexts();
-      }
-    } else if (STATE.phase === "flying") {
-      STATE.t += dt;
-      STATE.mult = multAt(STATE.t);
-
-      // добавляем точку (не слишком часто)
-      const last = STATE.points[STATE.points.length - 1];
-      if (!last || STATE.t - last.t >= 0.06) {
-        STATE.points.push({ t: STATE.t, mult: STATE.mult });
-        if (STATE.points.length > 420) STATE.points.shift();
-      }
-
-      // crash check
-      if (STATE.mult >= STATE.crashPoint) {
-        STATE.mult = STATE.crashPoint;
-        STATE.points.push({ t: STATE.t, mult: STATE.mult });
-
-        STATE.phase = "crashed";
-
-        // ракета пропадает
-        rocketEl.classList.add("hide");
-
-        // если был в раунде и не забрал — сгорел (ставка уже списана)
-        crashSound();
-        renderTexts();
-        draw();
-
-        // пауза и новый раунд
-        setTimeout(() => {
-          resetRound();
-        }, 2000);
-      } else {
-        renderTexts();
-        draw();
-      }
+    // little "engine" tick sound (very subtle)
+    if (soundOn) {
+      const p = Math.sin(performance.now() / 120);
+      if (p > 0.98) beep(520 + game.mult * 8, 0.02, "sine", 0.01);
     }
 
-    requestAnimationFrame(loop);
+    if (game.mult >= game.crashPoint) {
+      // clamp to crashPoint for nicer UI
+      game.mult = game.crashPoint;
+      crashNow();
+    }
+    return;
   }
-  requestAnimationFrame(loop);
 
-  // Пояснение честности (по клику на бейдж можно показать crashPoint — опционально)
-  // сейчас без лишних элементов, чтобы не было "квадратиков"
-})();
+  // CRASH phase: nothing, waiting for timeout to call newRound
+}
+
+// -------- Actions ----------
+joinBtn.addEventListener("click", () => {
+  if (game.phase !== PHASE.WAIT) return;
+
+  const bet = clampBet();
+  if (bet <= 0) return;
+
+  if (bet > wallet.coins) {
+    betHint.textContent = "Недостаточно монет.";
+    beep(180, 0.08, "square", 0.04);
+    return;
+  }
+
+  // place bet
+  addCoins(-bet);
+  game.inRound = true;
+  game.bet = bet;
+  game.cashed = false;
+
+  betHint.textContent = "В полёте нажми “Забрать”.";
+  logLine(`Вошёл в раунд: ставка ${bet} 🪙`);
+  beep(620, 0.06, "triangle", 0.03);
+});
+
+cashBtn.addEventListener("click", () => {
+  if (game.phase !== PHASE.FLY) return;
+  if (!game.inRound || game.cashed) return;
+
+  game.cashed = true;
+
+  const payout = Math.floor(game.bet * game.mult);
+  addCoins(payout);
+
+  logLine(`Забрал на x${game.mult.toFixed(2)}: +${payout} 🪙`);
+  beep(880, 0.06, "triangle", 0.03);
+  beep(1120, 0.06, "triangle", 0.025);
+});
+
+// -------- Init ----------
+function init() {
+  // protect if canvas missing
+  if (!canvas || !ctx) {
+    alert("Canvas не найден. Проверь index.html (id='chart').");
+    return;
+  }
+
+  clampBet();
+  newRound();
+  startLoop();
+  render();
+}
+
+window.addEventListener("resize", () => {
+  render();
+});
+
+// Start
+init();
