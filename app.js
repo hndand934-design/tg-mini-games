@@ -1,35 +1,27 @@
-// ===============================
-// Rocket Crash — app.js (ONLY Crash)
-// no history panel, no rocket sprite
-// line grows + glow at endpoint
-// sounds: start + crash (no music)
-// ===============================
+/* =========================
+   Rocket Crash — app.js
+   v6 (only Crash)
+   Auto rounds + graph (no rocket)
+   ========================= */
 
-// --- RNG (честный) ---
+// ---- RNG (fair-ish demo) ----
 function randFloat() {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
   return a[0] / 2 ** 32;
 }
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+function fmt2(x) { return (Math.round(x * 100) / 100).toFixed(2); }
 
-// "классическая" формула crashPoint (скрыт заранее, честный RNG)
-function genCrashPoint() {
-  // houseEdge можно 0.01..0.05 (мягкий). Оставим 0.02
-  const houseEdge = 0.02;
-  const r = Math.max(1e-12, 1 - randFloat());
-  const x = (1 - houseEdge) / r;
-  // ограничим верх, чтобы не улетало бесконечно визуально (логика ок)
-  return Math.max(1.01, Math.min(x, 300));
-}
-
+// ---- Telegram WebApp (optional) ----
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
 }
 
-// --- Wallet (local) ---
-const WALLET_KEY = "rocket_wallet_v1";
+// ---- Wallet (local) ----
+const WALLET_KEY = "rocket_wallet_v6";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -37,9 +29,7 @@ function loadWallet() {
   } catch {}
   return { coins: 1000 };
 }
-function saveWallet(w) {
-  localStorage.setItem(WALLET_KEY, JSON.stringify(w));
-}
+function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
 
 function setCoins(v) {
@@ -47,510 +37,542 @@ function setCoins(v) {
   saveWallet(wallet);
   renderBalance();
 }
-function addCoins(d) {
-  setCoins(wallet.coins + d);
+function addCoins(d) { setCoins(wallet.coins + d); }
+
+// ---- DOM helpers ----
+const $ = (id) => document.getElementById(id);
+const el = {
+  // top / header
+  balanceValue: $("balanceValue") || $("balance") || null,
+
+  // stats
+  multValue: $("multValue") || $("statMult") || $("mult") || null,
+  multHint: $("multHint") || null,
+  statusValue: $("statusValue") || $("statStatus") || $("status") || null,
+  statusHint: $("statusHint") || null,
+  betStatValue: $("betStatValue") || $("statBet") || $("yourBet") || null,
+  betStatHint: $("betStatHint") || null,
+
+  // center overlay
+  centerTitle: $("centerTitle") || $("centerMult") || null,
+  centerSub: $("centerSub") || $("centerText") || null,
+
+  // canvas
+  canvas: $("chart") || $("canvas") || null,
+
+  // controls
+  betInput: $("betInput") || $("bet") || null,
+  joinBtn: $("joinBtn") || $("enterBtn") || $("btnJoin") || null,
+  cashBtn: $("cashBtn") || $("btnCash") || null,
+  bonusBtn: $("bonusBtn") || null,
+  soundBtn: $("soundBtn") || null,
+};
+
+// If some elements are missing — fail loudly (so you can fix index)
+function assertDom() {
+  const required = ["canvas", "betInput", "joinBtn", "cashBtn"];
+  const missing = required.filter((k) => !el[k]);
+  if (missing.length) {
+    console.error("Missing DOM ids:", missing);
+  }
 }
+assertDom();
 
-// --- DOM ---
-const elBalance = document.getElementById("balanceValue");
-const elMult = document.getElementById("statMultValue");
-const elMultHint = document.getElementById("statMultHint");
-const elStatus = document.getElementById("statStatusValue");
-const elStatusHint = document.getElementById("statStatusHint");
-const elBet = document.getElementById("statBetValue");
-const elBetHint = document.getElementById("statBetHint");
-
-const btnSound = document.getElementById("soundBtn");
-const btnBonus = document.getElementById("bonusBtn");
-const btnJoin = document.getElementById("btnJoin");
-const btnCash = document.getElementById("btnCash");
-
-const betInput = document.getElementById("betInput");
-const betMinus = document.getElementById("betMinus");
-const betPlus = document.getElementById("betPlus");
-const chipButtons = Array.from(document.querySelectorAll(".chip"));
-
-const centerTitle = document.getElementById("centerTitle");
-const centerSub = document.getElementById("centerSub");
-
-const canvas = document.getElementById("chart");
-const ctx = canvas.getContext("2d", { alpha: true });
-
-// --- Resize canvas (retina) ---
-function fitCanvas() {
-  const rect = canvas.getBoundingClientRect();
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  canvas.width = Math.floor(rect.width * dpr);
-  canvas.height = Math.floor(rect.height * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-window.addEventListener("resize", () => {
-  fitCanvas();
-  draw(); // перерисовка
-});
-
-// --- UI render ---
+// ---- Render UI bits ----
 function renderBalance() {
-  if (elBalance) elBalance.textContent = `🪙 ${wallet.coins}`;
+  if (!el.balanceValue) return;
+  // show "🪙 1000" or just number depending on your html
+  el.balanceValue.textContent = `🪙 ${wallet.coins}`;
 }
 renderBalance();
 
-function clampBetUI() {
-  let v = Math.floor(Number(betInput.value) || 0);
+function setStatText(node, text) { if (node) node.textContent = text; }
+
+function setCenter(mult, sub) {
+  if (el.centerTitle) el.centerTitle.textContent = `${fmt2(mult)}x`;
+  if (el.centerSub) el.centerSub.textContent = sub || "";
+}
+
+// ---- Sound (only start + crash) ----
+let soundOn = true;
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playWhoosh() {
+  if (!soundOn) return;
+  ensureAudio();
+  const ctx = audioCtx;
+
+  const now = ctx.currentTime;
+
+  // noise burst
+  const bufferSize = Math.floor(ctx.sampleRate * 0.25);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.setValueAtTime(300, now);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  noise.start(now);
+
+  // short “engine” tone
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.0001, now);
+  og.gain.exponentialRampToValueAtTime(0.05, now + 0.05);
+  og.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+  osc.frequency.setValueAtTime(90, now);
+  osc.frequency.exponentialRampToValueAtTime(160, now + 0.22);
+  osc.connect(og);
+  og.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.28);
+}
+
+function playCrash() {
+  if (!soundOn) return;
+  ensureAudio();
+  const ctx = audioCtx;
+  const now = ctx.currentTime;
+
+  // noise impact
+  const bufferSize = Math.floor(ctx.sampleRate * 0.35);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    const t = i / bufferSize;
+    data[i] = (Math.random() * 2 - 1) * (1 - t) * 0.9;
+  }
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+
+  const low = ctx.createBiquadFilter();
+  low.type = "lowpass";
+  low.frequency.setValueAtTime(500, now);
+
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+
+  noise.connect(low);
+  low.connect(g);
+  g.connect(ctx.destination);
+  noise.start(now);
+
+  // low “boom” sine
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.0001, now);
+  og.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+  og.gain.exponentialRampToValueAtTime(0.0001, now + 0.30);
+  osc.frequency.setValueAtTime(70, now);
+  osc.frequency.exponentialRampToValueAtTime(35, now + 0.25);
+  osc.connect(og);
+  og.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.32);
+}
+
+function updateSoundBtn() {
+  if (!el.soundBtn) return;
+  el.soundBtn.textContent = soundOn ? "Звук: on" : "Звук: off";
+}
+updateSoundBtn();
+
+if (el.soundBtn) {
+  el.soundBtn.addEventListener("click", async () => {
+    soundOn = !soundOn;
+    updateSoundBtn();
+    // allow audio on first interaction
+    try { ensureAudio(); await audioCtx.resume(); } catch {}
+  });
+}
+
+// ---- Game state ----
+const state = {
+  phase: "waiting",   // waiting | flying | crashed
+  waitTotal: 3.0,
+  waitLeft: 3.0,
+
+  inRound: false,
+  bet: 100,
+  placedBet: 0,
+
+  // flight
+  crashPoint: 2.0,
+  mult: 1.0,
+  t0: 0,
+  t: 0,
+
+  // visuals
+  points: [],
+};
+
+function computeCrashPoint() {
+  // classic crash distribution: 1/(1-r)
+  const r = randFloat();
+  const raw = 1 / (1 - r);
+  // keep sane for demo
+  return clamp(raw, 1.05, 80);
+}
+
+function resetRoundToWaiting() {
+  state.phase = "waiting";
+  state.waitTotal = 3.0;
+  state.waitLeft = 3.0;
+
+  state.inRound = false;
+  state.placedBet = 0;
+
+  state.mult = 1.0;
+  state.t = 0;
+  state.points = [{ t: 0, m: 1.0 }];
+
+  syncUi();
+}
+
+function startFlight() {
+  state.phase = "flying";
+  state.crashPoint = computeCrashPoint();
+  state.t0 = performance.now();
+  state.t = 0;
+  state.mult = 1.0;
+  state.points = [{ t: 0, m: 1.0 }];
+
+  playWhoosh();
+  syncUi();
+}
+
+function crashNow() {
+  state.phase = "crashed";
+  // lock mult at crashPoint (visual)
+  state.mult = state.crashPoint;
+  state.points.push({ t: state.t, m: state.mult });
+
+  // if user didn't cash out and was in round -> lose (bet already deducted)
+  // if cashed out -> state.inRound already false
+  state.inRound = false;
+  state.placedBet = 0;
+
+  playCrash();
+  syncUi();
+
+  // short pause then next round
+  setTimeout(() => resetRoundToWaiting(), 1200);
+}
+
+// ---- Controls ----
+function clampBetInput() {
+  if (!el.betInput) return;
+  let v = Math.floor(Number(el.betInput.value) || 0);
   if (v < 1) v = 1;
   if (v > wallet.coins) v = wallet.coins;
-  betInput.value = String(v);
-  return v;
+  el.betInput.value = String(v);
+  state.bet = v;
+  syncUi();
 }
 
-// --- Sounds (start + crash only) ---
-let soundEnabled = true;
-btnSound?.addEventListener("click", () => {
-  soundEnabled = !soundEnabled;
-  btnSound.textContent = soundEnabled ? "Звук: on" : "Звук: off";
-});
-
-let audioCtx = null;
-function ensureAudio() {
-  if (!soundEnabled) return null;
-  if (!audioCtx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    audioCtx = new AC();
-  }
-  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
-  return audioCtx;
+if (el.betInput) {
+  el.betInput.addEventListener("input", clampBetInput);
+  // initial
+  el.betInput.value = String(state.bet);
 }
 
-function beep({ type = "sine", t = 0.12, f0 = 440, f1 = 440, gain = 0.08 } = {}) {
-  const ac = ensureAudio();
-  if (!ac) return;
-  const now = ac.currentTime;
-
-  const o = ac.createOscillator();
-  const g = ac.createGain();
-
-  o.type = type;
-  o.frequency.setValueAtTime(f0, now);
-  o.frequency.linearRampToValueAtTime(f1, now + t);
-
-  g.gain.setValueAtTime(0.0001, now);
-  g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, now + t);
-
-  o.connect(g);
-  g.connect(ac.destination);
-  o.start(now);
-  o.stop(now + t);
-}
-
-// мягкий “взлёт”
-function sfxStart() {
-  beep({ type: "triangle", t: 0.18, f0: 220, f1: 520, gain: 0.07 });
-  setTimeout(() => beep({ type: "sine", t: 0.10, f0: 660, f1: 880, gain: 0.04 }), 60);
-}
-
-// “краш” (короткий удар)
-function sfxCrash() {
-  beep({ type: "sawtooth", t: 0.22, f0: 320, f1: 80, gain: 0.08 });
-  setTimeout(() => beep({ type: "square", t: 0.10, f0: 140, f1: 60, gain: 0.05 }), 70);
-}
-
-// Разрешение звука в браузере: первый клик по странице
-document.addEventListener("pointerdown", () => ensureAudio(), { once: true });
-
-// --- Game State ---
-const PHASE = {
-  WAIT: "wait",   // ожидание/отсчёт
-  FLY: "fly",     // полёт множителя
-  CRASH: "crash"  // краш показан
-};
-
-let state = {
-  phase: PHASE.WAIT,
-  countdown: 3,
-  crashPoint: genCrashPoint(),
-  startAt: 0,
-  mult: 1.0,
-  // ставка игрока
-  bet: 100,
-  joined: false,
-  betLocked: 0,
-  cashed: false,
-  // визуал
-  spark: { on: false, x: 0, y: 0, r: 0, life: 0 }
-};
-
-function resetRound() {
-  state.phase = PHASE.WAIT;
-  state.countdown = 3;
-  state.crashPoint = genCrashPoint();
-  state.startAt = 0;
-  state.mult = 1.0;
-  state.joined = false;
-  state.betLocked = 0;
-  state.cashed = false;
-  state.spark = { on: false, x: 0, y: 0, r: 0, life: 0 };
-
-  updateUI();
-  draw();
-}
-
-function startFly() {
-  state.phase = PHASE.FLY;
-  state.startAt = performance.now();
-  state.mult = 1.0;
-  state.spark.on = false;
-  sfxStart();
-  updateUI();
-}
-
-function doCrash() {
-  state.phase = PHASE.CRASH;
-  // эффект взрыва в точке конца
-  state.spark.on = true;
-  state.spark.life = 1.0;
-  state.spark.r = 6;
-
-  sfxCrash();
-
-  // если игрок в раунде и не забрал — проиграл ставку
-  if (state.joined && !state.cashed) {
-    // ставка уже списана при входе
-  }
-
-  updateUI();
-}
-
-function nextRoundAfter(ms = 1400) {
-  setTimeout(() => resetRound(), ms);
-}
-
-// --- Mult growth curve (красиво, ускоряется) ---
-function multByTime(t) {
-  // t в секундах
-  // мягкая кривая, похожая на crash: сначала медленно, потом быстрее
-  // base = exp(k*t) но ограничим визуально
-  const k = 0.55;
-  const m = Math.exp(k * t);
-  return Math.max(1.0, m);
-}
-
-// --- Controls ---
-chipButtons.forEach((b) => {
+document.querySelectorAll("[data-bet]").forEach((b) => {
   b.addEventListener("click", () => {
-    const v = Number(b.dataset.bet);
-    if (!Number.isFinite(v)) return;
-    betInput.value = String(v);
-    state.bet = clampBetUI();
-    updateUI();
+    const val = b.getAttribute("data-bet");
+    if (!el.betInput) return;
+
+    if (val === "max") {
+      el.betInput.value = String(wallet.coins);
+    } else {
+      el.betInput.value = String(Number(val) || state.bet);
+    }
+    clampBetInput();
   });
 });
 
-betMinus.addEventListener("click", () => {
-  betInput.value = String((Number(betInput.value) || 1) - 10);
-  state.bet = clampBetUI();
-  updateUI();
-});
-betPlus.addEventListener("click", () => {
-  betInput.value = String((Number(betInput.value) || 1) + 10);
-  state.bet = clampBetUI();
-  updateUI();
-});
-betInput.addEventListener("input", () => {
-  state.bet = clampBetUI();
-  updateUI();
+document.querySelectorAll("[data-bet-step]").forEach((b) => {
+  b.addEventListener("click", () => {
+    if (!el.betInput) return;
+    const step = Number(b.getAttribute("data-bet-step")) || 0;
+    el.betInput.value = String((Number(el.betInput.value) || 0) + step);
+    clampBetInput();
+  });
 });
 
-btnBonus?.addEventListener("click", () => addCoins(1000));
+if (el.bonusBtn) {
+  el.bonusBtn.addEventListener("click", () => addCoins(1000));
+}
 
-// Вход в раунд — только во время WAIT (до старта)
-btnJoin.addEventListener("click", () => {
-  state.bet = clampBetUI();
-  if (state.phase !== PHASE.WAIT) return;
+if (el.joinBtn) {
+  el.joinBtn.addEventListener("click", async () => {
+    // allow audio on interaction
+    try { ensureAudio(); await audioCtx.resume(); } catch {}
 
-  if (state.joined) {
-    // уже в раунде
-    return;
-  }
-  if (state.bet <= 0) return;
-  if (state.bet > wallet.coins) return;
+    if (state.phase !== "waiting") return;
+    clampBetInput();
 
-  // списываем ставку, фиксируем
-  addCoins(-state.bet);
-  state.joined = true;
-  state.betLocked = state.bet;
-  state.cashed = false;
-  updateUI();
-});
+    if (state.bet <= 0) return;
+    if (state.bet > wallet.coins) return;
 
-// Забрать — только во время FLY, если в раунде
-btnCash.addEventListener("click", () => {
-  if (state.phase !== PHASE.FLY) return;
-  if (!state.joined) return;
-  if (state.cashed) return;
+    addCoins(-state.bet);
+    state.inRound = true;
+    state.placedBet = state.bet;
 
-  state.cashed = true;
+    syncUi();
+  });
+}
 
-  const payout = Math.floor(state.betLocked * state.mult);
-  addCoins(payout);
+if (el.cashBtn) {
+  el.cashBtn.addEventListener("click", async () => {
+    // allow audio on interaction
+    try { ensureAudio(); await audioCtx.resume(); } catch {}
 
-  // маленький “блеск” в конце линии
-  state.spark.on = true;
-  state.spark.life = 0.6;
-  state.spark.r = 5;
+    if (state.phase !== "flying") return;
+    if (!state.inRound) return;
 
-  updateUI();
-});
+    const payout = Math.floor(state.placedBet * state.mult);
+    addCoins(payout);
 
-// --- UI update ---
-function updateUI() {
+    state.inRound = false;
+    state.placedBet = 0;
+
+    syncUi();
+  });
+}
+
+// ---- UI sync ----
+function syncUi() {
   renderBalance();
 
-  // multiplier tile
-  elMult.textContent = `x${state.mult.toFixed(2)}`;
-  if (state.phase === PHASE.WAIT) elMultHint.textContent = "Ожидание";
-  if (state.phase === PHASE.FLY) elMultHint.textContent = "Растёт...";
-  if (state.phase === PHASE.CRASH) elMultHint.textContent = "Краш";
+  // stats row
+  setStatText(el.multValue, `x${fmt2(state.mult)}`);
+  setStatText(el.statusValue,
+    state.phase === "waiting" ? "Ожидание" :
+    state.phase === "flying" ? "Полёт" : "Краш"
+  );
 
-  // status tile
-  if (state.phase === PHASE.WAIT) {
-    elStatus.textContent = "Ожидание";
-    elStatusHint.textContent = `Старт через ${state.countdown}с`;
-  } else if (state.phase === PHASE.FLY) {
-    elStatus.textContent = "Полёт";
-    elStatusHint.textContent = "Можно забрать";
-  } else {
-    elStatus.textContent = "Краш";
-    elStatusHint.textContent = `Краш на x${state.crashPoint.toFixed(2)}`;
+  // "твоя ставка"
+  setStatText(el.betStatValue, state.inRound ? `${state.placedBet} 🪙` : "—");
+  if (el.betStatHint) {
+    el.betStatHint.textContent = state.inRound ? "Ты в раунде" : "не в раунде";
   }
 
-  // bet tile
-  elBet.textContent = state.joined ? `${state.betLocked} 🪙` : "—";
-  elBetHint.textContent = state.joined ? (state.cashed ? "забрал" : "в раунде") : "не в раунде";
-
-  // center label
-  centerTitle.textContent = `${state.mult.toFixed(2)}x`;
-  if (state.phase === PHASE.WAIT) {
-    centerSub.textContent = `Ожидание следующего раунда (${state.countdown}с)`;
-  } else if (state.phase === PHASE.FLY) {
-    centerSub.textContent = state.joined ? "Ты в раунде" : "Ты не в раунде";
-  } else {
-    centerSub.textContent = state.joined
-      ? (state.cashed ? "Ты забрал" : "Ты не успел")
-      : "Раунд завершён";
+  // hints
+  if (el.multHint) {
+    el.multHint.textContent =
+      state.phase === "waiting" ? "Новый раунд скоро" :
+      state.phase === "flying" ? "Растёт..." : "Раунд завершён";
+  }
+  if (el.statusHint) {
+    el.statusHint.textContent =
+      state.phase === "waiting" ? `Старт через ${Math.ceil(state.waitLeft)}с` :
+      state.phase === "flying" ? (state.inRound ? "Можно забрать" : "Ты не в раунде") :
+      "Краш";
   }
 
-  // кнопки
-  btnJoin.disabled = !(state.phase === PHASE.WAIT);
-  btnJoin.textContent = state.joined ? "В раунде (ждёшь)" : "Войти в раунд";
+  // center overlay
+  const sub =
+    state.phase === "waiting" ? `Ожидание следующего раунда (${Math.ceil(state.waitLeft)}с)` :
+    state.phase === "flying" ? (state.inRound ? "Нажми “Забрать” в любой момент" : "Ты не в раунде") :
+    `Краш на x${fmt2(state.crashPoint)}`;
+  setCenter(state.mult, sub);
 
-  btnCash.disabled = !(state.phase === PHASE.FLY && state.joined && !state.cashed);
+  // buttons
+  if (el.joinBtn) {
+    el.joinBtn.disabled = (state.phase !== "waiting") || state.inRound;
+    el.joinBtn.textContent =
+      state.phase !== "waiting" ? "Вход закрыт" : (state.inRound ? "В раунде" : "Войти в раунд");
+  }
+  if (el.cashBtn) {
+    el.cashBtn.disabled = (state.phase !== "flying") || !state.inRound;
+    el.cashBtn.textContent = "Забрать";
+  }
 }
 
-// --- Drawing ---
-function drawGrid(w, h) {
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  ctx.lineWidth = 1;
+// ---- Graph drawing ----
+const ctx = el.canvas ? el.canvas.getContext("2d") : null;
 
-  const step = 60;
-  ctx.strokeStyle = "rgba(255,255,255,0.06)";
-  for (let x = 0; x <= w; x += step) {
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, h);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= h; y += step) {
-    ctx.beginPath();
-    ctx.moveTo(0, y + 0.5);
-    ctx.lineTo(w, y + 0.5);
-    ctx.stroke();
-  }
-  ctx.restore();
+function resizeCanvasToCSS() {
+  if (!el.canvas || !ctx) return;
+  const r = el.canvas.getBoundingClientRect();
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  el.canvas.width = Math.floor(r.width * dpr);
+  el.canvas.height = Math.floor(r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
+window.addEventListener("resize", () => {
+  resizeCanvasToCSS();
+  draw();
+});
 
-function drawBackground(w, h) {
+function draw() {
+  if (!ctx || !el.canvas) return;
+  const w = el.canvas.getBoundingClientRect().width;
+  const h = el.canvas.getBoundingClientRect().height;
+
   ctx.clearRect(0, 0, w, h);
 
-  // мягкая виньетка
-  const g = ctx.createRadialGradient(w * 0.5, h * 0.45, 40, w * 0.5, h * 0.5, Math.max(w, h));
-  g.addColorStop(0, "rgba(255,255,255,0.03)");
+  // plot area padding
+  const pad = 18;
+  const x0 = pad, y0 = pad, x1 = w - pad, y1 = h - pad;
+  const pw = x1 - x0, ph = y1 - y0;
+
+  // dynamic scaling
+  const visibleT = Math.max(6, Math.min(14, state.t + 3)); // adaptive window
+  const maxM = Math.max(2, state.mult, state.crashPoint || 2);
+  const visibleM = Math.min(80, Math.max(3, maxM * 1.08));
+
+  const toX = (t) => x0 + (t / visibleT) * pw;
+  const toY = (m) => y1 - ((m - 1) / (visibleM - 1)) * ph;
+
+  // subtle vignette
+  const g = ctx.createRadialGradient(w * 0.5, h * 0.8, 20, w * 0.5, h * 0.8, Math.max(w, h));
+  g.addColorStop(0, "rgba(255,255,255,0.06)");
   g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
 
-  drawGrid(w, h);
-}
+  // build path points
+  const pts = state.points;
+  if (!pts || pts.length < 2) return;
 
-// перевод множителя -> точка на графике
-function mapToPoint(mult, w, h) {
-  // по X — время (0..T), по Y — рост
-  // Выбираем “окно” так, чтобы и 20x помещалось красиво
-  // Вместо реального времени делаем нормализацию: x зависит от ln(mult)
-  const pad = 18;
-
-  const m = Math.max(1.0, mult);
-  const xNorm = Math.min(1, Math.log(m) / Math.log(40)); // 40x ~ почти справа
-  const yNorm = Math.min(1, (m - 1) / 25);               // 26x ~ почти вверх
-
-  const x = pad + xNorm * (w - pad * 2);
-  const y = (h - pad) - yNorm * (h - pad * 2);
-
-  return { x, y };
-}
-
-function drawLineAndFill(w, h) {
-  const pad = 18;
-
-  const p = mapToPoint(state.mult, w, h);
-
-  // baseline
-  const x0 = pad;
-  const y0 = h - pad;
-
-  // линия — белая
+  // clip to plot
   ctx.save();
-  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, pw, ph, 12);
+  ctx.clip();
+
+  // fill under curve (stake-like)
+  ctx.beginPath();
+  ctx.moveTo(toX(pts[0].t), y1);
+  for (let i = 0; i < pts.length; i++) ctx.lineTo(toX(pts[i].t), toY(pts[i].m));
+  ctx.lineTo(toX(pts[pts.length - 1].t), y1);
+  ctx.closePath();
+
+  const fill = ctx.createLinearGradient(0, y0, 0, y1);
+  fill.addColorStop(0, "rgba(255,85,85,0.10)");
+  fill.addColorStop(1, "rgba(255,85,85,0.00)");
+  ctx.fillStyle = fill;
+  ctx.fill();
+
+  // glow line
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
-  // glow
-  ctx.shadowColor = "rgba(255,255,255,0.25)";
-  ctx.shadowBlur = 10;
-
-  ctx.strokeStyle = "rgba(255,255,255,0.95)";
   ctx.beginPath();
-  ctx.moveTo(x0, y0);
+  ctx.moveTo(toX(pts[0].t), toY(pts[0].m));
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(toX(pts[i].t), toY(pts[i].m));
 
-  // кривая (квадратичная) к концу
-  const cx = x0 + (p.x - x0) * 0.55;
-  const cy = y0 - (y0 - p.y) * 0.15; // слегка выгнута
-  ctx.quadraticCurveTo(cx, cy, p.x, p.y);
+  ctx.strokeStyle = "rgba(255,110,110,0.30)";
+  ctx.lineWidth = 6;
   ctx.stroke();
-  ctx.restore();
 
-  // заливка под кривой (красно-розовая)
-  ctx.save();
+  ctx.strokeStyle = "rgba(255,110,110,0.95)";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // dot at the end (so “интереснее смотреть” без ракеты)
+  const last = pts[pts.length - 1];
+  const lx = toX(last.t), ly = toY(last.m);
+
+  // glow dot
   ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  const cx2 = x0 + (p.x - x0) * 0.55;
-  const cy2 = y0 - (y0 - p.y) * 0.15;
-  ctx.quadraticCurveTo(cx2, cy2, p.x, p.y);
-  ctx.lineTo(p.x, y0);
-  ctx.closePath();
-
-  const fill = ctx.createLinearGradient(0, p.y, 0, y0);
-  fill.addColorStop(0, "rgba(255,80,120,0.18)");
-  fill.addColorStop(1, "rgba(255,80,120,0.02)");
-  ctx.fillStyle = fill;
+  ctx.arc(lx, ly, 10, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,120,120,0.12)";
   ctx.fill();
-  ctx.restore();
 
-  // точка на конце (как “интересно смотреть”)
-  ctx.save();
-  ctx.shadowColor = "rgba(255,255,255,0.35)";
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
   ctx.beginPath();
-  ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+  ctx.arc(lx, ly, 4.2, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,220,220,0.95)";
   ctx.fill();
+
   ctx.restore();
 
-  // эффекты: spark / crash flash
-  if (state.spark.on && state.spark.life > 0) {
-    const life = state.spark.life;
-    const rr = state.spark.r + (1 - life) * 28;
-
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, life);
-    const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
-    if (state.phase === PHASE.CRASH) {
-      rg.addColorStop(0, "rgba(255,80,80,0.55)");
-      rg.addColorStop(1, "rgba(255,80,80,0)");
-    } else {
-      rg.addColorStop(0, "rgba(255,255,255,0.35)");
-      rg.addColorStop(1, "rgba(255,255,255,0)");
-    }
-    ctx.fillStyle = rg;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
+  // outer border (soft)
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x0, y0, pw, ph);
 }
 
-function draw() {
-  const rect = canvas.getBoundingClientRect();
-  const w = rect.width;
-  const h = rect.height;
+// ---- Main loop (auto rounds) ----
+function tick() {
+  if (state.phase === "waiting") {
+    state.waitLeft -= 1 / 60;
+    state.waitLeft = Math.max(0, state.waitLeft);
+    state.mult = 1.0;
+    state.points = [{ t: 0, m: 1.0 }];
 
-  drawBackground(w, h);
-  drawLineAndFill(w, h);
-}
-
-// --- Main loop ---
-let lastTick = performance.now();
-let raf = null;
-
-function tick(now) {
-  const dt = Math.min(0.05, (now - lastTick) / 1000);
-  lastTick = now;
-
-  // countdown
-  if (state.phase === PHASE.WAIT) {
-    // уменьшаем раз в секунду
-    state._acc = (state._acc || 0) + dt;
-    if (state._acc >= 1) {
-      state._acc = 0;
-      state.countdown -= 1;
-      if (state.countdown <= 0) {
-        startFly();
-      }
-      updateUI();
-    }
+    if (state.waitLeft <= 0) startFlight();
+    syncUi();
+    draw();
+    requestAnimationFrame(tick);
+    return;
   }
 
-  // flight
-  if (state.phase === PHASE.FLY) {
-    const t = (now - state.startAt) / 1000;
-    const m = multByTime(t);
+  if (state.phase === "flying") {
+    const now = performance.now();
+    state.t = (now - state.t0) / 1000;
 
-    state.mult = Math.min(m, state.crashPoint);
+    // Growth: smooth curve (looks like crash games)
+    // mult = 1 + a*t + b*t^2
+    const a = 0.75;
+    const b = 0.14;
+    state.mult = 1 + a * state.t + b * state.t * state.t;
 
-    // если дошли до краша
-    if (state.mult >= state.crashPoint - 1e-6) {
-      state.mult = state.crashPoint;
-      doCrash();
-      nextRoundAfter(1400);
+    // Keep points for drawing
+    // push ~ every 50ms
+    const last = state.points[state.points.length - 1];
+    if (!last || state.t - last.t >= 0.05) {
+      state.points.push({ t: state.t, m: state.mult });
+      // limit points
+      if (state.points.length > 450) state.points.shift();
     }
 
-    updateUI();
-  }
-
-  // spark decay
-  if (state.spark.on) {
-    state.spark.life -= dt * 1.8;
-    if (state.spark.life <= 0) {
-      state.spark.on = false;
-      state.spark.life = 0;
+    // crash check
+    if (state.mult >= state.crashPoint) {
+      crashNow();
+      draw();
+      return;
     }
+
+    syncUi();
+    draw();
+    requestAnimationFrame(tick);
+    return;
   }
 
-  draw();
-  raf = requestAnimationFrame(tick);
+  // crashed phase is handled by timeout (resetRoundToWaiting)
+  requestAnimationFrame(tick);
 }
 
-// --- Init ---
-function init() {
-  fitCanvas();
-  state.bet = clampBetUI();
-  updateUI();
-  draw();
-
-  if (raf) cancelAnimationFrame(raf);
-  lastTick = performance.now();
-  raf = requestAnimationFrame(tick);
+// ---- init ----
+function initChipsActive() {
+  // optional: highlight chosen chip if your HTML has it
 }
+resizeCanvasToCSS();
+resetRoundToWaiting();
+syncUi();
+draw();
 
-init();
+// Start animation loop (auto)
+requestAnimationFrame(tick);
