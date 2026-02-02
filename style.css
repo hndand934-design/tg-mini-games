@@ -1,312 +1,298 @@
-:root{
-  --bg1:#070b17;
-  --bg2:#0b1430;
-  --card:rgba(255,255,255,.06);
-  --card2:rgba(255,255,255,.08);
-  --stroke:rgba(255,255,255,.10);
-  --stroke2:rgba(255,255,255,.14);
-  --text:#eaf0ff;
-  --muted:rgba(234,240,255,.72);
-
-  --blue:#4c7dff;
-  --blue2:#2b62ff;
-  --red:#ff5a6b;
-
-  --shadow: 0 18px 45px rgba(0,0,0,.42);
-  --radius: 18px;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
 }
 
-*{ box-sizing:border-box; }
-html,body{ height:100%; }
-body{
-  margin:0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  color:var(--text);
+body {
+  background: #070b18;
+  color: #e8ecff;
+  min-height: 100vh;
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
   background:
-    radial-gradient(1200px 650px at 20% 10%, rgba(76,125,255,.20), transparent 60%),
-    radial-gradient(900px 500px at 80% 10%, rgba(255,90,107,.16), transparent 58%),
-    radial-gradient(1100px 900px at 50% 85%, rgba(24,200,255,.08), transparent 60%),
-    linear-gradient(180deg, var(--bg2), var(--bg1));
-  overflow-x:hidden;
+    radial-gradient(circle at 30% 20%, rgba(88, 80, 255, 0.25), transparent 60%),
+    radial-gradient(circle at 80% 70%, rgba(255, 60, 120, 0.2), transparent 60%),
+    linear-gradient(180deg, #050816, #070b18);
+  z-index: -1;
 }
 
-/* Лёгкие "звёзды" */
-body:before{
-  content:"";
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  background-image:
-    radial-gradient(circle, rgba(255,255,255,.14) 1px, transparent 1px),
-    radial-gradient(circle, rgba(255,255,255,.10) 1px, transparent 1px);
-  background-size: 80px 80px, 120px 120px;
-  background-position: 0 0, 40px 30px;
-  opacity:.22;
-  filter: blur(.0px);
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px;
 }
 
-.app{
-  width:min(1180px, calc(100vw - 36px));
-  margin: 18px auto 34px;
-}
-
-/* TOPBAR */
-.topbar{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:14px;
-  padding: 14px 16px;
-  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
-  border:1px solid var(--stroke);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.topbar__title{
-  font-weight: 900;
-  letter-spacing:.2px;
-  font-size: 16px;
-}
-.topbar__sub{
-  margin-top:2px;
-  font-size:12px;
-  color:var(--muted);
-}
-
-.pill{
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.06);
-  border:1px solid var(--stroke);
-  font-size:12px;
-  color:var(--muted);
-}
-.pill b{ color:var(--text); font-weight:900; }
-
-/* GRID LAYOUT (фиксируем как "стандарт") */
-.grid{
-  margin-top: 14px;
-  display:grid;
-  grid-template-columns: 1fr 330px;
-  gap: 14px;
-  align-items:start;
-}
-
-@media (max-width: 980px){
-  .grid{ grid-template-columns: 1fr; }
-}
-
-/* LEFT SIDE */
-.left{ min-width:0; }
-
-.stats{
-  display:grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-@media (max-width: 980px){
-  .stats{ grid-template-columns: 1fr; }
-}
-
-.stat{
-  padding: 12px 14px;
+/* Topbar */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
   border-radius: 16px;
-  background: rgba(255,255,255,.05);
-  border:1px solid var(--stroke);
-  box-shadow: 0 10px 22px rgba(0,0,0,.20) inset;
+  padding: 14px 18px;
+  margin-bottom: 18px;
 }
 
-.stat__label{
-  font-size:12px;
-  color:var(--muted);
-}
-.stat__value{
-  margin-top:6px;
-  font-size:16px;
-  font-weight:900;
-}
-.stat__hint{
-  margin-top:2px;
-  font-size:12px;
-  color:rgba(234,240,255,.62);
+.title {
+  font-weight: 900;
+  font-size: 18px;
 }
 
-/* CARDS */
-.card{
-  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.04));
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+.subtitle {
+  font-size: 12px;
+  opacity: .7;
 }
 
-/* BOARD (КВАДРАТ ИГРЫ — фиксируем!) */
-.board{
+.balanceBox {
+  text-align: right;
+}
+
+.balanceLabel {
+  font-size: 11px;
+  opacity: .7;
+}
+
+.balanceValue {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+/* Layout */
+.main {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.right {
+  display: flex;
+}
+
+/* Stats */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.stat {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.stat__label {
+  font-size: 11px;
+  opacity: .7;
+}
+
+.stat__value {
+  font-size: 20px;
+  font-weight: 900;
+  margin-top: 2px;
+}
+
+.stat__hint {
+  font-size: 11px;
+  opacity: .65;
+}
+
+/* Chart */
+.chartCard {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
   padding: 12px;
 }
 
-.board__inner{
-  position:relative;
-  width:100%;
-  aspect-ratio: 16 / 9; /* красиво как в примерах */
-  border-radius: 16px;
-  overflow:hidden;
-
-  background:
-    radial-gradient(900px 420px at 50% 40%, rgba(76,125,255,.10), transparent 60%),
-    radial-gradient(520px 340px at 75% 35%, rgba(255,90,107,.08), transparent 60%),
-    linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.38));
-  border:1px solid rgba(255,255,255,.08);
-}
-
-/* CANVAS под размер контейнера */
-#crashCanvas{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
-  display:block;
-}
-
-/* Footer внутри квадрата */
-.board__footer{
-  position:absolute;
-  left:10px;
-  right:10px;
-  bottom:10px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  pointer-events:none; /* чтобы canvas ловил события если нужно */
-}
-.board__footer > *{ pointer-events:auto; }
-
-.board__note{
-  font-size:12px;
-  color:rgba(234,240,255,.70);
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(0,0,0,.22);
-  border:1px solid rgba(255,255,255,.08);
-  white-space:nowrap;
-}
-
-.underNote{
-  margin-top:10px;
-  font-size:12px;
-  color:rgba(234,240,255,.62);
-  padding-left: 6px;
-}
-
-/* RIGHT PANEL */
-.right{
-  padding: 14px;
-  min-height: 420px;
-}
-
-.panelHead{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-}
-.panelTitle{
-  font-weight:900;
-  font-size:14px;
-}
-
-.presetRow{
-  margin-top:12px;
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-}
-
-.betRow{
-  margin-top:12px;
-  display:flex;
-  gap:8px;
-  align-items:center;
-}
-
-.betInput{
-  flex:1;
-  height:40px;
-  border-radius: 12px;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.06);
-  color:var(--text);
-  padding: 0 12px;
-  outline:none;
-  font-weight:800;
-}
-
-.btnSquare{
-  width:44px;
-  height:40px;
-  border-radius: 12px;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.06);
-  color:var(--text);
-  font-weight:900;
-  cursor:pointer;
-}
-.btnSquare:active{ transform: scale(.98); }
-
-.actionRow{
-  margin-top:12px;
-  display:flex;
-  gap:10px;
-}
-
-.btnPrimary, .btnDanger{
-  flex:1;
-  height:42px;
+.chartInner {
+  position: relative;
+  height: 360px;
+  background: radial-gradient(circle at center, rgba(255,255,255,.03), transparent 70%);
   border-radius: 14px;
-  border:1px solid rgba(255,255,255,.10);
-  cursor:pointer;
-  font-weight:900;
-  color:var(--text);
-}
-.btnPrimary{
-  background: linear-gradient(180deg, rgba(76,125,255,.95), rgba(43,98,255,.82));
-}
-.btnDanger{
-  background: linear-gradient(180deg, rgba(255,90,107,.85), rgba(255,90,107,.45));
-}
-.btnPrimary:disabled, .btnDanger:disabled{
-  opacity:.45;
-  cursor:not-allowed;
+  overflow: hidden;
 }
 
-.panelFoot{
-  margin-top:12px;
-  font-size:12px;
-  color:rgba(234,240,255,.62);
-}
-.panelFoot .ver{
-  float:right;
-  opacity:.8;
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
-/* CHIPS */
-.chip{
-  padding: 8px 10px;
+.center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.center__title {
+  font-size: 44px;
+  font-weight: 900;
+}
+
+.center__sub {
+  font-size: 13px;
+  opacity: .75;
+  margin-top: 6px;
+}
+
+.soundBtn {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
   border-radius: 999px;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.06);
-  color: var(--text);
-  font-weight:800;
-  font-size:12px;
-  cursor:pointer;
-}
-.chip:active{ transform: scale(.98); }
-.chip--muted{
-  background: rgba(0,0,0,.22);
+  padding: 6px 12px;
+  color: #e8ecff;
+  font-size: 12px;
+  cursor: pointer;
 }
 
-/* Чтобы ничего не "расползалось" */
-button, input { font: inherit; }
+.fairLabel {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  font-size: 11px;
+  opacity: .6;
+}
+
+.footerHint {
+  text-align: center;
+  font-size: 11px;
+  opacity: .6;
+  margin-top: 6px;
+}
+
+/* Bet card */
+.betCard {
+  width: 100%;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.betTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.betTitle {
+  font-weight: 800;
+}
+
+.bonusBtn {
+  background: rgba(76,125,255,.2);
+  border: 1px solid rgba(76,125,255,.4);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #dbe2ff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  flex: 1;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px;
+  padding: 6px 0;
+  color: #e8ecff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.betRow {
+  display: flex;
+  gap: 6px;
+}
+
+.betInput {
+  flex: 1;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 8px;
+  color: #fff;
+  text-align: center;
+}
+
+.miniBtn {
+  width: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  cursor: pointer;
+}
+
+.actionRow {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primary {
+  background: linear-gradient(180deg, #4c7dff, #355fff);
+  color: #fff;
+}
+
+.danger {
+  background: linear-gradient(180deg, #ff5a5a, #d94040);
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.smallNote {
+  font-size: 11px;
+  opacity: .6;
+  text-align: center;
+}
+
+.ver {
+  font-size: 11px;
+  opacity: .5;
+  text-align: center;
+}
