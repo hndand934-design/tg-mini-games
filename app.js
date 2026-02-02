@@ -1,7 +1,7 @@
-// app.js — Wheel (GitHub Pages) v2
-// Логика: выигрыш только если выпал выбранный сектор (фракция).
-// Есть "0x" (проигрышный) сектор как отдельная фракция.
-// Есть звук (tick во время вращения + stop), кнопка mute/unmute.
+// app.js — Wheel v3 (цветные фракции без серого сектора)
+// Логика: выигрыш ТОЛЬКО если выпал выбранный множитель.
+// Не безпроигрышно за счет весов (дорогие множители реже).
+// Плашки "Твой выбор" и "Результат" всегда обновляются.
 
 // ---------------- RNG ----------------
 function randFloat() {
@@ -21,7 +21,7 @@ if (tg) {
 }
 
 // ---------------- Wallet (virtual) ----------------
-const WALLET_KEY = "wheel_wallet_v2";
+const WALLET_KEY = "wheel_wallet_v3";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -54,79 +54,16 @@ const elBetPlus = $("#betPlus");
 const elSpin = $("#spinBtn");
 const elCanvas = $("#wheel");
 
+// центр
 const elCenterTitle = $("#centerTitle");
 const elCenterSub = $("#centerSub");
 
-const elStatMult = $("#statMult");
+// верхние плашки
 const elStatStatus = $("#statStatus");
 const elStatPick = $("#statPick");
-const elStatResult = $("#statResult"); // если есть отдельный блок результата (опц)
-const elMuteBtn = $("#muteBtn"); // кнопка звука (если есть)
+const elStatResult = $("#statResult");
+const elStatMult = $("#statMult"); // если есть
 
-if (!elCanvas || !elSpin || !elBet) {
-  console.error("Не найден(ы) нужные элементы. Проверь index.html (wheel/spinBtn/betInput).");
-}
-
-// ---------------- Sound (tiny, pleasant) ----------------
-const SOUND_KEY = "wheel_sound_on_v1";
-let soundOn = (localStorage.getItem(SOUND_KEY) ?? "1") === "1";
-
-// WebAudio
-let audioCtx = null;
-function getAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  return audioCtx;
-}
-function playTick() {
-  if (!soundOn) return;
-  const ctx = getAudio();
-  const t = ctx.currentTime;
-  const o = ctx.createOscillator();
-  const g = ctx.createGain();
-  o.type = "triangle";
-  o.frequency.setValueAtTime(720, t);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.03, t + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
-  o.connect(g); g.connect(ctx.destination);
-  o.start(t);
-  o.stop(t + 0.07);
-}
-function playStop() {
-  if (!soundOn) return;
-  const ctx = getAudio();
-  const t = ctx.currentTime;
-  const o = ctx.createOscillator();
-  const g = ctx.createGain();
-  o.type = "sine";
-  o.frequency.setValueAtTime(520, t);
-  o.frequency.exponentialRampToValueAtTime(880, t + 0.08);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.06, t + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o.connect(g); g.connect(ctx.destination);
-  o.start(t);
-  o.stop(t + 0.14);
-}
-function setSound(on) {
-  soundOn = !!on;
-  localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0");
-  if (elMuteBtn) elMuteBtn.textContent = soundOn ? "Звук: on" : "Звук: off";
-}
-
-// если кнопка есть — подключим
-if (elMuteBtn) {
-  setSound(soundOn);
-  elMuteBtn.addEventListener("click", async () => {
-    // чтобы в браузере аудио разрешилось
-    try { await getAudio().resume(); } catch {}
-    setSound(!soundOn);
-  });
-}
-
-// ---------------- UI ----------------
 function renderBalance() {
   if (elBalance) elBalance.textContent = `${wallet.coins} 🪙`;
 }
@@ -139,73 +76,93 @@ function clampBet() {
   elBet.value = String(v);
   return v;
 }
-clampBet();
 
-function setStatus(status, sub = "") {
-  if (elStatStatus) elStatStatus.textContent = status;
+// ---------------- UI helpers ----------------
+function pulse(el) {
+  if (!el) return;
+  el.classList.remove("pulse");
+  // reflow
+  void el.offsetWidth;
+  el.classList.add("pulse");
+}
+
+function setStatus(title, sub = "") {
+  if (elStatStatus) {
+    elStatStatus.textContent = title;
+    pulse(elStatStatus);
+  }
   if (elCenterSub) elCenterSub.textContent = sub || "";
 }
-function setMultText(t) {
-  if (elStatMult) elStatMult.textContent = t;
+
+function setPickText(t) {
+  if (elStatPick) {
+    elStatPick.textContent = t;
+    pulse(elStatPick);
+  }
+}
+
+function setResultText(t) {
+  if (elStatResult) {
+    elStatResult.textContent = t;
+    pulse(elStatResult);
+  }
+}
+
+function setCenterTitle(t) {
   if (elCenterTitle) elCenterTitle.textContent = t;
 }
-function setPickText(t) {
-  if (elStatPick) elStatPick.textContent = t;
-}
-function setResultText(t) {
-  if (elStatResult) elStatResult.textContent = t;
+
+function setMultText(t) {
+  if (elStatMult) elStatMult.textContent = t;
 }
 
-// ---------------- Wheel model ----------------
-// Добавили "lose" сектор (0x). Он делает игру НЕ безпроигрышной.
-// Чем больше count у lose — тем чаще будет проигрыш.
+// ---------------- Wheel model (NO GREY) ----------------
+// Веса подобраны так, чтобы игра не была "в плюс" на дистанции.
+// Total = 100
 const FACTIONS = [
-  { key: "lose",   label: "0.00x", mult: 0.0,  color: "#A8B0C2", count: 16 }, // проигрышные
-  { key: "green",  label: "1.20x", mult: 1.2,  color: "#3DFF8A", count: 12 },
-  { key: "lime",   label: "1.50x", mult: 1.5,  color: "#B8FF3D", count: 7  },
-  { key: "blue",   label: "2.00x", mult: 2.0,  color: "#44D7FF", count: 4  },
-  { key: "purple", label: "3.00x", mult: 3.0,  color: "#A966FF", count: 2  },
-  { key: "orange", label: "5.00x", mult: 5.0,  color: "#FFB03D", count: 1  },
-  { key: "red",    label: "20.0x", mult: 20.0, color: "#FF4D4D", count: 1  },
+  { key: "x12", label: "1.20x", mult: 1.2,  color: "#3DFF8A", count: 55 },
+  { key: "x15", label: "1.50x", mult: 1.5,  color: "#B8FF3D", count: 25 },
+  { key: "x20", label: "2.00x", mult: 2.0,  color: "#44D7FF", count: 12 },
+  { key: "x30", label: "3.00x", mult: 3.0,  color: "#A966FF", count: 5  },
+  { key: "x50", label: "5.00x", mult: 5.0,  color: "#FFB03D", count: 2  },
+  { key: "x200",label: "20.0x", mult: 20.0, color: "#FF4D4D", count: 1  },
 ];
 
-// Секторы
 const SECTORS = [];
 for (const f of FACTIONS) for (let i = 0; i < f.count; i++) SECTORS.push(f);
 const N = SECTORS.length;
 
 // ---------------- State ----------------
-let selectedPick = "green";   // что выбрал игрок
+let selectedPick = FACTIONS[0].key; // по умолчанию 1.2
 let spinning = false;
 let rotation = 0;
 let raf = null;
 
-// Для тиков: будем тикать при прохождении границ секторов
+// tick (чтобы “результат” жил во время вращения)
 let lastTickSector = 0;
 
 // ---------------- Pick buttons ----------------
-// IMPORTANT: кнопки с data-pick должны существовать.
-// Проигрышный сектор НЕ выбираем как ставку — поэтому игнорируем lose.
+// Кнопки должны иметь class="pickBtn" data-pick="x12" и т.д.
+function getFaction(key) {
+  return FACTIONS.find(f => f.key === key) || FACTIONS[0];
+}
+
 function setPick(key) {
-  if (key === "lose") return;
+  if (spinning) return;
   selectedPick = key;
+  const f = getFaction(key);
 
-  const f = FACTIONS.find(x => x.key === key) || FACTIONS.find(x => x.key === "green");
   setPickText(`${f.label}`);
+  setResultText("—");
   setStatus("Ожидание", "Выбери фракцию снизу и нажми «Крутить»");
+  setCenterTitle(f.label);
   setMultText("—");
-  setResultText("");
 
-  $$(".pickBtn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.pick === key);
-  });
+  $$(".pickBtn").forEach(btn => btn.classList.toggle("active", btn.dataset.pick === key));
 }
 
 $$(".pickBtn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    if (spinning) return;
-    setPick(btn.dataset.pick);
-  });
+  btn.addEventListener("click", () => setPick(btn.dataset.pick));
 });
 
 // chips
@@ -221,20 +178,16 @@ $$(".chip").forEach(ch => {
 });
 
 // bet +/- buttons
-if (elBetMinus) {
-  elBetMinus.addEventListener("click", () => {
-    if (spinning) return;
-    elBet.value = String((Number(elBet.value) || 1) - 10);
-    clampBet();
-  });
-}
-if (elBetPlus) {
-  elBetPlus.addEventListener("click", () => {
-    if (spinning) return;
-    elBet.value = String((Number(elBet.value) || 1) + 10);
-    clampBet();
-  });
-}
+if (elBetMinus) elBetMinus.addEventListener("click", () => {
+  if (spinning) return;
+  elBet.value = String((Number(elBet.value) || 1) - 10);
+  clampBet();
+});
+if (elBetPlus) elBetPlus.addEventListener("click", () => {
+  if (spinning) return;
+  elBet.value = String((Number(elBet.value) || 1) + 10);
+  clampBet();
+});
 elBet.addEventListener("input", () => { if (!spinning) clampBet(); });
 
 // ---------------- Canvas draw ----------------
@@ -244,7 +197,6 @@ function getCanvasSize() {
   const size = Math.floor(Math.min(rect.width, rect.height) * dpr);
   return { size, dpr };
 }
-
 function hexToRgba(hex, a) {
   const h = hex.replace("#", "");
   const n = parseInt(h, 16);
@@ -272,10 +224,10 @@ function drawWheel() {
   const R = Math.min(cx, cy) * 0.96;
   const rInner = R * 0.74;
 
-  // диск
+  // фон диска
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.035)";
+  ctx.fillStyle = "rgba(255,255,255,0.03)";
   ctx.fill();
 
   // обод
@@ -296,19 +248,19 @@ function drawWheel() {
     ctx.arc(cx, cy, rInner, end, start, true);
     ctx.closePath();
 
-    const alt = (i % 2 === 0) ? 0.92 : 0.78;
+    const alt = (i % 2 === 0) ? 0.95 : 0.78;
     ctx.fillStyle = hexToRgba(f.color, 0.88 * alt);
     ctx.fill();
 
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.strokeStyle = "rgba(0,0,0,0.28)";
     ctx.stroke();
   }
 
   // внутренняя часть
   ctx.beginPath();
   ctx.arc(cx, cy, rInner * 0.92, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(10,16,40,0.65)";
+  ctx.fillStyle = "rgba(10,16,40,0.62)";
   ctx.fill();
 
   ctx.lineWidth = Math.max(2, R * 0.015);
@@ -326,7 +278,7 @@ function drawWheel() {
   ctx.fill();
 }
 
-// сектор под указателем
+// сектор под стрелкой
 function sectorAtPointerIndex(rot) {
   const da = (Math.PI * 2) / N;
   let t = (-rot) / da;
@@ -334,50 +286,46 @@ function sectorAtPointerIndex(rot) {
   return Math.floor(t);
 }
 
-// ---------------- Animation ----------------
+// ---------------- Spin ----------------
 function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-// выбор случайного сектора (равномерно по массиву SECTORS)
-function pickRandomSectorIndex() {
-  return randInt(0, N - 1);
-}
-
-// ---------------- Spin ----------------
 function lockUI(lock) {
   elSpin.disabled = lock;
   $$(".pickBtn, .chip, #betMinus, #betPlus").forEach(x => { if (x) x.disabled = lock; });
   if (elBet) elBet.disabled = lock;
 }
 
-async function spinOnce() {
-  if (spinning) return;
+function pickRandomSectorIndex() {
+  return randInt(0, N - 1); // равномерно по массиву SECTORS (а веса уже в count)
+}
 
-  // чтобы звук работал после клика в браузере
-  try { if (soundOn) await getAudio().resume(); } catch {}
+function spinOnce() {
+  if (spinning) return;
 
   const bet = clampBet();
   if (bet <= 0) return alert("Ставка должна быть больше 0");
   if (bet > wallet.coins) return alert("Недостаточно монет");
 
-  const pick = FACTIONS.find(f => f.key === selectedPick) || FACTIONS.find(f => f.key === "green");
+  const pick = getFaction(selectedPick);
 
   // списываем ставку
   addCoins(-bet);
 
   spinning = true;
   lockUI(true);
+
+  setPickText(`${pick.label}`);
+  setResultText("Крутится…");
   setStatus("Крутится…", "Ждём выпадение сектора");
+  setCenterTitle("…");
   setMultText("—");
-  setResultText("");
 
   const targetIndex = pickRandomSectorIndex();
   const targetFaction = SECTORS[targetIndex];
 
   const da = (Math.PI * 2) / N;
-  const a0 = -Math.PI / 2;
-
   const jitter = (randFloat() - 0.5) * da * 0.70;
   const baseTargetRot = -((targetIndex + 0.5) * da) - jitter;
 
@@ -396,12 +344,14 @@ async function spinOnce() {
 
     rotation = startRot + (endRot - startRot) * e;
 
-    // tick sound при смене сектора
+    // "живой" результат во время кручения
     const curSector = sectorAtPointerIndex(rotation);
     if (curSector !== lastTickSector) {
-      // чем ближе к финалу — тем реже тики (не обязательно), но пусть будет мягко:
-      playTick();
       lastTickSector = curSector;
+      const curF = SECTORS[curSector];
+      setCenterTitle(curF.label);
+      // чтобы плашка результата “дышала”
+      setResultText(`Крутится… (${curF.label})`);
     }
 
     drawWheel();
@@ -415,39 +365,31 @@ async function spinOnce() {
     rotation = ((rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     drawWheel();
 
-    // итог
     const landedIndex = sectorAtPointerIndex(rotation);
     const landed = SECTORS[landedIndex];
 
+    // выигрыш только при совпадении
+    let won = (landed.key === pick.key);
     let payout = 0;
-    let won = false;
 
-    if (landed.key === pick.key && landed.key !== "lose") {
+    if (won) {
       payout = Math.floor(bet * landed.mult);
       addCoins(payout);
-      won = true;
-    } else {
-      // проигрыш (в т.ч. если landed=lose или выбрал одно, выпало другое)
-      payout = 0;
-      won = false;
     }
 
-    playStop();
-
-    // UI
+    // UI итог
     setPickText(`${pick.label}`);
-    // result
-    const resultText = `${landed.label}`;
-    if (elStatResult) elStatResult.textContent = resultText;
+    setResultText(`${landed.label}`);
+    setCenterTitle(`${landed.label}`);
 
     if (won) {
       setStatus("Выигрыш!", `+${payout} 🪙 (ставка ${bet} 🪙)`);
       setMultText(`+${payout} 🪙`);
-      setResultText(`Выпало: ${landed.label} · Ты выбрал: ${pick.label}`);
+      if (elCenterSub) elCenterSub.textContent = `Ты выбрал ${pick.label} · Выпало ${landed.label}`;
     } else {
       setStatus("Проигрыш", `Ставка ${bet} 🪙 сгорела`);
-      setMultText(`${landed.label}`);
-      setResultText(`Выпало: ${landed.label} · Ты выбрал: ${pick.label}`);
+      setMultText("0 🪙");
+      if (elCenterSub) elCenterSub.textContent = `Ты выбрал ${pick.label} · Выпало ${landed.label}`;
     }
 
     spinning = false;
@@ -461,17 +403,12 @@ async function spinOnce() {
 elSpin.addEventListener("click", spinOnce);
 
 // ---------------- Resize ----------------
-function onResize() { drawWheel(); }
-window.addEventListener("resize", () => setTimeout(onResize, 60));
+window.addEventListener("resize", () => setTimeout(drawWheel, 60));
 
 // ---------------- Init ----------------
 function init() {
-  // дефолт — green
+  clampBet();
   setPick(selectedPick);
-
-  // mute text
-  if (elMuteBtn) elMuteBtn.textContent = soundOn ? "Звук: on" : "Звук: off";
-
   drawWheel();
 }
 init();
