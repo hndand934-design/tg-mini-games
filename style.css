@@ -1,253 +1,288 @@
-/* =========================
+/* ============================
    Rocket Crash — style.css
-   v7 (Crash only)
-   ========================= */
+   FINAL (Crash only)
+   ============================ */
 
-/* Reset */
-*{box-sizing:border-box}
-html,body{height:100%}
+:root{
+  --bg:#070a13;
+  --card: rgba(255,255,255,.05);
+  --stroke: rgba(255,255,255,.09);
+  --stroke2: rgba(255,255,255,.12);
+  --txt: #eaf0ff;
+  --muted: rgba(234,240,255,.72);
+  --muted2: rgba(234,240,255,.52);
+  --blue: #4c7dff;
+  --blue2:#3d6bff;
+  --red:#ff5a6a;
+  --red2:#d84a57;
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
 body{
   margin:0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  color:#eaf0ff;
-  background:#070a13;
+  background: var(--bg);
+  color: var(--txt);
   overflow-x:hidden;
 }
 
-/* Background (animated winter night vibe) */
+/* Background layers */
 .bg{
   position:fixed; inset:0;
-  background:
-    radial-gradient(1200px 700px at 20% 20%, rgba(76,125,255,.22), transparent 60%),
-    radial-gradient(900px 600px at 80% 30%, rgba(255,76,156,.14), transparent 55%),
-    radial-gradient(700px 500px at 30% 85%, rgba(0,255,204,.10), transparent 60%),
-    linear-gradient(180deg, #070a13 0%, #060814 50%, #050612 100%);
-  z-index:-3;
-}
-
-/* subtle moving aurora */
-.bg::before{
-  content:"";
-  position:absolute; inset:-20%;
-  background:
-    radial-gradient(600px 320px at 30% 40%, rgba(90,160,255,.16), transparent 70%),
-    radial-gradient(520px 300px at 65% 55%, rgba(255,90,180,.10), transparent 72%),
-    radial-gradient(540px 340px at 50% 80%, rgba(80,255,210,.10), transparent 75%);
-  filter: blur(18px);
-  animation: aurora 10s ease-in-out infinite alternate;
   z-index:-2;
-}
-@keyframes aurora{
-  from{ transform: translate3d(-10px,-10px,0) scale(1.02); opacity:.9; }
-  to{   transform: translate3d(12px,14px,0)  scale(1.05); opacity:1; }
+  pointer-events:none;
+  background:
+    radial-gradient(1200px 700px at 20% 20%, rgba(76,125,255,.20), transparent 60%),
+    radial-gradient(900px 650px at 80% 35%, rgba(255,90,160,.14), transparent 60%),
+    radial-gradient(800px 600px at 40% 85%, rgba(0,255,204,.10), transparent 65%),
+    linear-gradient(180deg, #070a13, #050612);
 }
 
-/* stars + snow sparkle */
-.bg::after{
-  content:"";
+.bgGlow{
+  position:absolute; inset:-18%;
+  background:
+    radial-gradient(700px 420px at 30% 25%, rgba(76,125,255,.16), transparent 70%),
+    radial-gradient(700px 420px at 70% 55%, rgba(255,90,160,.12), transparent 72%),
+    radial-gradient(650px 420px at 50% 80%, rgba(255,255,255,.06), transparent 75%);
+  filter: blur(18px);
+  animation: glowMove 10s ease-in-out infinite alternate;
+  opacity:.95;
+}
+
+@keyframes glowMove{
+  from{ transform: translate3d(-10px,-10px,0) scale(1.02); }
+  to{ transform: translate3d(12px,14px,0) scale(1.05); }
+}
+
+.bgStars{
   position:absolute; inset:0;
   background-image:
-    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.55) 45%, transparent 46%),
-    radial-gradient(1px 1px at 25% 70%, rgba(255,255,255,.45) 45%, transparent 46%),
-    radial-gradient(1px 1px at 45% 35%, rgba(255,255,255,.55) 45%, transparent 46%),
-    radial-gradient(1px 1px at 65% 25%, rgba(255,255,255,.40) 45%, transparent 46%),
-    radial-gradient(1px 1px at 78% 62%, rgba(255,255,255,.50) 45%, transparent 46%),
-    radial-gradient(1px 1px at 90% 18%, rgba(255,255,255,.38) 45%, transparent 46%),
-    radial-gradient(2px 2px at 15% 45%, rgba(255,255,255,.25) 45%, transparent 46%),
-    radial-gradient(2px 2px at 70% 85%, rgba(255,255,255,.22) 45%, transparent 46%);
-  background-size: 100% 100%;
-  opacity:.45;
-  animation: twinkle 4.5s ease-in-out infinite alternate;
-  z-index:-1;
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.45) 45%, transparent 46%),
+    radial-gradient(1px 1px at 25% 70%, rgba(255,255,255,.35) 45%, transparent 46%),
+    radial-gradient(1px 1px at 45% 35%, rgba(255,255,255,.40) 45%, transparent 46%),
+    radial-gradient(1px 1px at 65% 25%, rgba(255,255,255,.30) 45%, transparent 46%),
+    radial-gradient(1px 1px at 78% 62%, rgba(255,255,255,.38) 45%, transparent 46%),
+    radial-gradient(2px 2px at 15% 45%, rgba(255,255,255,.18) 45%, transparent 46%),
+    radial-gradient(2px 2px at 70% 85%, rgba(255,255,255,.16) 45%, transparent 46%);
+  opacity:.35;
+  animation: starDrift 18s linear infinite;
 }
-@keyframes twinkle{
-  from{ opacity:.32; transform: translateY(0px); }
-  to{ opacity:.55; transform: translateY(1px); }
+@keyframes starDrift{
+  from{ transform: translate3d(0,0,0); }
+  to{ transform: translate3d(-140px,80px,0); }
 }
 
-/* Layout wrapper */
+/* Wrapper */
 .wrap{
-  width:min(1040px, calc(100vw - 32px));
-  margin: 22px auto 40px;
-}
-
-/* Glass card */
-.card{
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-  border: 1px solid rgba(255,255,255,.08);
-  box-shadow:
-    0 18px 40px rgba(0,0,0,.35),
-    0 1px 0 rgba(255,255,255,.06) inset;
-  backdrop-filter: blur(10px);
+  width: min(1040px, calc(100vw - 32px));
+  margin: 22px auto 48px;
 }
 
 /* Topbar */
 .topbar{
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  justify-content:space-between;
+  padding:14px 16px;
+  border-radius:16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  border:1px solid var(--stroke);
+  box-shadow: 0 18px 45px rgba(0,0,0,.35);
+  backdrop-filter: blur(10px);
 }
-.title{font-weight:900; font-size:16px; letter-spacing:.2px}
-.sub{opacity:.75; font-size:12px; margin-top:2px}
-.balanceBox{
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255,255,255,.04);
-  border: 1px solid rgba(255,255,255,.08);
-  min-width: 140px;
-  text-align:right;
-}
-.balLabel{opacity:.7; font-size:11px}
-.balValue{font-weight:900; font-size:14px}
 
-/* Grid */
-.grid{
+.title{ font-weight:900; font-size:16px; letter-spacing:.2px; }
+.sub{ font-size:12px; opacity:.75; margin-top:2px; }
+
+.balanceBox{
+  min-width:150px;
+  text-align:right;
+  padding:10px 12px;
+  border-radius:14px;
+  background: rgba(255,255,255,.04);
+  border:1px solid var(--stroke);
+}
+.balanceLabel{ font-size:11px; opacity:.7; }
+.balanceValue{ font-weight:900; font-size:14px; margin-top:2px; }
+
+/* Main layout */
+.main{
   display:grid;
   grid-template-columns: 1fr 340px;
   gap: 14px;
+  margin-top: 14px;
 }
 @media (max-width: 920px){
-  .grid{grid-template-columns: 1fr}
+  .main{ grid-template-columns: 1fr; }
 }
 
+/* Panels */
+.panel{
+  border-radius:18px;
+  background: var(--card);
+  border:1px solid var(--stroke);
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  backdrop-filter: blur(10px);
+}
+.left{ padding: 14px; }
+.right{ padding: 14px; height: fit-content; }
+
 /* Stats row */
-.stats{
+.statsRow{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 @media (max-width: 640px){
-  .stats{grid-template-columns: 1fr; }
+  .statsRow{ grid-template-columns: 1fr; }
 }
-.stat{ padding: 12px 12px; }
-.statLabel{opacity:.72; font-size:11px}
-.statValue{font-weight:900; font-size:16px; margin-top:4px}
-.statHint{opacity:.72; font-size:12px; margin-top:2px}
+.stat{
+  padding: 12px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+}
+.statLabel{ font-size:11px; opacity:.72; }
+.statValue{ font-size:16px; font-weight:900; margin-top:4px; }
+.statHint{ font-size:12px; opacity:.72; margin-top:2px; }
 
-/* Chart */
-.chartCard{ padding: 12px; }
-.chartInner{
-  position:relative;
-  height: 320px;
-  border-radius: 14px;
+/* Chart card */
+.chartCard{
+  border-radius: 18px;
   overflow:hidden;
+  border:1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.08);
+}
+
+.chartWrap{
+  position:relative;
+  height: 340px; /* важно: стандартный размер, не на весь экран */
+  padding: 12px;
   background:
-    linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.06)),
-    radial-gradient(700px 380px at 40% 10%, rgba(76,125,255,.10), transparent 70%),
-    radial-gradient(700px 380px at 80% 70%, rgba(255,76,156,.08), transparent 72%);
-  border: 1px solid rgba(255,255,255,.06);
+    radial-gradient(900px 450px at 50% 110%, rgba(255,90,120,.12), transparent 62%),
+    radial-gradient(800px 420px at 20% 10%, rgba(76,125,255,.12), transparent 62%),
+    linear-gradient(180deg, rgba(0,0,0,.22), rgba(0,0,0,.08));
 }
-@media (max-width: 920px){
-  .chartInner{ height: 300px; }
+
+/* nice inner grid in chart area */
+.chartWrap::before{
+  content:"";
+  position:absolute;
+  inset: 12px;
+  border-radius: 14px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0, rgba(255,255,255,.08) 1px, transparent 1px, transparent 62px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0, rgba(255,255,255,.08) 1px, transparent 1px, transparent 62px);
+  opacity:.10;
+  pointer-events:none;
 }
-.chart{
-  width:100%;
-  height:100%;
+
+/* Canvas layers */
+.fx, .chart{
+  position:absolute;
+  inset:12px;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
+  border-radius: 14px;
   display:block;
 }
+.fx{ z-index: 1; }
+.chart{ z-index: 2; }
 
 /* Center overlay */
-.centerOverlay{
-  pointer-events:none;
-  position:absolute; inset:0;
+.centerInfo{
+  position:absolute;
+  inset:0;
+  z-index:3;
   display:flex;
   align-items:center;
   justify-content:center;
   flex-direction:column;
-  gap:6px;
   text-align:center;
+  pointer-events:none;
 }
-.centerTitle{
-  font-weight: 950;
-  font-size: 44px;
-  letter-spacing: .5px;
-  text-shadow: 0 12px 28px rgba(0,0,0,.55);
+.centerMult{
+  font-size:46px;
+  font-weight:1000;
+  letter-spacing:.4px;
+  text-shadow: 0 14px 30px rgba(0,0,0,.55);
 }
-.centerSub{
+.centerText{
+  margin-top:8px;
+  font-size:13px;
   opacity:.78;
-  font-size: 13px;
-  text-shadow: 0 10px 22px rgba(0,0,0,.45);
+  text-shadow: 0 12px 24px rgba(0,0,0,.45);
 }
 
-/* Bottom labels */
-.soundBtn{
+/* Chart footer inside wrap */
+.chartFooter{
   position:absolute;
-  left:12px;
-  bottom:12px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  pointer-events:none;
+}
+
+.pill{
   padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.06);
-  color:#eaf0ff;
-  font-weight:800;
-  cursor:pointer;
+  font-size: 12px;
+  font-weight: 900;
 }
-.soundBtn:active{transform:scale(.98)}
-.fairLabel{
-  position:absolute;
-  right:12px;
-  bottom:12px;
-  opacity:.72;
-  font-size: 11px;
+
+.note{
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(0,0,0,.20);
-  border: 1px solid rgba(255,255,255,.08);
-}
-
-.chartFooter{
-  margin-top: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  font-size: 11px;
   opacity:.72;
-  font-size:12px;
 }
 
-/* Right panel */
-.right{
-  padding: 14px 14px 12px;
-  height: fit-content;
+.chartHint{
+  padding: 10px 14px 12px;
+  font-size: 12px;
+  opacity: .72;
+  border-top: 1px solid rgba(255,255,255,.06);
 }
-.rightHead{
+
+/* Right panel controls */
+.betHeader{
   display:flex;
-  justify-content:space-between;
   align-items:center;
+  justify-content:space-between;
+  gap: 10px;
   margin-bottom: 10px;
 }
-.rightTitle{font-weight:900}
-.bonusBtn{
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.06);
-  color:#eaf0ff;
-  cursor:pointer;
-  font-weight:900;
-}
-.bonusBtn:active{transform:scale(.98)}
-.chips{
+.betTitle{ font-weight: 900; }
+
+.presetRow{
   display:flex;
   flex-wrap:wrap;
-  gap:8px;
-  margin: 8px 0 10px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 .chip{
   padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.05);
-  color:#eaf0ff;
-  cursor:pointer;
-  font-weight:800;
-  font-size:12px;
+  background: rgba(255,255,255,.06);
+  color: var(--txt);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
 }
-.chip:active{transform:scale(.98)}
-.chip.active{
-  outline: 2px solid rgba(76,125,255,.75);
-  background: rgba(76,125,255,.14);
-}
+.chip:active{ transform: scale(.98); }
+.chip.ghost{ opacity:.9; }
 
 .betRow{
   display:flex;
@@ -255,61 +290,59 @@ body{
   align-items:center;
   margin-bottom: 12px;
 }
-.stepBtn{
+.miniBtn{
   width: 44px;
   height: 40px;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.06);
-  color:#eaf0ff;
+  color: var(--txt);
+  font-weight: 1000;
   cursor:pointer;
-  font-weight:900;
 }
-.stepBtn:active{transform:scale(.98)}
+.miniBtn:active{ transform: scale(.98); }
+
 .betInput{
   flex:1;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.10);
+  height:40px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.05);
-  color:#eaf0ff;
-  outline:none;
+  color: var(--txt);
   padding: 0 12px;
-  font-weight:900;
+  font-weight: 900;
+  outline:none;
 }
-.betInput::-webkit-outer-spin-button,
-.betInput::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
 
-.actions{
+.actionRow{
   display:flex;
   gap: 10px;
 }
-.btnPrimary, .btnDanger{
+.btn{
   flex:1;
-  height: 42px;
-  border-radius: 12px;
+  height:42px;
+  border-radius:12px;
   border: 1px solid rgba(255,255,255,.10);
   cursor:pointer;
-  font-weight:950;
-  color:#eef4ff;
+  font-weight: 1000;
+  color: var(--txt);
 }
-.btnPrimary{
-  background: linear-gradient(180deg, rgba(76,125,255,.95), rgba(62,105,255,.75));
+.primary{
+  background: linear-gradient(180deg, rgba(76,125,255,.95), rgba(62,105,255,.78));
   box-shadow: 0 14px 30px rgba(76,125,255,.18);
 }
-.btnPrimary:active{transform:scale(.99)}
-.btnDanger{
-  background: linear-gradient(180deg, rgba(255,76,76,.45), rgba(255,76,76,.18));
-  opacity:.85;
+.primary:active{ transform: scale(.99); }
+.danger{
+  background: linear-gradient(180deg, rgba(255,90,106,.42), rgba(255,90,106,.18));
 }
-.btnDanger:disabled{
+.danger:disabled{
   opacity:.45;
   cursor:not-allowed;
 }
-.note{opacity:.72; font-size:12px; margin-top:10px}
-.ver{opacity:.55; font-size:11px; margin-top:6px}
 
-/* Keep everything "standard size" (no full stretch) */
-@media (min-width: 1100px){
-  .wrap{ margin-top: 26px; }
+.smallText{
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: .70;
+  line-height: 1.35;
 }
