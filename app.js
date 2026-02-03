@@ -1,9 +1,4 @@
-// app.js — Wheel v3 (цветные фракции без серого сектора)
-// Логика: выигрыш ТОЛЬКО если выпал выбранный множитель.
-// Не безпроигрышно за счет весов (дорогие множители реже).
-// Плашки "Твой выбор" и "Результат" всегда обновляются.
-
-// ---------------- RNG ----------------
+// ---------- RNG ----------
 function randFloat() {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
@@ -13,15 +8,12 @@ function randInt(min, max) {
   return Math.floor(randFloat() * (max - min + 1)) + min;
 }
 
-// ---------------- Telegram WebApp ----------------
+// ---------- Telegram ----------
 const tg = window.Telegram?.WebApp;
-if (tg) {
-  tg.ready();
-  tg.expand();
-}
+if (tg) { tg.ready(); tg.expand(); }
 
-// ---------------- Wallet (virtual) ----------------
-const WALLET_KEY = "wheel_wallet_v3";
+// ---------- Wallet (virtual) ----------
+const WALLET_KEY = "mini_wallet_v2";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -29,386 +21,408 @@ function loadWallet() {
   } catch {}
   return { coins: 1000 };
 }
-function saveWallet(w) {
-  localStorage.setItem(WALLET_KEY, JSON.stringify(w));
-}
+function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
 
+const balanceVal = document.getElementById("balanceVal");
 function setCoins(v) {
   wallet.coins = Math.max(0, Math.floor(v));
   saveWallet(wallet);
   renderBalance();
 }
-function addCoins(d) {
-  setCoins(wallet.coins + d);
-}
-
-// ---------------- DOM ----------------
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-
-const elBalance = $("#balanceText");
-const elBet = $("#betInput");
-const elBetMinus = $("#betMinus");
-const elBetPlus = $("#betPlus");
-const elSpin = $("#spinBtn");
-const elCanvas = $("#wheel");
-
-// центр
-const elCenterTitle = $("#centerTitle");
-const elCenterSub = $("#centerSub");
-
-// верхние плашки
-const elStatStatus = $("#statStatus");
-const elStatPick = $("#statPick");
-const elStatResult = $("#statResult");
-const elStatMult = $("#statMult"); // если есть
-
-function renderBalance() {
-  if (elBalance) elBalance.textContent = `${wallet.coins} 🪙`;
-}
+function addCoins(d) { setCoins(wallet.coins + d); }
+function renderBalance() { balanceVal.textContent = `🪙 ${wallet.coins}`; }
 renderBalance();
 
-function clampBet() {
-  let v = Math.floor(Number(elBet.value) || 0);
-  if (v < 1) v = 1;
-  if (v > wallet.coins) v = wallet.coins;
-  elBet.value = String(v);
-  return v;
+// ---------- UI refs ----------
+const statusVal = document.getElementById("statusVal");
+const pickVal = document.getElementById("pickVal");
+const resultVal = document.getElementById("resultVal");
+const stStatus = document.getElementById("stStatus");
+const stPick = document.getElementById("stPick");
+const stResult = document.getElementById("stResult");
+
+const centerBig = document.getElementById("centerBig");
+const centerSmall = document.getElementById("centerSmall");
+
+const chanceBadge = document.getElementById("chanceBadge");
+
+const picksEl = document.getElementById("picks");
+const betInput = document.getElementById("betInput");
+const spinBtn = document.getElementById("spinBtn");
+const bonusBtn = document.getElementById("bonusBtn");
+const betMinus = document.getElementById("betMinus");
+const betPlus = document.getElementById("betPlus");
+
+// ---------- Sound (simple WebAudio) ----------
+let soundOn = true;
+const soundBtn = document.getElementById("soundBtn");
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function beep(freq = 440, dur = 0.05, vol = 0.04, type = "sine") {
+  if (!soundOn) return;
+  ensureAudio();
+  const t0 = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.value = 0.0001;
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start(t0);
+  gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+  osc.stop(t0 + dur + 0.02);
+}
+function tick() { beep(720, 0.03, 0.028, "square"); }
+function winSound() { beep(880, 0.08, 0.045, "sine"); setTimeout(() => beep(1320, 0.08, 0.04, "sine"), 90); }
+function loseSound() { beep(220, 0.10, 0.045, "triangle"); }
+
+soundBtn.onclick = () => {
+  soundOn = !soundOn;
+  soundBtn.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+  // маленький тихий сигнал при включении
+  if (soundOn) beep(520, 0.05, 0.03, "sine");
+};
+
+// ---------- Wheel setup (фиксированное число секторов, без выбора) ----------
+// Важно: игра не безпроигрышная — ты выигрываешь ТОЛЬКО если попал в свой множитель.
+const groups = [
+  { mult: 1.2, color: "#33d17a", count: 18 },
+  { mult: 1.5, color: "#a6e22e", count: 10 },
+  { mult: 2.0, color: "#45a3ff", count: 6 },
+  { mult: 3.0, color: "#9b5cff", count: 3 },
+  { mult: 5.0, color: "#ffb020", count: 2 },
+  { mult: 10.0, color: "#ff4d4d", count: 1 },
+];
+
+const segments = [];
+for (const g of groups) {
+  for (let i = 0; i < g.count; i++) segments.push({ mult: g.mult, color: g.color });
+}
+const N = segments.length; // фиксировано (например 40)
+
+let selectedMult = null;
+
+// ---------- Build pick buttons (bottom) ----------
+function formatMult(m) {
+  // 1.2 -> "1.20x"
+  return `${m.toFixed(2)}x`;
 }
 
-// ---------------- UI helpers ----------------
-function pulse(el) {
-  if (!el) return;
+function setPulse(el) {
   el.classList.remove("pulse");
   // reflow
   void el.offsetWidth;
   el.classList.add("pulse");
 }
 
-function setStatus(title, sub = "") {
-  if (elStatStatus) {
-    elStatStatus.textContent = title;
-    pulse(elStatStatus);
+function updateChance() {
+  if (!selectedMult) { chanceBadge.textContent = `Шанс: —`; return; }
+  const hit = segments.filter(s => s.mult === selectedMult).length;
+  chanceBadge.textContent = `Шанс: ${hit} / ${N}`;
+}
+
+function renderPicks() {
+  picksEl.innerHTML = "";
+  const uniq = [...new Set(segments.map(s => s.mult))].sort((a,b)=>a-b);
+  for (const m of uniq) {
+    const color = segments.find(s => s.mult === m).color;
+    const btn = document.createElement("button");
+    btn.className = "pickBtn";
+    btn.type = "button";
+    btn.innerHTML = `<span class="dot" style="background:${color}"></span>${formatMult(m)}`;
+    btn.onclick = () => {
+      if (state.spinning) return;
+      selectedMult = m;
+      document.querySelectorAll(".pickBtn").forEach(x => x.classList.remove("active"));
+      btn.classList.add("active");
+
+      pickVal.textContent = formatMult(m);
+      setPulse(stPick);
+      centerBig.textContent = formatMult(m);
+      centerSmall.textContent = `Шанс ${segments.filter(s => s.mult === m).length}/${N}`;
+      updateChance();
+    };
+    picksEl.appendChild(btn);
   }
-  if (elCenterSub) elCenterSub.textContent = sub || "";
 }
+renderPicks();
 
-function setPickText(t) {
-  if (elStatPick) {
-    elStatPick.textContent = t;
-    pulse(elStatPick);
-  }
+// ---------- Bet UI ----------
+function clampBet() {
+  let v = Math.floor(Number(betInput.value) || 0);
+  if (v < 1) v = 1;
+  if (v > wallet.coins) v = wallet.coins;
+  betInput.value = String(v);
 }
+clampBet();
 
-function setResultText(t) {
-  if (elStatResult) {
-    elStatResult.textContent = t;
-    pulse(elStatResult);
-  }
-}
-
-function setCenterTitle(t) {
-  if (elCenterTitle) elCenterTitle.textContent = t;
-}
-
-function setMultText(t) {
-  if (elStatMult) elStatMult.textContent = t;
-}
-
-// ---------------- Wheel model (NO GREY) ----------------
-// Веса подобраны так, чтобы игра не была "в плюс" на дистанции.
-// Total = 100
-const FACTIONS = [
-  { key: "x12", label: "1.20x", mult: 1.2,  color: "#3DFF8A", count: 55 },
-  { key: "x15", label: "1.50x", mult: 1.5,  color: "#B8FF3D", count: 25 },
-  { key: "x20", label: "2.00x", mult: 2.0,  color: "#44D7FF", count: 12 },
-  { key: "x30", label: "3.00x", mult: 3.0,  color: "#A966FF", count: 5  },
-  { key: "x50", label: "5.00x", mult: 5.0,  color: "#FFB03D", count: 2  },
-  { key: "x200",label: "20.0x", mult: 20.0, color: "#FF4D4D", count: 1  },
-];
-
-const SECTORS = [];
-for (const f of FACTIONS) for (let i = 0; i < f.count; i++) SECTORS.push(f);
-const N = SECTORS.length;
-
-// ---------------- State ----------------
-let selectedPick = FACTIONS[0].key; // по умолчанию 1.2
-let spinning = false;
-let rotation = 0;
-let raf = null;
-
-// tick (чтобы “результат” жил во время вращения)
-let lastTickSector = 0;
-
-// ---------------- Pick buttons ----------------
-// Кнопки должны иметь class="pickBtn" data-pick="x12" и т.д.
-function getFaction(key) {
-  return FACTIONS.find(f => f.key === key) || FACTIONS[0];
-}
-
-function setPick(key) {
-  if (spinning) return;
-  selectedPick = key;
-  const f = getFaction(key);
-
-  setPickText(`${f.label}`);
-  setResultText("—");
-  setStatus("Ожидание", "Выбери фракцию снизу и нажми «Крутить»");
-  setCenterTitle(f.label);
-  setMultText("—");
-
-  $$(".pickBtn").forEach(btn => btn.classList.toggle("active", btn.dataset.pick === key));
-}
-
-$$(".pickBtn").forEach(btn => {
-  btn.addEventListener("click", () => setPick(btn.dataset.pick));
-});
-
-// chips
-$$(".chip").forEach(ch => {
-  ch.addEventListener("click", () => {
-    if (spinning) return;
-    const b = ch.dataset.bet;
-    if (!b) return;
-    if (b === "max") elBet.value = String(wallet.coins);
-    else elBet.value = String(b);
+document.getElementById("chips").querySelectorAll(".chip").forEach(btn=>{
+  btn.onclick = () => {
+    const b = btn.dataset.bet;
+    if (b === "max") betInput.value = String(wallet.coins);
+    else betInput.value = String(Number(b) || 1);
     clampBet();
-  });
+  };
 });
 
-// bet +/- buttons
-if (elBetMinus) elBetMinus.addEventListener("click", () => {
-  if (spinning) return;
-  elBet.value = String((Number(elBet.value) || 1) - 10);
-  clampBet();
-});
-if (elBetPlus) elBetPlus.addEventListener("click", () => {
-  if (spinning) return;
-  elBet.value = String((Number(elBet.value) || 1) + 10);
-  clampBet();
-});
-elBet.addEventListener("input", () => { if (!spinning) clampBet(); });
+betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); };
+betPlus.onclick  = () => { betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); };
+betInput.oninput = clampBet;
 
-// ---------------- Canvas draw ----------------
-function getCanvasSize() {
-  const rect = elCanvas.getBoundingClientRect();
-  const dpr = Math.max(1, Math.min(2.25, window.devicePixelRatio || 1));
-  const size = Math.floor(Math.min(rect.width, rect.height) * dpr);
-  return { size, dpr };
+bonusBtn.onclick = () => addCoins(1000);
+
+// ---------- Canvas draw ----------
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+
+function dprFix() {
+  const cssSize = Math.min(520, Math.floor(window.innerWidth * 0.82));
+  const size = Math.max(360, Math.min(520, cssSize));
+  // canvas fixed buffer for crisp
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  canvas.style.width = size + "px";
+  canvas.style.height = size + "px";
+  canvas.width = Math.floor(size * dpr);
+  canvas.height = Math.floor(size * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-function hexToRgba(hex, a) {
-  const h = hex.replace("#", "");
-  const n = parseInt(h, 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  return `rgba(${r},${g},${b},${a})`;
-}
+window.addEventListener("resize", () => { dprFix(); draw(); });
+dprFix();
 
-function drawWheel() {
-  if (!elCanvas) return;
-  const ctx = elCanvas.getContext("2d");
-  const { size } = getCanvasSize();
+// rotation in radians (0 means segment 0 starts at 3 o'clock, but we control pointer at top)
+let rotation = 0;
 
-  if (elCanvas.width !== size || elCanvas.height !== size) {
-    elCanvas.width = size;
-    elCanvas.height = size;
-  }
+function draw() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  ctx.clearRect(0,0,w,h);
 
-  const w = elCanvas.width, h = elCanvas.height;
-  const cx = w / 2, cy = h / 2;
+  const cx = w/2, cy = h/2;
+  const R = Math.min(w,h)*0.46;
+  const ring = Math.min(w,h)*0.10;
 
-  ctx.clearRect(0, 0, w, h);
-
-  const R = Math.min(cx, cy) * 0.96;
-  const rInner = R * 0.74;
-
-  // фон диска
+  // outer shadow ring
+  ctx.save();
   ctx.beginPath();
-  ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.03)";
+  ctx.arc(cx,cy,R+10,0,Math.PI*2);
+  ctx.fillStyle = "rgba(0,0,0,.18)";
   ctx.fill();
+  ctx.restore();
 
-  // обод
-  ctx.lineWidth = Math.max(2, R * 0.02);
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
-  ctx.stroke();
+  // segments
+  const step = (Math.PI * 2) / N;
 
-  const a0 = -Math.PI / 2; // указатель сверху
-  const da = (Math.PI * 2) / N;
+  // pointer is at top: angle = -90deg
+  const pointerAngle = -Math.PI/2;
 
-  for (let i = 0; i < N; i++) {
-    const f = SECTORS[i];
-    const start = a0 + rotation + i * da;
-    const end = start + da;
+  for (let i=0;i<N;i++){
+    const s = segments[i];
+    const a0 = rotation + i*step;
+    const a1 = a0 + step;
 
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 0.985, start, end);
-    ctx.arc(cx, cy, rInner, end, start, true);
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,R,a0,a1);
     ctx.closePath();
-
-    const alt = (i % 2 === 0) ? 0.95 : 0.78;
-    ctx.fillStyle = hexToRgba(f.color, 0.88 * alt);
+    ctx.fillStyle = s.color;
+    ctx.globalAlpha = 0.85;
     ctx.fill();
 
+    // separators
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = "rgba(0,0,0,.45)";
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(0,0,0,0.28)";
     ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 
-  // внутренняя часть
+  // inner cut (hole)
   ctx.beginPath();
-  ctx.arc(cx, cy, rInner * 0.92, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(10,16,40,0.62)";
+  ctx.arc(cx,cy,R-ring,0,Math.PI*2);
+  ctx.fillStyle = "rgba(10,14,30,.92)";
   ctx.fill();
 
-  ctx.lineWidth = Math.max(2, R * 0.015);
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  // inner subtle ring
+  ctx.beginPath();
+  ctx.arc(cx,cy,R-ring,0,Math.PI*2);
+  ctx.strokeStyle = "rgba(255,255,255,.10)";
+  ctx.lineWidth = 2;
   ctx.stroke();
 
-  // подсветка
-  const g = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.25, R * 0.05, cx, cy, R);
-  g.addColorStop(0, "rgba(255,255,255,0.14)");
-  g.addColorStop(0.6, "rgba(255,255,255,0.04)");
-  g.addColorStop(1, "rgba(255,255,255,0.00)");
-  ctx.fillStyle = g;
+  // center disc
   ctx.beginPath();
-  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.arc(cx,cy,R*0.36,0,Math.PI*2);
+  ctx.fillStyle = "rgba(255,255,255,.06)";
   ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx,cy,R*0.36,0,Math.PI*2);
+  ctx.strokeStyle = "rgba(255,255,255,.10)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // compute current segment under pointer to make tick detection consistent
+  // pointerAngle corresponds to "top". We need index where pointerAngle falls into [a0,a1).
+  // Normalize angle: relative = pointerAngle - rotation
+  const rel = normalizeAngle(pointerAngle - rotation);
+  const idx = (Math.floor(rel / step) % N + N) % N;
+  state.currentIndex = idx;
+}
+function normalizeAngle(a){
+  const two = Math.PI*2;
+  a = a % two;
+  if (a < 0) a += two;
+  return a;
 }
 
-// сектор под стрелкой
-function sectorAtPointerIndex(rot) {
-  const da = (Math.PI * 2) / N;
-  let t = (-rot) / da;
-  t = ((t % N) + N) % N;
-  return Math.floor(t);
+// ---------- Spin logic ----------
+const state = {
+  spinning: false,
+  currentIndex: 0,
+  lastTickIndex: -1
+};
+
+function setStatus(text){
+  statusVal.textContent = text;
+  setPulse(stStatus);
 }
 
-// ---------------- Spin ----------------
-function easeOutCubic(t) {
-  return 1 - Math.pow(1 - t, 3);
+function setResult(text){
+  resultVal.textContent = text;
+  setPulse(stResult);
 }
 
-function lockUI(lock) {
-  elSpin.disabled = lock;
-  $$(".pickBtn, .chip, #betMinus, #betPlus").forEach(x => { if (x) x.disabled = lock; });
-  if (elBet) elBet.disabled = lock;
+function angleForIndexAtPointer(index){
+  // We want segment "index" to end up at pointerAngle (-90deg) at its center.
+  const step = (Math.PI*2)/N;
+  const pointerAngle = -Math.PI/2;
+  const segCenter = index*step + step/2;
+  // pointerAngle = rotation + segCenter  => rotation = pointerAngle - segCenter
+  return pointerAngle - segCenter;
 }
 
-function pickRandomSectorIndex() {
-  return randInt(0, N - 1); // равномерно по массиву SECTORS (а веса уже в count)
+function pickRandomIndexWeighted(){
+  // but wheel already has repeats per group (counts), so uniform index is already weighted
+  return randInt(0, N-1);
 }
 
-function spinOnce() {
-  if (spinning) return;
+function disableUI(dis){
+  spinBtn.disabled = dis;
+  document.querySelectorAll(".pickBtn").forEach(b=>b.disabled = dis);
+  betInput.disabled = dis;
+  betMinus.disabled = dis;
+  betPlus.disabled = dis;
+  document.querySelectorAll("#chips .chip").forEach(b=>b.disabled = dis);
+}
 
-  const bet = clampBet();
-  if (bet <= 0) return alert("Ставка должна быть больше 0");
-  if (bet > wallet.coins) return alert("Недостаточно монет");
+function spin(){
+  clampBet();
+  const bet = Math.floor(Number(betInput.value)||0);
+  if (bet <= 0) return;
+  if (bet > wallet.coins) return;
 
-  const pick = getFaction(selectedPick);
+  if (!selectedMult){
+    setStatus("Выбери фракцию");
+    centerBig.textContent = "Выбери фракцию";
+    centerSmall.textContent = "снизу";
+    return;
+  }
 
-  // списываем ставку
+  // списываем ставку сразу
   addCoins(-bet);
 
-  spinning = true;
-  lockUI(true);
+  state.spinning = true;
+  disableUI(true);
+  setStatus("Крутится…");
+  centerBig.textContent = "Крутится…";
+  centerSmall.textContent = "удачи";
 
-  setPickText(`${pick.label}`);
-  setResultText("Крутится…");
-  setStatus("Крутится…", "Ждём выпадение сектора");
-  setCenterTitle("…");
-  setMultText("—");
+  // выбор сектора (вес уже в массивах)
+  const winIndex = pickRandomIndexWeighted();
+  const landed = segments[winIndex];
 
-  const targetIndex = pickRandomSectorIndex();
-  const targetFaction = SECTORS[targetIndex];
-
-  const da = (Math.PI * 2) / N;
-  const jitter = (randFloat() - 0.5) * da * 0.70;
-  const baseTargetRot = -((targetIndex + 0.5) * da) - jitter;
-
-  const extraTurns = randInt(7, 10) * Math.PI * 2;
+  // target rotation:
+  //  - we add big spins + align final rotation to land chosen index at pointer
+  const baseTarget = angleForIndexAtPointer(winIndex);
+  const spins = randInt(6, 9) * Math.PI * 2;
   const startRot = rotation;
-  const endRot = baseTargetRot + extraTurns;
+  const endRot = baseTarget + spins;
 
-  const dur = 4200;
-  const t0 = performance.now();
+  const dur = randInt(3200, 4200); // ms
+  const tStart = performance.now();
 
-  lastTickSector = sectorAtPointerIndex(rotation);
+  state.lastTickIndex = -1;
 
-  const tick = (now) => {
-    const p = Math.min(1, (now - t0) / dur);
-    const e = easeOutCubic(p);
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
+  function frame(now){
+    const t = Math.min(1, (now - tStart) / dur);
+    const e = easeOutCubic(t);
     rotation = startRot + (endRot - startRot) * e;
 
-    // "живой" результат во время кручения
-    const curSector = sectorAtPointerIndex(rotation);
-    if (curSector !== lastTickSector) {
-      lastTickSector = curSector;
-      const curF = SECTORS[curSector];
-      setCenterTitle(curF.label);
-      // чтобы плашка результата “дышала”
-      setResultText(`Крутится… (${curF.label})`);
+    draw();
+
+    // tick when passing into new segment
+    if (state.currentIndex !== state.lastTickIndex) {
+      state.lastTickIndex = state.currentIndex;
+      // тихий тик только во время спина
+      if (t < 0.98) tick();
     }
 
-    drawWheel();
-
-    if (p < 1) {
-      raf = requestAnimationFrame(tick);
+    if (t < 1){
+      requestAnimationFrame(frame);
       return;
     }
 
-    // финал нормализация
-    rotation = ((rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    drawWheel();
+    // finalize exact
+    rotation = endRot;
+    draw();
 
-    const landedIndex = sectorAtPointerIndex(rotation);
-    const landed = SECTORS[landedIndex];
+    state.spinning = false;
+    disableUI(false);
 
-    // выигрыш только при совпадении
-    let won = (landed.key === pick.key);
-    let payout = 0;
-
-    if (won) {
-      payout = Math.floor(bet * landed.mult);
+    // outcome
+    const win = landed.mult === selectedMult;
+    if (win){
+      const payout = Math.floor(bet * landed.mult);
       addCoins(payout);
-    }
 
-    // UI итог
-    setPickText(`${pick.label}`);
-    setResultText(`${landed.label}`);
-    setCenterTitle(`${landed.label}`);
-
-    if (won) {
-      setStatus("Выигрыш!", `+${payout} 🪙 (ставка ${bet} 🪙)`);
-      setMultText(`+${payout} 🪙`);
-      if (elCenterSub) elCenterSub.textContent = `Ты выбрал ${pick.label} · Выпало ${landed.label}`;
+      setStatus("Победа ✅");
+      setResult(`${formatMult(landed.mult)} · +${payout} 🪙`);
+      centerBig.textContent = "Победа ✅";
+      centerSmall.textContent = `+${payout} 🪙`;
+      winSound();
     } else {
-      setStatus("Проигрыш", `Ставка ${bet} 🪙 сгорела`);
-      setMultText("0 🪙");
-      if (elCenterSub) elCenterSub.textContent = `Ты выбрал ${pick.label} · Выпало ${landed.label}`;
+      setStatus("Проигрыш ❌");
+      setResult(`${formatMult(landed.mult)} · -${bet} 🪙`);
+      centerBig.textContent = "Проигрыш ❌";
+      centerSmall.textContent = `выпало ${formatMult(landed.mult)}`;
+      loseSound();
     }
+  }
 
-    spinning = false;
-    lockUI(false);
-  };
-
-  cancelAnimationFrame(raf);
-  raf = requestAnimationFrame(tick);
+  requestAnimationFrame(frame);
 }
 
-elSpin.addEventListener("click", spinOnce);
+spinBtn.onclick = () => {
+  // unlock audio on first user gesture
+  if (!audioCtx && soundOn) ensureAudio();
+  spin();
+};
 
-// ---------------- Resize ----------------
-window.addEventListener("resize", () => setTimeout(drawWheel, 60));
-
-// ---------------- Init ----------------
-function init() {
-  clampBet();
-  setPick(selectedPick);
-  drawWheel();
-}
-init();
+// initial UI
+setStatus("Ожидание");
+pickVal.textContent = "—";
+setResult("—");
+centerBig.textContent = "Выбери фракцию";
+centerSmall.textContent = "и нажми “Крутить”";
+updateChance();
+draw();
