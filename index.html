@@ -7,128 +7,90 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="bg"></div>
-
-  <div class="wrap">
-    <!-- Top bar -->
-    <header class="topbar">
+  <div class="container">
+    <div class="topbar">
       <div class="brand">
-        <div class="brandTitle">Wheel</div>
-        <div class="brandSub">Открыто вне Telegram</div>
+        <div class="title">Wheel</div>
+        <div class="sub">Открыто вне Telegram</div>
       </div>
 
-      <div class="topRight">
-        <div class="pill">
-          <div class="pillLabel">Баланс</div>
-          <div class="pillValue"><span id="coins">0</span> 🪙</div>
+      <div class="rightTop">
+        <button class="soundBtn" id="soundBtn" type="button">Звук: on</button>
+        <div class="balanceBox">
+          <div class="lbl">Баланс</div>
+          <div class="val" id="balanceVal">🪙 0</div>
         </div>
       </div>
-    </header>
+    </div>
 
-    <main class="layout">
-      <!-- LEFT: Wheel -->
-      <section class="panel wheelPanel">
-        <div class="panelHead">
-          <div class="statRow">
-            <div class="stat">
-              <div class="statLabel">Статус</div>
-              <div class="statValue" id="statusText">Ожидание</div>
-            </div>
-            <div class="stat">
-              <div class="statLabel">Твой выбор</div>
-              <div class="statValue" id="pickText">—</div>
-            </div>
-            <div class="stat">
-              <div class="statLabel">Результат</div>
-              <div class="statValue" id="resultText">—</div>
-            </div>
+    <div class="main">
+      <!-- LEFT -->
+      <div class="card leftWrap">
+        <div class="stats">
+          <div class="stat" id="stStatus">
+            <div class="lbl">Статус</div>
+            <div class="val" id="statusVal">Ожидание</div>
+          </div>
+          <div class="stat" id="stPick">
+            <div class="lbl">Твой выбор</div>
+            <div class="val" id="pickVal">—</div>
+          </div>
+          <div class="stat" id="stResult">
+            <div class="lbl">Результат</div>
+            <div class="val" id="resultVal">—</div>
           </div>
         </div>
 
-        <div class="wheelStage">
+        <div class="stage">
           <div class="wheelWrap">
-            <canvas id="wheel" width="560" height="560"></canvas>
+            <div class="pointerDot"></div>
+            <div class="pointer"></div>
 
-            <!-- Pointer -->
-            <div class="pointer" aria-hidden="true">
-              <div class="pointerPin"></div>
-              <div class="pointerNeedle"></div>
-            </div>
+            <canvas id="wheel" width="520" height="520"></canvas>
 
-            <!-- Center badge -->
-            <div class="centerBadge">
-              <div class="centerTitle" id="centerTitle">WHEEL</div>
-              <div class="centerSub" id="centerSub">Выбери фракцию снизу</div>
+            <div class="centerHud">
+              <div class="big" id="centerBig">Выбери фракцию</div>
+              <div class="small" id="centerSmall">и нажми “Крутить”</div>
             </div>
           </div>
 
-          <div class="stageHint" id="stageHint">
-            Нажми «Крутить», колесо остановится на одном секторе.
+          <div class="picks" id="picks"></div>
+
+          <div class="hint">
+            Правило: если выпало <b>на твою фракцию</b> — выигрываешь <b>xмножитель</b>, иначе ставка сгорает.
           </div>
         </div>
+      </div>
 
-        <!-- Bottom pick buttons -->
-        <div class="pickBar">
-          <button class="pickBtn" data-pick="x1_2" id="pick_x1_2">
-            <span class="pickDot dotGreen"></span>
-            <span class="pickTxt">1.20×</span>
-          </button>
-          <button class="pickBtn" data-pick="x1_5" id="pick_x1_5">
-            <span class="pickDot dotLime"></span>
-            <span class="pickTxt">1.50×</span>
-          </button>
-          <button class="pickBtn" data-pick="x2" id="pick_x2">
-            <span class="pickDot dotBlue"></span>
-            <span class="pickTxt">2.00×</span>
-          </button>
-          <button class="pickBtn" data-pick="x3" id="pick_x3">
-            <span class="pickDot dotPurple"></span>
-            <span class="pickTxt">3.00×</span>
-          </button>
-          <button class="pickBtn" data-pick="x5" id="pick_x5">
-            <span class="pickDot dotOrange"></span>
-            <span class="pickTxt">5.00×</span>
-          </button>
-          <button class="pickBtn" data-pick="x10" id="pick_x10">
-            <span class="pickDot dotRed"></span>
-            <span class="pickTxt">10.00×</span>
-          </button>
-        </div>
-      </section>
+      <!-- RIGHT -->
+      <div class="card rightWrap">
+        <div class="panelTitle">Ставка</div>
 
-      <!-- RIGHT: Bet / Actions -->
-      <aside class="panel betPanel">
-        <div class="betHead">
-          <div class="betTitle">Ставка</div>
-          <button class="chip ghost" id="bonusBtn">+1000 🪙</button>
+        <div class="panelRow">
+          <div class="badge" id="chanceBadge">Шанс: —</div>
+          <button class="chip" id="bonusBtn" type="button">+1000 🪙</button>
         </div>
 
-        <div class="chipsRow" id="presetRow">
-          <button class="chip" data-bet="10">10</button>
-          <button class="chip" data-bet="50">50</button>
-          <button class="chip" data-bet="100">100</button>
-          <button class="chip" data-bet="250">250</button>
-          <button class="chip" data-bet="500">500</button>
-          <button class="chip" data-bet="max">MAX</button>
+        <div class="chips" id="chips">
+          <button class="chip" data-bet="10" type="button">10</button>
+          <button class="chip" data-bet="50" type="button">50</button>
+          <button class="chip" data-bet="100" type="button">100</button>
+          <button class="chip" data-bet="250" type="button">250</button>
+          <button class="chip" data-bet="500" type="button">500</button>
+          <button class="chip" data-bet="max" type="button">MAX</button>
         </div>
 
-        <div class="betInputRow">
-          <button class="btnIcon" id="betMinus" aria-label="Уменьшить">−</button>
-          <input class="betInput" id="betInput" type="number" min="1" step="1" value="100" />
-          <button class="btnIcon" id="betPlus" aria-label="Увеличить">+</button>
+        <div class="betRow">
+          <button class="btnSmall" id="betMinus" type="button">-</button>
+          <input class="input" id="betInput" type="number" min="1" step="1" value="100" />
+          <button class="btnSmall" id="betPlus" type="button">+</button>
         </div>
 
-        <div class="actionRow">
-          <button class="btnPrimary" id="spinBtn">Крутить</button>
-        </div>
+        <button class="btn" id="spinBtn" type="button">Крутить</button>
 
-        <div class="miniNote" id="miniNote">
-          Монеты виртуальные, без вывода.
-        </div>
-
-        <div class="versionTag">v1 · Wheel</div>
-      </aside>
-    </main>
+        <div class="footerVer">v1 · режим Wheel</div>
+      </div>
+    </div>
   </div>
 
   <script src="./app.js"></script>
