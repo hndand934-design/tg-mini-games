@@ -1,428 +1,427 @@
-// ---------- RNG ----------
-function randFloat() {
-  const a = new Uint32Array(1);
-  crypto.getRandomValues(a);
-  return a[0] / 2 ** 32;
-}
-function randInt(min, max) {
-  return Math.floor(randFloat() * (max - min + 1)) + min;
-}
-
-// ---------- Telegram ----------
-const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
-
-// ---------- Wallet (virtual) ----------
-const WALLET_KEY = "mini_wallet_v2";
-function loadWallet() {
-  try {
-    const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
-    if (w && typeof w.coins === "number") return w;
-  } catch {}
-  return { coins: 1000 };
-}
-function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
-let wallet = loadWallet();
-
-const balanceVal = document.getElementById("balanceVal");
-function setCoins(v) {
-  wallet.coins = Math.max(0, Math.floor(v));
-  saveWallet(wallet);
-  renderBalance();
-}
-function addCoins(d) { setCoins(wallet.coins + d); }
-function renderBalance() { balanceVal.textContent = `🪙 ${wallet.coins}`; }
-renderBalance();
-
-// ---------- UI refs ----------
-const statusVal = document.getElementById("statusVal");
-const pickVal = document.getElementById("pickVal");
-const resultVal = document.getElementById("resultVal");
-const stStatus = document.getElementById("stStatus");
-const stPick = document.getElementById("stPick");
-const stResult = document.getElementById("stResult");
-
-const centerBig = document.getElementById("centerBig");
-const centerSmall = document.getElementById("centerSmall");
-
-const chanceBadge = document.getElementById("chanceBadge");
-
-const picksEl = document.getElementById("picks");
-const betInput = document.getElementById("betInput");
-const spinBtn = document.getElementById("spinBtn");
-const bonusBtn = document.getElementById("bonusBtn");
-const betMinus = document.getElementById("betMinus");
-const betPlus = document.getElementById("betPlus");
-
-// ---------- Sound (simple WebAudio) ----------
-let soundOn = true;
-const soundBtn = document.getElementById("soundBtn");
-let audioCtx = null;
-
-function ensureAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-}
-function beep(freq = 440, dur = 0.05, vol = 0.04, type = "sine") {
-  if (!soundOn) return;
-  ensureAudio();
-  const t0 = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  gain.gain.value = 0.0001;
-
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-
-  osc.start(t0);
-  gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-  osc.stop(t0 + dur + 0.02);
-}
-function tick() { beep(720, 0.03, 0.028, "square"); }
-function winSound() { beep(880, 0.08, 0.045, "sine"); setTimeout(() => beep(1320, 0.08, 0.04, "sine"), 90); }
-function loseSound() { beep(220, 0.10, 0.045, "triangle"); }
-
-soundBtn.onclick = () => {
-  soundOn = !soundOn;
-  soundBtn.textContent = `Звук: ${soundOn ? "on" : "off"}`;
-  // маленький тихий сигнал при включении
-  if (soundOn) beep(520, 0.05, 0.03, "sine");
-};
-
-// ---------- Wheel setup (фиксированное число секторов, без выбора) ----------
-// Важно: игра не безпроигрышная — ты выигрываешь ТОЛЬКО если попал в свой множитель.
-const groups = [
-  { mult: 1.2, color: "#33d17a", count: 18 },
-  { mult: 1.5, color: "#a6e22e", count: 10 },
-  { mult: 2.0, color: "#45a3ff", count: 6 },
-  { mult: 3.0, color: "#9b5cff", count: 3 },
-  { mult: 5.0, color: "#ffb020", count: 2 },
-  { mult: 10.0, color: "#ff4d4d", count: 1 },
-];
-
-const segments = [];
-for (const g of groups) {
-  for (let i = 0; i < g.count; i++) segments.push({ mult: g.mult, color: g.color });
-}
-const N = segments.length; // фиксировано (например 40)
-
-let selectedMult = null;
-
-// ---------- Build pick buttons (bottom) ----------
-function formatMult(m) {
-  // 1.2 -> "1.20x"
-  return `${m.toFixed(2)}x`;
+:root{
+  --bg0:#070b16;
+  --bg1:#0a1024;
+  --panel: rgba(255,255,255,.06);
+  --panel2: rgba(255,255,255,.08);
+  --stroke: rgba(255,255,255,.10);
+  --stroke2: rgba(255,255,255,.14);
+  --text:#eaf1ff;
+  --muted: rgba(234,241,255,.72);
+  --muted2: rgba(234,241,255,.55);
+  --blue:#4c7dff;
+  --blue2:#2b5cff;
+  --red:#ff5a66;
+  --green:#33d17a;
+  --yellow:#ffcc66;
+  --shadow: 0 18px 55px rgba(0,0,0,.45);
+  --shadow2: 0 10px 28px rgba(0,0,0,.35);
+  --r: 18px;
+  --r2: 14px;
+  --maxW: 1100px;
 }
 
-function setPulse(el) {
-  el.classList.remove("pulse");
-  // reflow
-  void el.offsetWidth;
-  el.classList.add("pulse");
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  color:var(--text);
+  background: radial-gradient(1200px 700px at 20% 20%, rgba(76,125,255,.20), transparent 60%),
+              radial-gradient(900px 700px at 80% 30%, rgba(255,90,102,.14), transparent 65%),
+              radial-gradient(1100px 800px at 50% 90%, rgba(51,209,122,.10), transparent 60%),
+              linear-gradient(180deg, var(--bg0), var(--bg1));
+  overflow-x:hidden;
 }
 
-function updateChance() {
-  if (!selectedMult) { chanceBadge.textContent = `Шанс: —`; return; }
-  const hit = segments.filter(s => s.mult === selectedMult).length;
-  chanceBadge.textContent = `Шанс: ${hit} / ${N}`;
+.bg{
+  position:fixed; inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(1000px 650px at 15% 15%, rgba(76,125,255,.14), transparent 60%),
+    radial-gradient(900px 650px at 85% 25%, rgba(255,90,102,.10), transparent 60%),
+    radial-gradient(900px 650px at 50% 95%, rgba(51,209,122,.08), transparent 60%);
+  filter: blur(0px);
+  opacity:1;
 }
 
-function renderPicks() {
-  picksEl.innerHTML = "";
-  const uniq = [...new Set(segments.map(s => s.mult))].sort((a,b)=>a-b);
-  for (const m of uniq) {
-    const color = segments.find(s => s.mult === m).color;
-    const btn = document.createElement("button");
-    btn.className = "pickBtn";
-    btn.type = "button";
-    btn.innerHTML = `<span class="dot" style="background:${color}"></span>${formatMult(m)}`;
-    btn.onclick = () => {
-      if (state.spinning) return;
-      selectedMult = m;
-      document.querySelectorAll(".pickBtn").forEach(x => x.classList.remove("active"));
-      btn.classList.add("active");
-
-      pickVal.textContent = formatMult(m);
-      setPulse(stPick);
-      centerBig.textContent = formatMult(m);
-      centerSmall.textContent = `Шанс ${segments.filter(s => s.mult === m).length}/${N}`;
-      updateChance();
-    };
-    picksEl.appendChild(btn);
-  }
-}
-renderPicks();
-
-// ---------- Bet UI ----------
-function clampBet() {
-  let v = Math.floor(Number(betInput.value) || 0);
-  if (v < 1) v = 1;
-  if (v > wallet.coins) v = wallet.coins;
-  betInput.value = String(v);
-}
-clampBet();
-
-document.getElementById("chips").querySelectorAll(".chip").forEach(btn=>{
-  btn.onclick = () => {
-    const b = btn.dataset.bet;
-    if (b === "max") betInput.value = String(wallet.coins);
-    else betInput.value = String(Number(b) || 1);
-    clampBet();
-  };
-});
-
-betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); };
-betPlus.onclick  = () => { betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); };
-betInput.oninput = clampBet;
-
-bonusBtn.onclick = () => addCoins(1000);
-
-// ---------- Canvas draw ----------
-const canvas = document.getElementById("wheel");
-const ctx = canvas.getContext("2d");
-
-function dprFix() {
-  const cssSize = Math.min(520, Math.floor(window.innerWidth * 0.82));
-  const size = Math.max(360, Math.min(520, cssSize));
-  // canvas fixed buffer for crisp
-  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-  canvas.style.width = size + "px";
-  canvas.style.height = size + "px";
-  canvas.width = Math.floor(size * dpr);
-  canvas.height = Math.floor(size * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-window.addEventListener("resize", () => { dprFix(); draw(); });
-dprFix();
-
-// rotation in radians (0 means segment 0 starts at 3 o'clock, but we control pointer at top)
-let rotation = 0;
-
-function draw() {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  ctx.clearRect(0,0,w,h);
-
-  const cx = w/2, cy = h/2;
-  const R = Math.min(w,h)*0.46;
-  const ring = Math.min(w,h)*0.10;
-
-  // outer shadow ring
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx,cy,R+10,0,Math.PI*2);
-  ctx.fillStyle = "rgba(0,0,0,.18)";
-  ctx.fill();
-  ctx.restore();
-
-  // segments
-  const step = (Math.PI * 2) / N;
-
-  // pointer is at top: angle = -90deg
-  const pointerAngle = -Math.PI/2;
-
-  for (let i=0;i<N;i++){
-    const s = segments[i];
-    const a0 = rotation + i*step;
-    const a1 = a0 + step;
-
-    ctx.beginPath();
-    ctx.moveTo(cx,cy);
-    ctx.arc(cx,cy,R,a0,a1);
-    ctx.closePath();
-    ctx.fillStyle = s.color;
-    ctx.globalAlpha = 0.85;
-    ctx.fill();
-
-    // separators
-    ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = "rgba(0,0,0,.45)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-
-  // inner cut (hole)
-  ctx.beginPath();
-  ctx.arc(cx,cy,R-ring,0,Math.PI*2);
-  ctx.fillStyle = "rgba(10,14,30,.92)";
-  ctx.fill();
-
-  // inner subtle ring
-  ctx.beginPath();
-  ctx.arc(cx,cy,R-ring,0,Math.PI*2);
-  ctx.strokeStyle = "rgba(255,255,255,.10)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // center disc
-  ctx.beginPath();
-  ctx.arc(cx,cy,R*0.36,0,Math.PI*2);
-  ctx.fillStyle = "rgba(255,255,255,.06)";
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx,cy,R*0.36,0,Math.PI*2);
-  ctx.strokeStyle = "rgba(255,255,255,.10)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // compute current segment under pointer to make tick detection consistent
-  // pointerAngle corresponds to "top". We need index where pointerAngle falls into [a0,a1).
-  // Normalize angle: relative = pointerAngle - rotation
-  const rel = normalizeAngle(pointerAngle - rotation);
-  const idx = (Math.floor(rel / step) % N + N) % N;
-  state.currentIndex = idx;
-}
-function normalizeAngle(a){
-  const two = Math.PI*2;
-  a = a % two;
-  if (a < 0) a += two;
-  return a;
+.wrap{
+  max-width: var(--maxW);
+  margin: 18px auto 28px;
+  padding: 0 14px;
 }
 
-// ---------- Spin logic ----------
-const state = {
-  spinning: false,
-  currentIndex: 0,
-  lastTickIndex: -1
-};
+/* TOP */
+.top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 14px 16px;
+  border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow2);
+}
+.title{font-weight:900; letter-spacing:.2px}
+.subtitle{font-size:12px; opacity:.78; margin-top:2px}
 
-function setStatus(text){
-  statusVal.textContent = text;
-  setPulse(stStatus);
+.pill{
+  min-width: 140px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.20);
+  border: 1px solid var(--stroke);
+  text-align:right;
+}
+.pill__label{font-size:11px; opacity:.75}
+.pill__value{font-size:14px; font-weight:900; margin-top:3px}
+
+/* GRID */
+.grid{
+  margin-top: 14px;
+  display:grid;
+  grid-template-columns: 1.25fr .75fr;
+  gap: 14px;
+}
+@media (max-width: 980px){
+  .grid{grid-template-columns:1fr; }
 }
 
-function setResult(text){
-  resultVal.textContent = text;
-  setPulse(stResult);
+/* CARD */
+.card{
+  border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.04));
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+.card--game{
+  padding: 12px;
+}
+.card--bet{
+  padding: 12px;
 }
 
-function angleForIndexAtPointer(index){
-  // We want segment "index" to end up at pointerAngle (-90deg) at its center.
-  const step = (Math.PI*2)/N;
-  const pointerAngle = -Math.PI/2;
-  const segCenter = index*step + step/2;
-  // pointerAngle = rotation + segCenter  => rotation = pointerAngle - segCenter
-  return pointerAngle - segCenter;
+/* HUD */
+.hud{
+  display:grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 6px 4px 12px;
+}
+@media (max-width: 980px){
+  .hud{grid-template-columns: repeat(2, 1fr);}
+}
+.hud__item{
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid var(--stroke);
+}
+.hud__label{font-size:11px; opacity:.75}
+.hud__value{margin-top:3px; font-weight:900; font-size:13px}
+
+/* ARENA */
+.arena{
+  position:relative;
+  border-radius: var(--r);
+  background:
+    radial-gradient(700px 380px at 50% 40%, rgba(255,255,255,.06), transparent 70%),
+    linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.30));
+  border: 1px solid rgba(255,255,255,.08);
+  padding: 14px;
+  min-height: 420px;
 }
 
-function pickRandomIndexWeighted(){
-  // but wheel already has repeats per group (counts), so uniform index is already weighted
-  return randInt(0, N-1);
+.arena__grid{
+  position:absolute; inset:12px;
+  border-radius: 16px;
+  background:
+    linear-gradient(to right, rgba(255,255,255,.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 52px 52px;
+  opacity:.25;
+  mask-image: radial-gradient(circle at 50% 40%, rgba(0,0,0,1), rgba(0,0,0,.15) 70%, transparent 100%);
+  pointer-events:none;
 }
 
-function disableUI(dis){
-  spinBtn.disabled = dis;
-  document.querySelectorAll(".pickBtn").forEach(b=>b.disabled = dis);
-  betInput.disabled = dis;
-  betMinus.disabled = dis;
-  betPlus.disabled = dis;
-  document.querySelectorAll("#chips .chip").forEach(b=>b.disabled = dis);
+/* STAGE */
+.stage{
+  position:relative;
+  display:grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items:center;
+  gap: 12px;
+  margin-top: 6px;
+  padding: 10px 8px;
+}
+@media (max-width: 720px){
+  .stage{grid-template-columns:1fr; gap:14px;}
 }
 
-function spin(){
-  clampBet();
-  const bet = Math.floor(Number(betInput.value)||0);
-  if (bet <= 0) return;
-  if (bet > wallet.coins) return;
-
-  if (!selectedMult){
-    setStatus("Выбери фракцию");
-    centerBig.textContent = "Выбери фракцию";
-    centerSmall.textContent = "снизу";
-    return;
-  }
-
-  // списываем ставку сразу
-  addCoins(-bet);
-
-  state.spinning = true;
-  disableUI(true);
-  setStatus("Крутится…");
-  centerBig.textContent = "Крутится…";
-  centerSmall.textContent = "удачи";
-
-  // выбор сектора (вес уже в массивах)
-  const winIndex = pickRandomIndexWeighted();
-  const landed = segments[winIndex];
-
-  // target rotation:
-  //  - we add big spins + align final rotation to land chosen index at pointer
-  const baseTarget = angleForIndexAtPointer(winIndex);
-  const spins = randInt(6, 9) * Math.PI * 2;
-  const startRot = rotation;
-  const endRot = baseTarget + spins;
-
-  const dur = randInt(3200, 4200); // ms
-  const tStart = performance.now();
-
-  state.lastTickIndex = -1;
-
-  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-
-  function frame(now){
-    const t = Math.min(1, (now - tStart) / dur);
-    const e = easeOutCubic(t);
-    rotation = startRot + (endRot - startRot) * e;
-
-    draw();
-
-    // tick when passing into new segment
-    if (state.currentIndex !== state.lastTickIndex) {
-      state.lastTickIndex = state.currentIndex;
-      // тихий тик только во время спина
-      if (t < 0.98) tick();
-    }
-
-    if (t < 1){
-      requestAnimationFrame(frame);
-      return;
-    }
-
-    // finalize exact
-    rotation = endRot;
-    draw();
-
-    state.spinning = false;
-    disableUI(false);
-
-    // outcome
-    const win = landed.mult === selectedMult;
-    if (win){
-      const payout = Math.floor(bet * landed.mult);
-      addCoins(payout);
-
-      setStatus("Победа ✅");
-      setResult(`${formatMult(landed.mult)} · +${payout} 🪙`);
-      centerBig.textContent = "Победа ✅";
-      centerSmall.textContent = `+${payout} 🪙`;
-      winSound();
-    } else {
-      setStatus("Проигрыш ❌");
-      setResult(`${formatMult(landed.mult)} · -${bet} 🪙`);
-      centerBig.textContent = "Проигрыш ❌";
-      centerSmall.textContent = `выпало ${formatMult(landed.mult)}`;
-      loseSound();
-    }
-  }
-
-  requestAnimationFrame(frame);
+.side{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap: 10px;
+}
+.side__label{
+  font-weight:900;
+  opacity:.85;
+  font-size:12px;
+  letter-spacing:.2px;
+}
+.mini{
+  font-size:12px;
+  opacity:.78;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.09);
 }
 
-spinBtn.onclick = () => {
-  // unlock audio on first user gesture
-  if (!audioCtx && soundOn) ensureAudio();
-  spin();
-};
+.center{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap: 10px;
+  min-width: 200px;
+}
+.mult{
+  text-align:center;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: 0 10px 28px rgba(0,0,0,.25);
+}
+.mult__big{font-size:20px; font-weight:1000; letter-spacing:.2px}
+.mult__small{font-size:12px; opacity:.78; margin-top:4px}
+.vs{
+  display:flex; align-items:center; gap:10px;
+  opacity:.9;
+}
+.vs__text{
+  font-weight:1000;
+  letter-spacing:1px;
+  font-size:12px;
+}
+.vs__dot{
+  width:8px;height:8px;border-radius:50%;
+  background: rgba(255,255,255,.35);
+}
 
-// initial UI
-setStatus("Ожидание");
-pickVal.textContent = "—";
-setResult("—");
-centerBig.textContent = "Выбери фракцию";
-centerSmall.textContent = "и нажми “Крутить”";
-updateChance();
-draw();
+/* 3D HAND */
+.hand3d{
+  width: 150px;
+  height: 170px;
+  position:relative;
+  perspective: 700px;
+}
+.hand3d__shadow{
+  position:absolute;
+  left:50%; top: 132px;
+  width: 120px; height: 26px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(0,0,0,.55), transparent 65%);
+  filter: blur(1px);
+  opacity: .55;
+}
+.hand3d__card{
+  position:absolute;
+  inset: 0;
+  margin:auto;
+  width: 150px;
+  height: 150px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 18px 40px rgba(0,0,0,.35);
+  transform: rotateX(14deg) rotateY(-16deg) translateZ(0);
+  transform-style:preserve-3d;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+.side--bot .hand3d__card{ transform: rotateX(14deg) rotateY(16deg); }
+
+.hand3d__card::before{
+  content:"";
+  position:absolute; inset:-1px;
+  background: radial-gradient(260px 180px at 20% 20%, rgba(76,125,255,.22), transparent 60%),
+              radial-gradient(260px 180px at 80% 30%, rgba(255,90,102,.18), transparent 60%);
+  opacity:.75;
+  pointer-events:none;
+}
+.hand3d__face{
+  position:relative;
+  z-index:2;
+  font-size: 58px;
+  font-weight: 900;
+  transform: translateZ(40px);
+  text-shadow: 0 10px 22px rgba(0,0,0,.35);
+  user-select:none;
+}
+
+/* shuffle animation (hands) */
+@keyframes shuffle {
+  0%   { transform: rotateX(14deg) rotateY(-16deg) translateY(0) translateZ(0); }
+  15%  { transform: rotateX(22deg) rotateY(-30deg) translateY(-8px) translateZ(6px); }
+  35%  { transform: rotateX(10deg) rotateY(-6deg) translateY(0) translateZ(0); }
+  55%  { transform: rotateX(24deg) rotateY(-26deg) translateY(-10px) translateZ(8px); }
+  100% { transform: rotateX(14deg) rotateY(-16deg) translateY(0) translateZ(0); }
+}
+@keyframes shuffleBot {
+  0%   { transform: rotateX(14deg) rotateY(16deg) translateY(0) translateZ(0); }
+  15%  { transform: rotateX(22deg) rotateY(30deg) translateY(-8px) translateZ(6px); }
+  35%  { transform: rotateX(10deg) rotateY(6deg) translateY(0) translateZ(0); }
+  55%  { transform: rotateX(24deg) rotateY(26deg) translateY(-10px) translateZ(8px); }
+  100% { transform: rotateX(14deg) rotateY(16deg) translateY(0) translateZ(0); }
+}
+.hand3d.isShuffle .hand3d__card{ animation: shuffle .72s ease-in-out both; }
+.side--bot .hand3d.isShuffle .hand3d__card{ animation: shuffleBot .72s ease-in-out both; }
+
+@keyframes revealPop{
+  0%{ transform: translateZ(40px) scale(.92); filter: blur(.4px); opacity:.8;}
+  100%{ transform: translateZ(40px) scale(1); filter: blur(0); opacity:1;}
+}
+.hand3d.isReveal .hand3d__face{ animation: revealPop .18s ease-out both; }
+
+/* CHOICES */
+.choices{
+  margin-top: 12px;
+  display:flex;
+  gap: 10px;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+.chip{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding: 12px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  color: var(--text);
+  cursor:pointer;
+  font-weight: 900;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  user-select:none;
+}
+.chip:active{transform: scale(.98);}
+.chip__icon{font-size:18px}
+.chip__text{font-size:13px; opacity:.95}
+
+.chip--r:hover{border-color: rgba(255,90,102,.40); background: rgba(255,90,102,.09);}
+.chip--s:hover{border-color: rgba(255,204,102,.40); background: rgba(255,204,102,.09);}
+.chip--p:hover{border-color: rgba(76,125,255,.45); background: rgba(76,125,255,.09);}
+
+.chip.isActive{
+  outline: 2px solid rgba(76,125,255,.55);
+}
+
+/* Hint */
+.hint{
+  margin-top: 10px;
+  text-align:center;
+  font-size: 12px;
+  opacity:.72;
+}
+
+/* BET PANEL */
+.betHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+.betTitle{font-weight:1000}
+.betSub{font-size:12px; opacity:.72; margin-top:4px}
+
+.bets{padding: 0 2px 2px;}
+.row{display:flex; gap:10px; align-items:center;}
+.row--chips{flex-wrap:wrap; gap:8px; margin-top: 10px;}
+.row--bet{margin-top: 10px;}
+.row--actions{margin-top: 12px;}
+
+.pillBtn{
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  cursor:pointer;
+  font-weight:900;
+  font-size:12px;
+}
+.pillBtn:active{transform:scale(.98);}
+
+.input{
+  flex:1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  outline:none;
+}
+
+.btn{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 12px 12px;
+  cursor:pointer;
+  font-weight:1000;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease, opacity .12s ease;
+}
+.btn:active{transform:scale(.98);}
+.btn--primary{
+  background: linear-gradient(180deg, rgba(76,125,255,.95), rgba(46,92,255,.75));
+  border-color: rgba(76,125,255,.45);
+}
+.btn--ghost{ background: rgba(255,255,255,.05); }
+.btn--square{ width: 44px; padding: 12px 0; border-radius: 12px; }
+.btn--tiny{ padding: 8px 10px; border-radius: 12px; font-size: 12px; }
+
+.btn:disabled{opacity:.55; cursor:not-allowed;}
+
+.logline{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.10);
+  font-weight: 900;
+}
+.smallNote{
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: .70;
+  line-height:1.25;
+}
+.soundRow{margin-top: 12px; display:flex; justify-content:flex-start;}
+
+/* FOOT */
+.foot{
+  margin-top: 10px;
+  display:flex;
+  justify-content:flex-end;
+  opacity:.7;
+}
+.muted{font-size:12px}
+
+/* RESULT COLOR STATES (JS toggles these classes on #arena) */
+.arena.isWin{
+  box-shadow: 0 0 0 1px rgba(51,209,122,.24) inset, 0 24px 70px rgba(51,209,122,.10);
+}
+.arena.isLose{
+  box-shadow: 0 0 0 1px rgba(255,90,102,.22) inset, 0 24px 70px rgba(255,90,102,.10);
+}
+.arena.isDraw{
+  box-shadow: 0 0 0 1px rgba(255,204,102,.18) inset, 0 24px 70px rgba(255,204,102,.08);
+}
