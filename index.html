@@ -3,94 +3,177 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Wheel</title>
+  <title>RPS</title>
+
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="container">
-    <div class="topbar">
-      <div class="brand">
-        <div class="title">Wheel</div>
-        <div class="sub">Открыто вне Telegram</div>
+  <div class="bg"></div>
+
+  <div class="wrap">
+    <!-- TOP BAR -->
+    <header class="top">
+      <div class="top__left">
+        <div class="title">RPS</div>
+        <div class="subtitle" id="userLine">Открыто вне Telegram</div>
       </div>
 
-      <div class="rightTop">
-        <button class="soundBtn" id="soundBtn" type="button">Звук: on</button>
-        <div class="balanceBox">
-          <div class="lbl">Баланс</div>
-          <div class="val" id="balanceVal">🪙 0</div>
+      <div class="top__right">
+        <div class="pill">
+          <div class="pill__label">Баланс</div>
+          <div class="pill__value"><span id="coins">0</span> 🪙</div>
         </div>
       </div>
-    </div>
+    </header>
 
-    <div class="main">
-      <!-- LEFT -->
-      <div class="card leftWrap">
-        <div class="stats">
-          <div class="stat" id="stStatus">
-            <div class="lbl">Статус</div>
-            <div class="val" id="statusVal">Ожидание</div>
+    <!-- MAIN GRID -->
+    <main class="grid">
+      <!-- GAME CARD -->
+      <section class="card card--game">
+        <div class="hud">
+          <div class="hud__item">
+            <div class="hud__label">Статус</div>
+            <div class="hud__value" id="status">Ожидание</div>
           </div>
-          <div class="stat" id="stPick">
-            <div class="lbl">Твой выбор</div>
-            <div class="val" id="pickVal">—</div>
+
+          <div class="hud__item">
+            <div class="hud__label">Твой выбор</div>
+            <div class="hud__value" id="pickYou">—</div>
           </div>
-          <div class="stat" id="stResult">
-            <div class="lbl">Результат</div>
-            <div class="val" id="resultVal">—</div>
+
+          <div class="hud__item">
+            <div class="hud__label">Выбор бота</div>
+            <div class="hud__value" id="pickBot">—</div>
+          </div>
+
+          <div class="hud__item">
+            <div class="hud__label">Результат</div>
+            <div class="hud__value" id="result">—</div>
           </div>
         </div>
 
-        <div class="stage">
-          <div class="wheelWrap">
-            <div class="pointerDot"></div>
-            <div class="pointer"></div>
+        <!-- ARENA -->
+        <div class="arena" id="arena">
+          <!-- decorative -->
+          <div class="arena__grid"></div>
 
-            <canvas id="wheel" width="520" height="520"></canvas>
+          <!-- stage -->
+          <div class="stage">
+            <!-- bot side -->
+            <div class="side side--bot">
+              <div class="side__label">Бот</div>
 
-            <div class="centerHud">
-              <div class="big" id="centerBig">Выбери фракцию</div>
-              <div class="small" id="centerSmall">и нажми “Крутить”</div>
+              <div class="hand3d" id="handBot" aria-label="bot hand">
+                <div class="hand3d__shadow"></div>
+                <div class="hand3d__card">
+                  <div class="hand3d__face" id="handBotFace">❔</div>
+                </div>
+              </div>
+
+              <div class="mini" id="botTag">Готов</div>
+            </div>
+
+            <!-- center -->
+            <div class="center">
+              <div class="mult" id="centerText">
+                <div class="mult__big" id="centerBig">Выбери</div>
+                <div class="mult__small" id="centerSmall">камень / ножницы / бумага</div>
+              </div>
+
+              <div class="vs">
+                <span class="vs__dot"></span>
+                <span class="vs__text">VS</span>
+                <span class="vs__dot"></span>
+              </div>
+            </div>
+
+            <!-- player side -->
+            <div class="side side--you">
+              <div class="side__label">Ты</div>
+
+              <div class="hand3d" id="handYou" aria-label="your hand">
+                <div class="hand3d__shadow"></div>
+                <div class="hand3d__card">
+                  <div class="hand3d__face" id="handYouFace">❔</div>
+                </div>
+              </div>
+
+              <div class="mini" id="youTag">Готов</div>
             </div>
           </div>
 
-          <div class="picks" id="picks"></div>
+          <!-- action buttons -->
+          <div class="choices">
+            <button class="chip chip--r" id="btnRock" type="button" data-move="rock">
+              <span class="chip__icon">✊</span>
+              <span class="chip__text">Камень</span>
+            </button>
 
-          <div class="hint">
-            Правило: если выпало <b>на твою фракцию</b> — выигрываешь <b>xмножитель</b>, иначе ставка сгорает.
+            <button class="chip chip--s" id="btnScissors" type="button" data-move="scissors">
+              <span class="chip__icon">✌️</span>
+              <span class="chip__text">Ножницы</span>
+            </button>
+
+            <button class="chip chip--p" id="btnPaper" type="button" data-move="paper">
+              <span class="chip__icon">✋</span>
+              <span class="chip__text">Бумага</span>
+            </button>
+          </div>
+
+          <div class="hint" id="hint">
+            Выбирай ход снизу. Раунд быстрый — с анимацией “перемешивания”.
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- RIGHT -->
-      <div class="card rightWrap">
-        <div class="panelTitle">Ставка</div>
+      <!-- BET / CONTROLS CARD -->
+      <aside class="card card--bet">
+        <div class="betHead">
+          <div>
+            <div class="betTitle">Ставка</div>
+            <div class="betSub">Монеты виртуальные, без вывода.</div>
+          </div>
 
-        <div class="panelRow">
-          <div class="badge" id="chanceBadge">Шанс: —</div>
-          <button class="chip" id="bonusBtn" type="button">+1000 🪙</button>
+          <button class="btn btn--tiny" id="bonus" type="button">+1000 🪙</button>
         </div>
 
-        <div class="chips" id="chips">
-          <button class="chip" data-bet="10" type="button">10</button>
-          <button class="chip" data-bet="50" type="button">50</button>
-          <button class="chip" data-bet="100" type="button">100</button>
-          <button class="chip" data-bet="250" type="button">250</button>
-          <button class="chip" data-bet="500" type="button">500</button>
-          <button class="chip" data-bet="max" type="button">MAX</button>
+        <div class="bets">
+          <div class="row row--chips" id="betPresets">
+            <button class="pillBtn" type="button" data-bet="10">10</button>
+            <button class="pillBtn" type="button" data-bet="50">50</button>
+            <button class="pillBtn" type="button" data-bet="100">100</button>
+            <button class="pillBtn" type="button" data-bet="250">250</button>
+            <button class="pillBtn" type="button" data-bet="500">500</button>
+            <button class="pillBtn" type="button" data-bet="max">MAX</button>
+          </div>
+
+          <div class="row row--bet">
+            <button class="btn btn--square" id="betMinus" type="button">–</button>
+            <input class="input" id="bet" type="number" min="1" step="1" value="100" />
+            <button class="btn btn--square" id="betPlus" type="button">+</button>
+          </div>
+
+          <div class="row row--actions">
+            <button class="btn btn--primary" id="play" type="button">Играть</button>
+            <button class="btn btn--ghost" id="reset" type="button">Сброс</button>
+          </div>
+
+          <div class="logline" id="payoutLine">Выигрыш: —</div>
+
+          <div class="smallNote">
+            * Выигрыш только при победе. При ничьей — ставка возвращается.
+          </div>
         </div>
 
-        <div class="betRow">
-          <button class="btnSmall" id="betMinus" type="button">-</button>
-          <input class="input" id="betInput" type="number" min="1" step="1" value="100" />
-          <button class="btnSmall" id="betPlus" type="button">+</button>
+        <div class="soundRow">
+          <button class="btn btn--ghost btn--tiny" id="soundToggle" type="button">Звук: off</button>
         </div>
+      </aside>
+    </main>
 
-        <button class="btn" id="spinBtn" type="button">Крутить</button>
-
-        <div class="footerVer">v1 · режим Wheel</div>
-      </div>
-    </div>
+    <footer class="foot">
+      <div class="muted">v1 • режим RPS</div>
+    </footer>
   </div>
 
   <script src="./app.js"></script>
