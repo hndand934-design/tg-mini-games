@@ -1,605 +1,567 @@
-/* RPS v2 — Ladder X + SVG hands + smoother anim
-   Требования:
-   - GitHub Pages (без билдов)
-   - localStorage баланс
-   - Лестница X (подсветка шага)
-   - Серия до 3 побед (best-of-5, кто первый до 3)
-   - Визуально: белые “руки” в стиле Stake (SVG), без «детских» картинок
-   - Звук уже есть в интерфейсе (если у тебя кнопка есть). Здесь оставил аккуратные тихие бипы.
+/* RPS v2 — fixed buttons + SVG white hands + smooth animations + ladder X + series (best of 3)
+   Works on GitHub Pages. No external libs.
 */
-
 (() => {
-  // ===== helpers =====
+  "use strict";
+
+  // --------- DOM ----------
   const $ = (id) => document.getElementById(id);
-  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-  const now = () => performance.now();
 
-  // ===== DOM (ОЖИДАЕТСЯ что id совпадают с твоим index) =====
-  const el = {
-    balance: $("balanceValue"),
-    status: $("status"),
-    yourPick: $("yourPick"),
-    botPick: $("botPick"),
-    result: $("result"),
+  const elBalance = $("balance");
+  const elStatus = $("statusText");
+  const elYourPick = $("yourPickText");
+  const elBotPick = $("botPickText");
+  const elResult = $("resultText");
 
-    // ladder container (внутри .ladder элементы .step)
-    ladder: $("ladder"),
+  const elBetInput = $("betInput");
+  const elPlus = $("plus");
+  const elMinus = $("minus");
+  const elSound = $("soundToggle");
 
-    // hands
-    botHand: $("botHand"),
-    youHand: $("youHand"),
+  const btnPlay = $("playBtn");
+  const btnReset = $("resetBtn");
 
-    // choice buttons
-    btnRock: $("pickRock"),
-    btnPaper: $("pickPaper"),
-    btnScissors: $("pickScissors"),
+  const btnRock = $("pickRock");
+  const btnPaper = $("pickPaper");
+  const btnScissors = $("pickScissors");
 
-    // bet UI
-    betInput: $("betInput"),
-    btnPlay: $("btnPlay"),
-    btnReset: $("btnReset"),
+  const handBot = $("botHand");
+  const handYou = $("youHand");
 
-    // quick bet buttons (optional)
-    q10: $("q10"),
-    q50: $("q50"),
-    q100: $("q100"),
-    q250: $("q250"),
-    q500: $("q500"),
-    qMax: $("qMax"),
-    btnMinus: $("btnMinus"),
-    btnPlus: $("btnPlus"),
+  const quickBtns = Array.from(document.querySelectorAll("[data-bet]"));
 
-    // win panel
-    winLine: $("winLine"),
-    soundToggle: $("soundToggle")
-  };
+  const steps = Array.from(document.querySelectorAll(".step"));
 
-  // ===== config =====
-  // Ladder X (как “лесенка”)
-  // Старт x1.00; Победа 1 -> x1.20; 2 -> x1.50; 3 -> x2.00; 4 -> x3.00; 5 -> x5.00; 6 -> x10.00
-  // Для best-of-5 (до 3 побед) хватит первых 4-5 шагов, но оставим красиво до x10.00.
+  // If any required element missing — fail loudly in console (helps debug)
+  const must = [
+    elBalance, elStatus, elYourPick, elBotPick, elResult,
+    elBetInput, elPlus, elMinus, elSound,
+    btnPlay, btnReset,
+    btnRock, btnPaper, btnScissors,
+    handBot, handYou,
+    ...steps
+  ];
+  if (must.some((x) => !x)) {
+    console.error("RPS: Missing DOM elements. Check index.html ids/classes.");
+  }
+
+  // --------- STATE ----------
+  const LS_BAL = "rps_balance_v1";
+  const LS_SND = "rps_sound_v1";
+
+  let balance = parseInt(localStorage.getItem(LS_BAL) || "1000", 10);
+  if (!Number.isFinite(balance) || balance < 0) balance = 1000;
+
+  let soundOn = (localStorage.getItem(LS_SND) ?? "1") === "1";
+
+  // series: first to 3 wins
+  let youWins = 0;
+  let botWins = 0;
+  let roundActive = false;
+
+  // current selection
+  let yourPick = null; // "rock"|"paper"|"scissors"
+  let lastOutcome = null; // "win"|"lose"|"draw"
+
+  // ladder multipliers (like stake-ish)
   const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00];
 
-  const STORAGE_BAL = "rps_balance_v1";
-  const STORAGE_SOUND = "rps_sound_v1";
-  const DEFAULT_BAL = 1000;
-
-  // серия: до 3 побед
-  const SERIES_TARGET = 3;
-
-  // ===== state =====
-  let state = {
-    balance: loadBalance(),
-    soundOn: loadSound(),
-
-    bet: 100,
-    selected: null, // "rock" | "paper" | "scissors"
-
-    inRound: false,
-    // серия
-    winsYou: 0,
-    winsBot: 0,
-    stepIndex: 0,   // индекс в LADDER (0=1.00)
-    // текущий profit (условный, для отображения)
-    lastDelta: 0
+  // --------- SVG HANDS (WHITE) ----------
+  // Simple clean "stake-like" white icons, custom but similar feel.
+  const SVG = {
+    rock: `
+      <svg viewBox="0 0 128 128" width="92" height="92" aria-label="rock">
+        <defs>
+          <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="rgba(255,255,255,.96)"/>
+            <stop offset="1" stop-color="rgba(210,220,255,.92)"/>
+          </linearGradient>
+          <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,.35)"/>
+          </filter>
+        </defs>
+        <g filter="url(#sh)">
+          <path fill="url(#gW)" d="M52 26c8 0 14 6 14 14v6c0 3 2 5 5 5s5-2 5-5V36c0-6 5-11 11-11s11 5 11 11v24c0 18-10 38-32 44l-10 3c-10 3-20-2-24-11l-8-17c-6-12 3-26 17-26h11V40c0-8 6-14 14-14z"/>
+          <path fill="rgba(0,0,0,.12)" d="M35 74c8 9 20 15 33 15 10 0 18-2 26-8-7 12-18 20-32 24l-10 3c-10 3-20-2-24-11l-8-17c-3-6-2-12 2-17 2 5 5 8 13 11z"/>
+        </g>
+      </svg>`,
+    paper: `
+      <svg viewBox="0 0 128 128" width="92" height="92" aria-label="paper">
+        <defs>
+          <linearGradient id="gW2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="rgba(255,255,255,.98)"/>
+            <stop offset="1" stop-color="rgba(225,235,255,.92)"/>
+          </linearGradient>
+          <filter id="sh2" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,.35)"/>
+          </filter>
+        </defs>
+        <g filter="url(#sh2)">
+          <path fill="url(#gW2)" d="M38 22c7 0 12 5 12 12v36c0 4 3 7 7 7s7-3 7-7V30c0-7 5-12 12-12s12 5 12 12v40c0 4 3 7 7 7s7-3 7-7V42c0-7 5-12 12-12s12 5 12 12v30c0 23-14 42-36 49l-14 4c-16 5-33-3-40-18L18 82c-5-10 3-22 14-22h6V34c0-7 5-12 12-12z"/>
+          <path fill="rgba(0,0,0,.10)" d="M26 85c9 10 22 16 36 16 9 0 17-2 25-6-8 13-21 22-37 26l-14 4c-16 5-33-3-40-18L18 82c-3-6-1-13 3-17 1 6 4 12 5 13z"/>
+        </g>
+      </svg>`,
+    scissors: `
+      <svg viewBox="0 0 128 128" width="92" height="92" aria-label="scissors">
+        <defs>
+          <linearGradient id="gW3" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="rgba(255,255,255,.98)"/>
+            <stop offset="1" stop-color="rgba(215,228,255,.92)"/>
+          </linearGradient>
+          <filter id="sh3" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,.35)"/>
+          </filter>
+        </defs>
+        <g filter="url(#sh3)">
+          <path fill="url(#gW3)" d="M40 28c7 0 12 5 12 12v14c0 4 3 7 7 7s7-3 7-7V34c0-7 5-12 12-12s12 5 12 12v20c0 4 3 7 7 7s7-3 7-7V44c0-7 5-12 12-12s12 5 12 12v22c0 17-9 32-24 40l-8 4 8 6c4 3 5 9 2 13-3 4-9 5-13 2l-22-16-22 16c-4 3-10 2-13-2-3-4-2-10 2-13l8-6-8-4c-15-8-24-23-24-40V40c0-7 5-12 12-12z"/>
+          <path fill="rgba(0,0,0,.10)" d="M36 88c10 8 22 12 28 12s18-4 28-12c-4 8-11 14-19 18l-8 4 8 6c4 3 5 9 2 13-3 4-9 5-13 2l-22-16-22 16c-4 3-10 2-13-2-3-4-2-10 2-13l8-6-8-4c-8-4-15-10-19-18z"/>
+        </g>
+      </svg>`,
+    unknown: `
+      <div style="font-size:64px;font-weight:900;color:rgba(233,239,255,.85);text-shadow:0 10px 28px rgba(0,0,0,.45)">?</div>`
   };
 
-  // ===== init =====
-  function init() {
-    // safety if some ids absent
-    if (!el.balance || !el.btnPlay) {
-      console.warn("RPS: some DOM ids are missing. Check index.html ids.");
-      return;
+  function setHand(el, pick) {
+    el.innerHTML = SVG[pick] || SVG.unknown;
+  }
+
+  // --------- SOUND (very light, WebAudio) ----------
+  let audioCtx = null;
+
+  function getCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+    return audioCtx;
+  }
 
-    setBalance(state.balance);
-    setSoundUI(state.soundOn);
-    setBetUI(state.bet);
-    renderStatus("Ожидание");
-    renderPicks(null, null);
-    renderResult(null);
-    renderWinLine(0);
-    buildLadder();
-    highlightLadder(0);
+  function beep({ f = 440, t = 0.08, type = "sine", gain = 0.06 } = {}) {
+    if (!soundOn) return;
+    const ctx = getCtx();
+    const now = ctx.currentTime;
 
-    // default hands: question
-    setHand(el.botHand, "question");
-    setHand(el.youHand, "question");
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, now);
 
-    // listeners
-    el.btnRock?.addEventListener("click", () => choose("rock"));
-    el.btnPaper?.addEventListener("click", () => choose("paper"));
-    el.btnScissors?.addEventListener("click", () => choose("scissors"));
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + t);
 
-    el.btnPlay.addEventListener("click", onPlay);
-    el.btnReset?.addEventListener("click", onResetSeries);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(now);
+    o.stop(now + t + 0.02);
+  }
 
-    // bet controls (optional)
-    el.q10?.addEventListener("click", () => setBet(state.bet + 10));
-    el.q50?.addEventListener("click", () => setBet(state.bet + 50));
-    el.q100?.addEventListener("click", () => setBet(state.bet + 100));
-    el.q250?.addEventListener("click", () => setBet(state.bet + 250));
-    el.q500?.addEventListener("click", () => setBet(state.bet + 500));
-    el.qMax?.addEventListener("click", () => setBet(state.balance));
-    el.btnMinus?.addEventListener("click", () => setBet(state.bet - 10));
-    el.btnPlus?.addEventListener("click", () => setBet(state.bet + 10));
+  function sWin() {
+    beep({ f: 660, t: 0.07, type: "triangle", gain: 0.05 });
+    setTimeout(() => beep({ f: 880, t: 0.09, type: "triangle", gain: 0.05 }), 75);
+  }
+  function sLose() {
+    beep({ f: 260, t: 0.10, type: "sawtooth", gain: 0.035 });
+    setTimeout(() => beep({ f: 180, t: 0.12, type: "sawtooth", gain: 0.03 }), 85);
+  }
+  function sDraw() {
+    beep({ f: 420, t: 0.07, type: "sine", gain: 0.04 });
+    setTimeout(() => beep({ f: 420, t: 0.07, type: "sine", gain: 0.03 }), 90);
+  }
+  function sClick() {
+    beep({ f: 520, t: 0.045, type: "square", gain: 0.02 });
+  }
 
-    el.betInput?.addEventListener("input", () => {
-      const v = parseInt(el.betInput.value || "0", 10);
-      if (Number.isFinite(v)) setBet(v, { silent: true });
+  // --------- UI HELPERS ----------
+  const fmt = (n) => `${Math.round(n)} ₼`;
+
+  function clampInt(v, min, max) {
+    v = parseInt(String(v).replace(/[^\d]/g, ""), 10);
+    if (!Number.isFinite(v)) v = min;
+    v = Math.max(min, Math.min(max, v));
+    return v;
+  }
+
+  function updateBalance() {
+    elBalance.textContent = fmt(balance);
+    localStorage.setItem(LS_BAL, String(balance));
+  }
+
+  function updateSoundBtn() {
+    elSound.textContent = soundOn ? "Звук: on" : "Звук: off";
+    localStorage.setItem(LS_SND, soundOn ? "1" : "0");
+  }
+
+  function setStatus(text) {
+    elStatus.textContent = text;
+  }
+
+  function setHeader() {
+    // status line includes series score + next multiplier hint
+    const nextIdx = Math.min(youWins + botWins + 1, LADDER.length - 1);
+    const nextX = LADDER[nextIdx];
+    const target = 3;
+
+    // optional: you may have spans in index, but we keep as plain text here
+    // Top pills:
+    // - statusText
+    // - yourPickText
+    // - botPickText
+    // - resultText
+    elYourPick.textContent = yourPick ? humanPick(yourPick) : "—";
+    elBotPick.textContent = (roundActive && lastOutcome === null) ? "..." : (botLastPick ? humanPick(botLastPick) : "—");
+
+    // result: handled elsewhere
+
+    // Ladder active step highlights
+    paintLadder();
+
+    // Can show series in status
+    // If your HTML already shows series elsewhere, this is still fine.
+    const score = `Серия: ${youWins}-${botWins} (до ${target} побед)`;
+    const hint = `След. победа: x${nextX.toFixed(2)}`;
+    setStatus(roundActive ? "Раунд..." : `${score} · ${hint}`);
+  }
+
+  function humanPick(p) {
+    if (p === "rock") return "Камень";
+    if (p === "paper") return "Бумага";
+    return "Ножницы";
+  }
+
+  function disableControls(disabled) {
+    [btnRock, btnPaper, btnScissors, btnPlay, btnReset, elBetInput, elPlus, elMinus, ...quickBtns].forEach((b) => {
+      if (!b) return;
+      b.disabled = disabled;
     });
-
-    el.soundToggle?.addEventListener("click", () => {
-      state.soundOn = !state.soundOn;
-      saveSound(state.soundOn);
-      setSoundUI(state.soundOn);
-      beep("tick");
-    });
-
-    // initial disable play until pick
-    syncButtons();
   }
 
-  // ===== ladder render =====
-  function buildLadder() {
-    if (!el.ladder) return;
+  function setActiveChoice() {
+    [btnRock, btnPaper, btnScissors].forEach((b) => b.classList.remove("active"));
+    if (yourPick === "rock") btnRock.classList.add("active");
+    if (yourPick === "paper") btnPaper.classList.add("active");
+    if (yourPick === "scissors") btnScissors.classList.add("active");
+  }
 
-    el.ladder.innerHTML = "";
-    LADDER.forEach((x, i) => {
-      const d = document.createElement("div");
-      d.className = "step";
-      d.dataset.i = String(i);
-      const label = i === 0 ? `Старт\nx${x.toFixed(2)}` : `Шаг ${i}\nx${x.toFixed(2)}`;
-      d.textContent = label.replace("\n", " ");
-      el.ladder.appendChild(d);
+  function clearHandFx() {
+    [handBot, handYou].forEach((h) => {
+      h.classList.remove("shake", "win", "lose", "draw", "ready");
     });
   }
 
-  function highlightLadder(idx) {
-    if (!el.ladder) return;
-    const steps = [...el.ladder.querySelectorAll(".step")];
-    steps.forEach((s, i) => s.classList.toggle("active", i === idx));
+  function paintLadder() {
+    // Determine current stage by wins in series (only your wins matter for "progress")
+    // But we also show last outcome by coloring current step.
+    steps.forEach((s) => s.classList.remove("active", "won", "lost"));
+
+    const stage = Math.min(youWins, LADDER.length - 1); // 0..6
+    // "active" indicates current x for cashout if you win next? We'll highlight current stage.
+    // Use stage index to highlight current multiplier.
+    if (steps[stage]) steps[stage].classList.add("active");
+
+    // last outcome feedback:
+    if (lastOutcome === "win" && steps[stage]) steps[stage].classList.add("won");
+    if (lastOutcome === "lose" && steps[Math.max(0, stage)] ) steps[Math.max(0, stage)].classList.add("lost");
   }
 
-  // ===== UI helpers =====
-  function setBalance(v) {
-    state.balance = Math.max(0, Math.floor(v));
-    saveBalance(state.balance);
-    if (el.balance) el.balance.textContent = String(state.balance);
-    syncButtons();
+  // --------- GAME LOGIC ----------
+  let botLastPick = null;
+
+  function randomBotPick() {
+    const r = Math.random();
+    return r < 0.333 ? "rock" : r < 0.666 ? "paper" : "scissors";
   }
 
-  function setBet(v, opts = {}) {
-    const vv = clamp(Math.floor(v || 0), 1, Math.max(1, state.balance));
-    state.bet = vv;
-    if (el.betInput && !opts.silent) el.betInput.value = String(vv);
-    if (el.betInput && opts.silent) {
-      // keep input as typed but clamp in state
-      el.betInput.value = String(vv);
-    }
-    syncButtons();
-  }
-
-  function setBetUI(v) {
-    if (el.betInput) el.betInput.value = String(v);
-  }
-
-  function renderStatus(txt) {
-    if (el.status) el.status.textContent = txt;
-  }
-
-  function renderPicks(your, bot) {
-    if (el.yourPick) el.yourPick.textContent = your ? labelOf(your) : "—";
-    if (el.botPick) el.botPick.textContent = bot ? labelOf(bot) : "—";
-  }
-
-  function renderResult(kind) {
-    if (!el.result) return;
-    el.result.classList.remove("win", "lose", "draw");
-    if (!kind) {
-      el.result.textContent = "—";
-      return;
-    }
-    if (kind === "win") {
-      el.result.textContent = "Победа ✓";
-      el.result.classList.add("win");
-    } else if (kind === "lose") {
-      el.result.textContent = "Поражение ✕";
-      el.result.classList.add("lose");
-    } else {
-      el.result.textContent = "Ничья";
-      el.result.classList.add("draw");
-    }
-  }
-
-  function renderWinLine(delta) {
-    if (!el.winLine) return;
-    if (!delta) {
-      el.winLine.textContent = "Выигрыш: —";
-      return;
-    }
-    const sign = delta > 0 ? "+" : "";
-    el.winLine.textContent = `Выигрыш: ${sign}${delta} Ⓒ`;
-  }
-
-  function syncButtons() {
-    const canPlay = !state.inRound && !!state.selected && state.bet > 0 && state.bet <= state.balance;
-    if (el.btnPlay) el.btnPlay.disabled = !canPlay;
-    // reset always available
-  }
-
-  function choose(pick) {
-    if (state.inRound) return;
-    state.selected = pick;
-
-    // active button styles
-    el.btnRock?.classList.toggle("active", pick === "rock");
-    el.btnPaper?.classList.toggle("active", pick === "paper");
-    el.btnScissors?.classList.toggle("active", pick === "scissors");
-
-    // show your chosen hand right away
-    setHand(el.youHand, pick);
-    setHand(el.botHand, "question");
-
-    renderPicks(pick, null);
-    renderResult(null);
-    renderStatus(seriesText("Готово"));
-    beep("tick");
-
-    syncButtons();
-  }
-
-  function seriesText(prefix) {
-    return `${prefix} · Серия: ${state.winsYou}-${state.winsBot} (до ${SERIES_TARGET} побед)`;
-  }
-
-  // ===== game flow =====
-  async function onPlay() {
-    if (state.inRound) return;
-    if (!state.selected) return;
-
-    // validate bet
-    if (state.bet <= 0 || state.bet > state.balance) {
-      renderStatus("Недостаточно баланса");
-      beep("bad");
-      return;
-    }
-
-    state.inRound = true;
-    syncButtons();
-
-    // take stake (заморозка ставки на раунд)
-    // Логика как в stake-ish: если победа — прибыль = ставка*(x-1); если проигрыш — -ставка; ничья — 0
-    setBalance(state.balance - state.bet);
-
-    renderStatus("Идёт раунд...");
-    renderResult(null);
-    renderWinLine(0);
-
-    // bot “thinking” animation
-    await animateReveal();
-
-    const bot = randomPick();
-    const you = state.selected;
-    renderPicks(you, bot);
-
-    // reveal bot hand
-    setHand(el.botHand, bot);
-
-    const outcome = judge(you, bot);
-
-    // handle ladder + payouts
-    let delta = 0;
-
-    if (outcome === "draw") {
-      // return stake
-      delta = 0;
-      setBalance(state.balance + state.bet);
-      renderStatus(seriesText("Ничья"));
-      renderResult("draw");
-      beep("tick");
-    } else if (outcome === "win") {
-      state.winsYou += 1;
-
-      // step goes forward (cap)
-      state.stepIndex = clamp(state.stepIndex + 1, 0, LADDER.length - 1);
-
-      const x = LADDER[state.stepIndex];
-      // payout includes returning stake + profit at x:
-      // total return = bet * x
-      // since bet already deducted, we add bet*x
-      const totalReturn = Math.floor(state.bet * x);
-      const profit = totalReturn - state.bet; // чистая прибыль
-      setBalance(state.balance + totalReturn);
-      delta = profit;
-
-      renderStatus(seriesText(`Победа! x${x.toFixed(2)}`));
-      renderResult("win");
-      beep("good");
-      flash("win");
-    } else {
-      // lose
-      state.winsBot += 1;
-
-      // reset step to start (как “лесенка” ломается)
-      state.stepIndex = 0;
-      delta = -state.bet;
-
-      renderStatus(seriesText("Поражение"));
-      renderResult("lose");
-      beep("bad");
-      flash("lose");
-    }
-
-    highlightLadder(state.stepIndex);
-    renderWinLine(delta);
-
-    // series end check
-    if (state.winsYou >= SERIES_TARGET || state.winsBot >= SERIES_TARGET) {
-      const youWon = state.winsYou > state.winsBot;
-      renderStatus(youWon ? "Серия выиграна ✓ Нажми «Сброс» чтобы начать заново" : "Серия проиграна ✕ Нажми «Сброс» чтобы начать заново");
-      // lock until reset
-      state.inRound = false;
-      state.selected = null;
-      syncChoiceButtonsOff();
-      syncButtons();
-      return;
-    }
-
-    // unlock next round
-    state.inRound = false;
-    // keep selected (удобно — можно играть серией одной кнопкой)
-    syncButtons();
-  }
-
-  function onResetSeries() {
-    if (state.inRound) return;
-
-    state.winsYou = 0;
-    state.winsBot = 0;
-    state.stepIndex = 0;
-    state.selected = null;
-
-    highlightLadder(0);
-    renderStatus("Ожидание");
-    renderPicks(null, null);
-    renderResult(null);
-    renderWinLine(0);
-
-    setHand(el.botHand, "question");
-    setHand(el.youHand, "question");
-
-    syncChoiceButtonsOff();
-    syncButtons();
-    beep("tick");
-  }
-
-  function syncChoiceButtonsOff() {
-    el.btnRock?.classList.remove("active");
-    el.btnPaper?.classList.remove("active");
-    el.btnScissors?.classList.remove("active");
-  }
-
-  // ===== animation =====
-  async function animateReveal() {
-    // smoother “shuffle” animation: flip both hands 3 times
-    const rounds = 3;
-    for (let i = 0; i < rounds; i++) {
-      addAnim(el.youHand, "flip");
-      addAnim(el.botHand, "flip");
-      beep("tick", 0.012);
-      await sleep(140);
-      setHand(el.botHand, randomPick()); // fast random while flipping
-      await sleep(120);
-    }
-    // final shake for punch
-    addAnim(el.youHand, "shake");
-    addAnim(el.botHand, "shake");
-    await sleep(120);
-  }
-
-  function addAnim(node, cls) {
-    if (!node) return;
-    node.classList.remove(cls);
-    // force reflow
-    void node.offsetWidth;
-    node.classList.add(cls);
-  }
-
-  function flash(kind) {
-    const arena = document.querySelector(".arena");
-    if (!arena) return;
-    arena.classList.remove("flash-win", "flash-lose");
-    void arena.offsetWidth;
-    arena.classList.add(kind === "win" ? "flash-win" : "flash-lose");
-    setTimeout(() => arena.classList.remove("flash-win", "flash-lose"), 320);
-  }
-
-  function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-  }
-
-  // ===== logic =====
-  function randomPick() {
-    const a = ["rock", "paper", "scissors"];
-    return a[(Math.random() * a.length) | 0];
-  }
-
-  function judge(you, bot) {
-    if (you === bot) return "draw";
+  function outcome(a, b) {
+    // returns "win" if a beats b, else "lose" or "draw"
+    if (a === b) return "draw";
     if (
-      (you === "rock" && bot === "scissors") ||
-      (you === "scissors" && bot === "paper") ||
-      (you === "paper" && bot === "rock")
+      (a === "rock" && b === "scissors") ||
+      (a === "paper" && b === "rock") ||
+      (a === "scissors" && b === "paper")
     ) return "win";
     return "lose";
   }
 
-  function labelOf(pick) {
-    if (pick === "rock") return "Камень";
-    if (pick === "paper") return "Бумага";
-    if (pick === "scissors") return "Ножницы";
-    return "—";
+  function getBet() {
+    const v = clampInt(elBetInput.value, 10, 1000000);
+    elBetInput.value = String(v);
+    return v;
   }
 
-  // ===== SVG hands (white, stake-like) =====
-  // Делал максимально “чисто”, без детских эмодзи: белые формы + мягкая тень.
-  // Если хочешь — потом дорисуем более “3д”.
-  function setHand(node, pick) {
-    if (!node) return;
+  function currentMultiplierIfWin() {
+    // When you win this round, the payout multiplier depends on ladder step for next win.
+    // If youWins=0 -> next win gives 1.20; if youWins=1 -> 1.50 ... etc.
+    const idx = Math.min(youWins + 1, LADDER.length - 1);
+    return LADDER[idx];
+  }
 
-    const wrap = (svg) => `
-      <div class="svg-hand" style="width:72px;height:72px;display:grid;place-items:center;">
-        ${svg}
-      </div>
-    `;
+  function resetSeries(full = false) {
+    youWins = 0;
+    botWins = 0;
+    lastOutcome = null;
+    botLastPick = null;
+    yourPick = null;
+    roundActive = false;
 
-    if (pick === "question") {
-      node.innerHTML = `<div style="font-weight:900;font-size:44px;opacity:.85;">?</div>`;
+    clearHandFx();
+    setHand(handBot, "unknown");
+    setHand(handYou, "unknown");
+
+    setActiveChoice();
+
+    elResult.textContent = "—";
+    elBotPick.textContent = "—";
+    elYourPick.textContent = "—";
+
+    if (full) setStatus("Ожидание");
+    paintLadder();
+  }
+
+  function setResultText(text, tone) {
+    elResult.textContent = text;
+    // optional: you can style result pill via data-attr if you want
+    // Here we keep it simple.
+  }
+
+  function finishMatch(winner) {
+    // winner: "you"|"bot"
+    roundActive = false;
+    disableControls(false);
+
+    if (winner === "you") {
+      setResultText("Победа в серии ✅", "win");
+      sWin();
+    } else {
+      setResultText("Поражение в серии ❌", "lose");
+      sLose();
+    }
+
+    // after short delay, auto reset series (keeps it flowing)
+    setTimeout(() => {
+      resetSeries(true);
+      setStatus("Ожидание");
+      setHeader();
+    }, 1100);
+  }
+
+  async function playRound() {
+    if (roundActive) return;
+    if (!yourPick) {
+      setStatus("Сначала выбери: камень / ножницы / бумага");
       return;
     }
 
-    if (pick === "rock") {
-      node.innerHTML = wrap(svgRock());
-    } else if (pick === "paper") {
-      node.innerHTML = wrap(svgPaper());
-    } else if (pick === "scissors") {
-      node.innerHTML = wrap(svgScissors());
+    const bet = getBet();
+    if (balance < bet) {
+      setStatus("Недостаточно баланса");
+      return;
     }
+
+    // start
+    roundActive = true;
+    disableControls(true);
+    lastOutcome = null;
+    botLastPick = null;
+
+    clearHandFx();
+    handBot.classList.add("ready");
+    handYou.classList.add("ready");
+
+    setResultText("Играем...", "neutral");
+    setStatus("Раунд...");
+    setHeader();
+
+    // pay bet upfront (like many games)
+    balance -= bet;
+    updateBalance();
+
+    // reveal animation sequence
+    sClick();
+
+    // shake a bit
+    handBot.classList.add("shake");
+    handYou.classList.add("shake");
+
+    // show unknown while shaking
+    setHand(handBot, "unknown");
+    setHand(handYou, "unknown");
+
+    await wait(520);
+
+    // decide bot
+    botLastPick = randomBotPick();
+
+    // set final hands
+    setHand(handBot, botLastPick);
+    setHand(handYou, yourPick);
+
+    // compute outcome
+    const out = outcome(yourPick, botLastPick);
+    lastOutcome = out;
+
+    clearHandFx();
+    // keep them slightly "ready"
+    handBot.classList.add("ready");
+    handYou.classList.add("ready");
+
+    if (out === "draw") {
+      // return bet
+      balance += bet;
+      updateBalance();
+
+      handBot.classList.add("draw");
+      handYou.classList.add("draw");
+
+      setResultText("Ничья 🤝", "draw");
+      setStatus("Ничья — ставка возвращена");
+      sDraw();
+      // no score change
+    }
+
+    if (out === "lose") {
+      botWins += 1;
+      handBot.classList.add("win");
+      handYou.classList.add("lose");
+
+      setResultText("Поражение ❌", "lose");
+      setStatus("Проигрыш — ставка сгорела");
+      sLose();
+    }
+
+    if (out === "win") {
+      youWins += 1;
+      const mult = currentMultiplierIfWin(); // based on updated youWins? careful
+
+      // Our function uses youWins + 1, but we already incremented.
+      // Let's compute correctly: payout for this win should correspond to youWins (after increment).
+      // If youWins=1 -> x1.20 ; if 2 -> x1.50 ... etc
+      const idx = Math.min(youWins, LADDER.length - 1);
+      const payoutX = LADDER[idx];
+
+      const winAmount = bet * payoutX;
+      balance += Math.round(winAmount);
+      updateBalance();
+
+      handBot.classList.add("lose");
+      handYou.classList.add("win");
+
+      setResultText(`Победа ✅ (+${Math.round(winAmount)} ₼)`, "win");
+      setStatus(`Ты выиграл раунд! x${payoutX.toFixed(2)}`);
+      sWin();
+    }
+
+    paintLadder();
+    setHeader();
+
+    await wait(650);
+
+    // check series end
+    const target = 3;
+    if (youWins >= target) {
+      finishMatch("you");
+      return;
+    }
+    if (botWins >= target) {
+      finishMatch("bot");
+      return;
+    }
+
+    // next
+    roundActive = false;
+    disableControls(false);
+    setStatus("Ожидание · выбери ход и нажми «Играть»");
+    setHeader();
   }
 
-  function svgCommon() {
-    // Common filters defs
-    return `
-      <defs>
-        <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
-          <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,.45)"/>
-        </filter>
-        <linearGradient id="handGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="rgba(255,255,255,.95)"/>
-          <stop offset="1" stop-color="rgba(255,255,255,.75)"/>
-        </linearGradient>
-        <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="rgba(255,255,255,.30)"/>
-          <stop offset="1" stop-color="rgba(255,255,255,.05)"/>
-        </linearGradient>
-      </defs>
-    `;
+  function wait(ms) {
+    return new Promise((res) => setTimeout(res, ms));
   }
 
-  function svgRock() {
-    return `
-    <svg width="70" height="70" viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
-      ${svgCommon()}
-      <g filter="url(#softShadow)">
-        <path d="M22 28c2-7 7-10 13-10 8 0 13 4 15 11 2 6 2 12 0 18-2 6-8 11-15 11-8 0-15-4-16-11-1-6 0-13 3-19z"
-              fill="url(#handGrad)" stroke="url(#edgeGrad)" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M27 31c1-3 4-5 7-5" stroke="rgba(0,0,0,.10)" stroke-width="2" stroke-linecap="round"/>
-        <path d="M40 31c2-2 4-3 7-2" stroke="rgba(0,0,0,.10)" stroke-width="2" stroke-linecap="round"/>
-      </g>
-    </svg>`;
+  // --------- EVENTS ----------
+  function pick(p) {
+    if (roundActive) return;
+    yourPick = p;
+    setActiveChoice();
+    setHand(handYou, p);
+    elYourPick.textContent = humanPick(p);
+    setStatus("Выбор сделан · нажми «Играть»");
+    sClick();
+    setHeader();
   }
 
-  function svgPaper() {
-    return `
-    <svg width="70" height="70" viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
-      ${svgCommon()}
-      <g filter="url(#softShadow)">
-        <path d="M20 18c6-4 24-4 30 0 2 1 3 3 3 6v23c0 4-3 7-7 7H24c-4 0-7-3-7-7V24c0-3 1-5 3-6z"
-              fill="url(#handGrad)" stroke="url(#edgeGrad)" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M26 26h18" stroke="rgba(0,0,0,.10)" stroke-width="2" stroke-linecap="round"/>
-        <path d="M26 34h18" stroke="rgba(0,0,0,.08)" stroke-width="2" stroke-linecap="round"/>
-        <path d="M26 42h14" stroke="rgba(0,0,0,.06)" stroke-width="2" stroke-linecap="round"/>
-      </g>
-    </svg>`;
-  }
+  btnRock.addEventListener("click", () => pick("rock"));
+  btnPaper.addEventListener("click", () => pick("paper"));
+  btnScissors.addEventListener("click", () => pick("scissors"));
 
-  function svgScissors() {
-    return `
-    <svg width="70" height="70" viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
-      ${svgCommon()}
-      <g filter="url(#softShadow)">
-        <path d="M22 44c0-6 5-11 11-11h4c6 0 11 5 11 11v1c0 6-5 11-11 11h-4c-6 0-11-5-11-11v-1z"
-              fill="url(#handGrad)" stroke="url(#edgeGrad)" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M34 33l-10-16" stroke="rgba(255,255,255,.85)" stroke-width="5" stroke-linecap="round"/>
-        <path d="M38 33l10-16" stroke="rgba(255,255,255,.85)" stroke-width="5" stroke-linecap="round"/>
-        <path d="M34 33l-10-16" stroke="rgba(0,0,0,.10)" stroke-width="2" stroke-linecap="round"/>
-        <path d="M38 33l10-16" stroke="rgba(0,0,0,.10)" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="32" cy="48" r="3.6" fill="rgba(0,0,0,.10)"/>
-        <circle cx="38" cy="48" r="3.6" fill="rgba(0,0,0,.10)"/>
-      </g>
-    </svg>`;
-  }
+  btnPlay.addEventListener("click", () => playRound());
+  btnReset.addEventListener("click", () => {
+    if (roundActive) return;
+    sClick();
+    resetSeries(true);
+    setStatus("Ожидание");
+    setHeader();
+  });
 
-  // ===== sound (simple, тихий) =====
-  let audioCtx = null;
-  function beep(type, volOverride) {
-    if (!state.soundOn) return;
+  elPlus.addEventListener("click", () => {
+    const v = clampInt(elBetInput.value, 10, 1000000);
+    elBetInput.value = String(v + 10);
+    sClick();
+  });
+  elMinus.addEventListener("click", () => {
+    const v = clampInt(elBetInput.value, 10, 1000000);
+    elBetInput.value = String(Math.max(10, v - 10));
+    sClick();
+  });
+
+  quickBtns.forEach((b) => {
+    b.addEventListener("click", () => {
+      const add = parseInt(b.getAttribute("data-bet"), 10);
+      const v = clampInt(elBetInput.value, 10, 1000000);
+      elBetInput.value = String(v + add);
+      sClick();
+    });
+  });
+
+  elBetInput.addEventListener("input", () => {
+    elBetInput.value = String(clampInt(elBetInput.value, 10, 1000000));
+  });
+
+  elSound.addEventListener("click", async () => {
+    soundOn = !soundOn;
+    updateSoundBtn();
+    // resume audio context after user gesture
     try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const t0 = audioCtx.currentTime;
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.connect(g);
-      g.connect(audioCtx.destination);
-
-      let freq = 600, dur = 0.06, vol = 0.018;
-      if (type === "good") { freq = 820; dur = 0.08; vol = 0.02; }
-      if (type === "bad") { freq = 220; dur = 0.10; vol = 0.02; }
-      if (type === "tick") { freq = 520; dur = 0.04; vol = 0.012; }
-
-      if (typeof volOverride === "number") vol = volOverride;
-
-      o.type = "sine";
-      o.frequency.setValueAtTime(freq, t0);
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-      o.start(t0);
-      o.stop(t0 + dur + 0.02);
+      if (soundOn) {
+        const ctx = getCtx();
+        if (ctx.state === "suspended") await ctx.resume();
+        sClick();
+      }
     } catch {}
+  });
+
+  // --------- INIT ----------
+  function init() {
+    updateBalance();
+    updateSoundBtn();
+
+    // default bet
+    if (!elBetInput.value) elBetInput.value = "100";
+    elBetInput.value = String(clampInt(elBetInput.value, 10, 1000000));
+
+    resetSeries(true);
+
+    // initial hands
+    setHand(handBot, "unknown");
+    setHand(handYou, "unknown");
+
+    setStatus("Ожидание · выбери ход");
+    setHeader();
+
+    // Ensure buttons really clickable (some old css could set pointer-events none)
+    [btnRock, btnPaper, btnScissors, btnPlay, btnReset].forEach((b) => {
+      if (b) b.style.pointerEvents = "auto";
+    });
   }
 
-  function setSoundUI(on) {
-    if (!el.soundToggle) return;
-    el.soundToggle.textContent = on ? "Звук: on" : "Звук: off";
-    el.soundToggle.classList.toggle("off", !on);
-  }
-
-  // ===== storage =====
-  function loadBalance() {
-    const v = parseInt(localStorage.getItem(STORAGE_BAL) || "", 10);
-    return Number.isFinite(v) ? v : DEFAULT_BAL;
-  }
-  function saveBalance(v) {
-    localStorage.setItem(STORAGE_BAL, String(v));
-  }
-
-  function loadSound() {
-    const v = localStorage.getItem(STORAGE_SOUND);
-    if (v === null) return true;
-    return v === "1";
-  }
-  function saveSound(on) {
-    localStorage.setItem(STORAGE_SOUND, on ? "1" : "0");
-  }
-
-  // ===== small arena flash styles via JS (чтобы не трогать css лишний раз) =====
-  // Добавим на лету нужные эффекты, если их нет.
-  function injectFlashCSS() {
-    const id = "rps_flash_css";
-    if (document.getElementById(id)) return;
-    const s = document.createElement("style");
-    s.id = id;
-    s.textContent = `
-      .arena.flash-win{ box-shadow: 0 0 0 1px rgba(44,230,168,.22) inset, 0 22px 70px rgba(44,230,168,.10); }
-      .arena.flash-lose{ box-shadow: 0 0 0 1px rgba(255,77,109,.22) inset, 0 22px 70px rgba(255,77,109,.10); }
-    `;
-    document.head.appendChild(s);
-  }
-
-  // ===== start =====
-  injectFlashCSS();
   init();
 })();
