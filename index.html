@@ -3,86 +3,105 @@
 <head>
   <meta charset="UTF-8" />
   <title>RPS</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="app">
 
-<div class="app">
-
-  <header class="top">
-    <div>
-      <h1>RPS</h1>
-      <span>Открыто в Telegram</span>
-    </div>
-    <div class="balance">
-      Баланс <b id="balance">0</b>
-    </div>
-  </header>
-
-  <section class="status-row">
-    <div>Статус: <b id="status">Ожидание</b></div>
-    <div>Твой выбор: <b id="yourPick">—</b></div>
-    <div>Бот: <b id="botPick">—</b></div>
-    <div>Результат: <b id="result">—</b></div>
-  </section>
-
-  <section class="ladder">
-    <div class="step active">x1.00</div>
-    <div class="step">x1.20</div>
-    <div class="step">x1.50</div>
-    <div class="step">x2.00</div>
-    <div class="step">x3.00</div>
-    <div class="step">x5.00</div>
-    <div class="step">x10.00</div>
-  </section>
-
-  <section class="arena">
-    <div class="card">
-      <div class="title">Бот</div>
-      <div class="hand" id="botHand">?</div>
+    <!-- HEADER -->
+    <div class="topbar">
+      <div class="title">
+        <h1>RPS</h1>
+        <span>Камень · Ножницы · Бумага</span>
+      </div>
+      <div class="balance">
+        Баланс: <b id="balanceValue">1000</b> ₮
+      </div>
     </div>
 
-    <div class="vs">VS</div>
-
-    <div class="card">
-      <div class="title">Ты</div>
-      <div class="hand" id="yourHand">?</div>
-    </div>
-  </section>
-
-  <section class="choices">
-    <button data-pick="rock">✊ Камень</button>
-    <button data-pick="scissors">✌ Ножницы</button>
-    <button data-pick="paper">✋ Бумага</button>
-  </section>
-
-  <aside class="bet">
-    <h3>Ставка</h3>
-    <div class="bet-row">
-      <button data-add="10">10</button>
-      <button data-add="50">50</button>
-      <button data-add="100">100</button>
-      <button data-add="250">250</button>
-      <button data-add="500">500</button>
-      <button data-add="max">MAX</button>
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+      <div class="pill">Статус: <b id="status">Ожидание</b></div>
+      <div class="pill">Твой выбор: <b id="yourPick">—</b></div>
+      <div class="pill">Бот: <b id="botPick">—</b></div>
+      <div class="pill">Результат: <b id="result">—</b></div>
     </div>
 
-    <div class="bet-input">
-      <button id="minus">-</button>
-      <input type="number" id="bet" value="100"/>
-      <button id="plus">+</button>
+    <!-- LADDER -->
+    <div class="ladder" id="ladder">
+      <div class="step active">x1.00</div>
+      <div class="step">x1.20</div>
+      <div class="step">x1.50</div>
+      <div class="step">x2.00</div>
+      <div class="step">x3.00</div>
+      <div class="step">x5.00</div>
+      <div class="step">x10.00</div>
     </div>
 
-    <button class="play" id="play">Играть</button>
-    <button class="reset" id="reset">Сброс</button>
+    <!-- ARENA -->
+    <div class="arena">
 
-    <div class="win">Выигрыш: <b id="win">—</b></div>
-    <div class="sound" id="soundToggle">Звук: on</div>
-  </aside>
+      <div class="player bot">
+        <div class="label">Бот</div>
+        <div class="hand" id="botHand">?</div>
+      </div>
 
-</div>
+      <div class="vs">VS</div>
 
-<script src="app.js"></script>
+      <div class="player you">
+        <div class="label">Ты</div>
+        <div class="hand" id="youHand">?</div>
+      </div>
+
+    </div>
+
+    <!-- CHOICES -->
+    <div class="choices">
+      <button class="choice" id="pickRock">✊ Камень</button>
+      <button class="choice" id="pickScissors">✌ Ножницы</button>
+      <button class="choice" id="pickPaper">✋ Бумага</button>
+    </div>
+
+    <!-- BET PANEL -->
+    <div class="panel">
+      <div class="bet">
+        <div class="row">
+          <span>Ставка</span>
+          <div class="quick">
+            <button data-bet="10">10</button>
+            <button data-bet="50">50</button>
+            <button data-bet="100">100</button>
+            <button data-bet="250">250</button>
+            <button data-bet="500">500</button>
+            <button data-bet="max">MAX</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="minus">-</button>
+          <input type="number" id="betInput" value="100" />
+          <button id="plus">+</button>
+        </div>
+
+        <div class="row">
+          <button class="primary" id="btnPlay">Играть</button>
+          <button class="secondary" id="btnReset">Сброс</button>
+        </div>
+
+        <div class="row small">
+          Выигрыш: <b id="winLine">—</b>
+        </div>
+
+        <div class="row small">
+          <button id="soundToggle">Звук: on</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
