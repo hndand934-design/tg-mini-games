@@ -1,567 +1,687 @@
-/* RPS v2 — fixed buttons + SVG white hands + smooth animations + ladder X + series (best of 3)
-   Works on GitHub Pages. No external libs.
+/* app.js — RPS (Rock / Paper / Scissors) v2
+   - кликабельные кнопки (без перекрытий)
+   - SVG “руки” белые (в стиле Stake, без кривых картинок)
+   - серия до N побед + лестница X
+   - плавные анимации + звук (on/off)
+   - GitHub Pages friendly, без библиотек
 */
+
 (() => {
   "use strict";
 
-  // --------- DOM ----------
-  const $ = (id) => document.getElementById(id);
+  /* =======================
+     CONFIG
+  ======================= */
+  const SERIES_WINS_TO_FINISH = 3; // серия до 3 побед
+  // Лестница X: старт + шаги (как в Stake-стиле)
+  const X_STEPS = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00];
 
-  const elBalance = $("balance");
-  const elStatus = $("statusText");
-  const elYourPick = $("yourPickText");
-  const elBotPick = $("botPickText");
-  const elResult = $("resultText");
+  const LS_BAL = "rps_balance";
+  const LS_SOUND = "rps_sound_on";
 
-  const elBetInput = $("betInput");
-  const elPlus = $("plus");
-  const elMinus = $("minus");
-  const elSound = $("soundToggle");
+  /* =======================
+     DOM helpers
+  ======================= */
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-  const btnPlay = $("playBtn");
-  const btnReset = $("resetBtn");
-
-  const btnRock = $("pickRock");
-  const btnPaper = $("pickPaper");
-  const btnScissors = $("pickScissors");
-
-  const handBot = $("botHand");
-  const handYou = $("youHand");
-
-  const quickBtns = Array.from(document.querySelectorAll("[data-bet]"));
-
-  const steps = Array.from(document.querySelectorAll(".step"));
-
-  // If any required element missing — fail loudly in console (helps debug)
-  const must = [
-    elBalance, elStatus, elYourPick, elBotPick, elResult,
-    elBetInput, elPlus, elMinus, elSound,
-    btnPlay, btnReset,
-    btnRock, btnPaper, btnScissors,
-    handBot, handYou,
-    ...steps
-  ];
-  if (must.some((x) => !x)) {
-    console.error("RPS: Missing DOM elements. Check index.html ids/classes.");
-  }
-
-  // --------- STATE ----------
-  const LS_BAL = "rps_balance_v1";
-  const LS_SND = "rps_sound_v1";
-
-  let balance = parseInt(localStorage.getItem(LS_BAL) || "1000", 10);
-  if (!Number.isFinite(balance) || balance < 0) balance = 1000;
-
-  let soundOn = (localStorage.getItem(LS_SND) ?? "1") === "1";
-
-  // series: first to 3 wins
-  let youWins = 0;
-  let botWins = 0;
-  let roundActive = false;
-
-  // current selection
-  let yourPick = null; // "rock"|"paper"|"scissors"
-  let lastOutcome = null; // "win"|"lose"|"draw"
-
-  // ladder multipliers (like stake-ish)
-  const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00];
-
-  // --------- SVG HANDS (WHITE) ----------
-  // Simple clean "stake-like" white icons, custom but similar feel.
-  const SVG = {
-    rock: `
-      <svg viewBox="0 0 128 128" width="92" height="92" aria-label="rock">
-        <defs>
-          <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,255,255,.96)"/>
-            <stop offset="1" stop-color="rgba(210,220,255,.92)"/>
-          </linearGradient>
-          <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,.35)"/>
-          </filter>
-        </defs>
-        <g filter="url(#sh)">
-          <path fill="url(#gW)" d="M52 26c8 0 14 6 14 14v6c0 3 2 5 5 5s5-2 5-5V36c0-6 5-11 11-11s11 5 11 11v24c0 18-10 38-32 44l-10 3c-10 3-20-2-24-11l-8-17c-6-12 3-26 17-26h11V40c0-8 6-14 14-14z"/>
-          <path fill="rgba(0,0,0,.12)" d="M35 74c8 9 20 15 33 15 10 0 18-2 26-8-7 12-18 20-32 24l-10 3c-10 3-20-2-24-11l-8-17c-3-6-2-12 2-17 2 5 5 8 13 11z"/>
-        </g>
-      </svg>`,
-    paper: `
-      <svg viewBox="0 0 128 128" width="92" height="92" aria-label="paper">
-        <defs>
-          <linearGradient id="gW2" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,255,255,.98)"/>
-            <stop offset="1" stop-color="rgba(225,235,255,.92)"/>
-          </linearGradient>
-          <filter id="sh2" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,.35)"/>
-          </filter>
-        </defs>
-        <g filter="url(#sh2)">
-          <path fill="url(#gW2)" d="M38 22c7 0 12 5 12 12v36c0 4 3 7 7 7s7-3 7-7V30c0-7 5-12 12-12s12 5 12 12v40c0 4 3 7 7 7s7-3 7-7V42c0-7 5-12 12-12s12 5 12 12v30c0 23-14 42-36 49l-14 4c-16 5-33-3-40-18L18 82c-5-10 3-22 14-22h6V34c0-7 5-12 12-12z"/>
-          <path fill="rgba(0,0,0,.10)" d="M26 85c9 10 22 16 36 16 9 0 17-2 25-6-8 13-21 22-37 26l-14 4c-16 5-33-3-40-18L18 82c-3-6-1-13 3-17 1 6 4 12 5 13z"/>
-        </g>
-      </svg>`,
-    scissors: `
-      <svg viewBox="0 0 128 128" width="92" height="92" aria-label="scissors">
-        <defs>
-          <linearGradient id="gW3" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,255,255,.98)"/>
-            <stop offset="1" stop-color="rgba(215,228,255,.92)"/>
-          </linearGradient>
-          <filter id="sh3" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,.35)"/>
-          </filter>
-        </defs>
-        <g filter="url(#sh3)">
-          <path fill="url(#gW3)" d="M40 28c7 0 12 5 12 12v14c0 4 3 7 7 7s7-3 7-7V34c0-7 5-12 12-12s12 5 12 12v20c0 4 3 7 7 7s7-3 7-7V44c0-7 5-12 12-12s12 5 12 12v22c0 17-9 32-24 40l-8 4 8 6c4 3 5 9 2 13-3 4-9 5-13 2l-22-16-22 16c-4 3-10 2-13-2-3-4-2-10 2-13l8-6-8-4c-15-8-24-23-24-40V40c0-7 5-12 12-12z"/>
-          <path fill="rgba(0,0,0,.10)" d="M36 88c10 8 22 12 28 12s18-4 28-12c-4 8-11 14-19 18l-8 4 8 6c4 3 5 9 2 13-3 4-9 5-13 2l-22-16-22 16c-4 3-10 2-13-2-3-4-2-10 2-13l8-6-8-4c-8-4-15-10-19-18z"/>
-        </g>
-      </svg>`,
-    unknown: `
-      <div style="font-size:64px;font-weight:900;color:rgba(233,239,255,.85);text-shadow:0 10px 28px rgba(0,0,0,.45)">?</div>`
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const fmt = (n) => {
+    const x = Math.round(n);
+    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
   };
 
-  function setHand(el, pick) {
-    el.innerHTML = SVG[pick] || SVG.unknown;
-  }
+  /* =======================
+     Find DOM (expects your current index.html ids/classes)
+     If something is missing — safely fallback
+  ======================= */
 
-  // --------- SOUND (very light, WebAudio) ----------
+  // Top labels
+  const elBal = $("#balanceValue") || $("#balance") || $('[data-balance]');
+  const elStatus = $("#pillStatus") || $("#statusValue") || $('[data-status]');
+  const elYour = $("#pillYour") || $("#yourPickValue") || $('[data-yourpick]');
+  const elBot = $("#pillBot") || $("#botPickValue") || $('[data-botpick]');
+  const elResult = $("#pillResult") || $("#resultValue") || $('[data-result]');
+
+  // Ladder
+  const elLadder = $("#xLadder") || $("#ladderRow") || $(".ladder__row");
+  const elLadderHint = $("#ladderHint") || $(".ladder__hint");
+
+  // Arena cards
+  const cardBot = $("#botCard") || $("#botCardBox") || $(".handCard[data-side='bot']") || $(".handCard.bot");
+  const cardYou = $("#youCard") || $("#youCardBox") || $(".handCard[data-side='you']") || $(".handCard.you");
+
+  const svgBotWrap = $("#botSvg") || (cardBot ? $(".handSvg", cardBot) : null);
+  const svgYouWrap = $("#youSvg") || (cardYou ? $(".handSvg", cardYou) : null);
+
+  const botState = $("#botState") || (cardBot ? $(".handState", cardBot) : null);
+  const youState = $("#youState") || (cardYou ? $(".handState", cardYou) : null);
+
+  // Picks
+  const pickBtns = $$(".pickBtn");
+  const btnRock = $("#pickRock") || pickBtns.find(b => b.dataset.pick === "rock");
+  const btnScissors = $("#pickScissors") || pickBtns.find(b => b.dataset.pick === "scissors");
+  const btnPaper = $("#pickPaper") || pickBtns.find(b => b.dataset.pick === "paper");
+
+  // Bet UI
+  const betInput = $("#betInput") || $("input[type='number']") || $("input");
+  const btnPlay = $("#btnPlay") || $("#playBtn") || $("button[data-action='play']") || $("button.btnPrimary");
+  const btnReset = $("#btnReset") || $("#resetBtn") || $("button[data-action='reset']") || $("button.btnGhost");
+
+  const chipBtns = $$(".chip"); // quick bet chips
+  const btnMinus = $("#betMinus") || $("button[data-action='minus']");
+  const btnPlus = $("#betPlus") || $("button[data-action='plus']");
+  const btnSound = $("#soundBtn") || $(".soundBtn");
+
+  const payoutValue = $("#payoutValue") || $("#winValue") || $('[data-win]');
+
+  /* =======================
+     Safety: if core elements missing, don't crash
+  ======================= */
+  const hasCore = !!(btnPlay && betInput);
+
+  /* =======================
+     SVG “Hands” (white, clean)
+  ======================= */
+  // base style for our icons: white fill + subtle shading
+  const SVG_BASE = `
+    <svg viewBox="0 0 128 128" width="112" height="112" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="rgba(255,255,255,0.98)"/>
+          <stop offset="1" stop-color="rgba(220,230,255,0.92)"/>
+        </linearGradient>
+        <filter id="s" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="rgba(0,0,0,0.45)"/>
+        </filter>
+      </defs>
+      __PATH__
+    </svg>
+  `;
+
+  // These are stylized “hand” silhouettes (not stock images)
+  // rock: fist
+  const SVG_ROCK = SVG_BASE.replace(
+    "__PATH__",
+    `
+    <g filter="url(#s)">
+      <path fill="url(#g)" d="M46 62c0-10 7-18 17-18h15c9 0 16 8 16 18v18c0 18-12 32-30 32S46 98 46 80V62z"/>
+      <path fill="rgba(180,200,255,.35)" d="M54 64h40v6H54z"/>
+      <path fill="rgba(180,200,255,.25)" d="M56 76h36v6H56z"/>
+      <path fill="rgba(180,200,255,.18)" d="M58 88h32v6H58z"/>
+      <path fill="url(#g)" d="M46 62c0-7 6-13 13-13h6v13H46z"/>
+      <path fill="url(#g)" d="M69 49h6v13h-6z"/>
+      <path fill="url(#g)" d="M79 49h6v13h-6z"/>
+      <path fill="url(#g)" d="M89 49h6c7 0 13 6 13 13H89V49z"/>
+      <path fill="rgba(0,0,0,.10)" d="M54 58h40v2H54z"/>
+    </g>`
+  );
+
+  // paper: open palm
+  const SVG_PAPER = SVG_BASE.replace(
+    "__PATH__",
+    `
+    <g filter="url(#s)">
+      <path fill="url(#g)" d="M44 64c0-8 6-14 14-14h12c8 0 14 6 14 14v28c0 18-12 30-28 30S44 110 44 92V64z"/>
+      <path fill="url(#g)" d="M52 44c0-6 5-10 10-10 6 0 10 4 10 10v18H52V44z"/>
+      <path fill="url(#g)" d="M74 44c0-6 5-10 10-10 6 0 10 4 10 10v22H74V44z"/>
+      <path fill="url(#g)" d="M96 50c0-6 5-10 10-10 6 0 10 4 10 10v28H96V50z"/>
+      <path fill="rgba(180,200,255,.25)" d="M50 78h44v6H50z"/>
+      <path fill="rgba(180,200,255,.18)" d="M52 90h40v6H52z"/>
+      <path fill="rgba(0,0,0,.10)" d="M50 70h46v2H50z"/>
+    </g>`
+  );
+
+  // scissors: “V” fingers
+  const SVG_SCISSORS = SVG_BASE.replace(
+    "__PATH__",
+    `
+    <g filter="url(#s)">
+      <path fill="url(#g)" d="M52 80c0-10 8-18 18-18h10c10 0 18 8 18 18v18c0 16-10 28-28 28S52 114 52 98V80z"/>
+      <path fill="url(#g)" d="M58 40c0-6 5-10 10-10 6 0 10 4 10 10v36H58V40z"/>
+      <path fill="url(#g)" d="M80 40c0-6 5-10 10-10 6 0 10 4 10 10v36H80V40z"/>
+      <path fill="rgba(0,0,0,.10)" d="M60 74h46v2H60z"/>
+      <path fill="rgba(180,200,255,.22)" d="M60 88h44v6H60z"/>
+    </g>`
+  );
+
+  const SVG_Q = SVG_BASE.replace(
+    "__PATH__",
+    `
+    <g filter="url(#s)">
+      <circle cx="64" cy="64" r="46" fill="rgba(255,255,255,.10)"/>
+      <text x="64" y="76" text-anchor="middle" font-size="64" font-weight="900" fill="rgba(255,255,255,.92)">?</text>
+    </g>`
+  );
+
+  const SVG_BY_PICK = {
+    rock: SVG_ROCK,
+    paper: SVG_PAPER,
+    scissors: SVG_SCISSORS
+  };
+
+  /* =======================
+     Sound (simple WebAudio beeps, not громкие)
+  ======================= */
   let audioCtx = null;
+  let soundOn = true;
 
-  function getCtx() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function loadSoundPref() {
+    const v = localStorage.getItem(LS_SOUND);
+    soundOn = (v === null) ? true : (v === "1");
+    syncSoundUI();
+  }
+
+  function syncSoundUI() {
+    if (!btnSound) return;
+    const dot = $(".dot", btnSound) || btnSound.querySelector(".dot");
+    if (dot) {
+      dot.style.background = soundOn ? "#4fe28a" : "#ff5d73";
+      dot.style.boxShadow = soundOn ? "0 0 0 3px rgba(79,226,138,.15)" : "0 0 0 3px rgba(255,93,115,.15)";
     }
-    return audioCtx;
+    btnSound.setAttribute("data-on", soundOn ? "1" : "0");
+    btnSound.textContent = soundOn ? "Звук: on" : "Звук: off";
+    // если в твоём HTML есть текст/иконка — лучше не трогать innerHTML.
+    // Но у тебя часто кнопка текстовая — так надёжнее.
   }
 
-  function beep({ f = 440, t = 0.08, type = "sine", gain = 0.06 } = {}) {
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  function beep({ f = 440, t = 0.08, type = "sine", v = 0.08 } = {}) {
     if (!soundOn) return;
-    const ctx = getCtx();
-    const now = ctx.currentTime;
+    try {
+      ensureAudio();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type;
+      o.frequency.value = f;
+      g.gain.value = 0.0001;
 
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(f, now);
+      o.connect(g);
+      g.connect(audioCtx.destination);
 
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + t);
+      const now = audioCtx.currentTime;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(v, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t);
 
-    o.connect(g);
-    g.connect(ctx.destination);
-    o.start(now);
-    o.stop(now + t + 0.02);
+      o.start(now);
+      o.stop(now + t + 0.02);
+    } catch (_) {}
   }
 
-  function sWin() {
-    beep({ f: 660, t: 0.07, type: "triangle", gain: 0.05 });
-    setTimeout(() => beep({ f: 880, t: 0.09, type: "triangle", gain: 0.05 }), 75);
-  }
-  function sLose() {
-    beep({ f: 260, t: 0.10, type: "sawtooth", gain: 0.035 });
-    setTimeout(() => beep({ f: 180, t: 0.12, type: "sawtooth", gain: 0.03 }), 85);
-  }
-  function sDraw() {
-    beep({ f: 420, t: 0.07, type: "sine", gain: 0.04 });
-    setTimeout(() => beep({ f: 420, t: 0.07, type: "sine", gain: 0.03 }), 90);
-  }
-  function sClick() {
-    beep({ f: 520, t: 0.045, type: "square", gain: 0.02 });
-  }
+  function sClick() { beep({ f: 520, t: 0.06, type: "triangle", v: 0.06 }); }
+  function sShuffle() { beep({ f: 260, t: 0.08, type: "sine", v: 0.05 }); }
+  function sWin() { beep({ f: 740, t: 0.10, type: "triangle", v: 0.08 }); setTimeout(()=>beep({f: 980, t:0.09, type:"triangle", v:0.07}), 80); }
+  function sLose() { beep({ f: 220, t: 0.12, type: "sine", v: 0.07 }); }
+  function sTie() { beep({ f: 420, t: 0.09, type: "sine", v: 0.06 }); }
 
-  // --------- UI HELPERS ----------
-  const fmt = (n) => `${Math.round(n)} ₼`;
+  /* =======================
+     Balance
+  ======================= */
+  let balance = 1000;
 
-  function clampInt(v, min, max) {
-    v = parseInt(String(v).replace(/[^\d]/g, ""), 10);
-    if (!Number.isFinite(v)) v = min;
-    v = Math.max(min, Math.min(max, v));
-    return v;
+  function loadBalance() {
+    const v = localStorage.getItem(LS_BAL);
+    const n = v ? Number(v) : NaN;
+    balance = Number.isFinite(n) ? Math.max(0, n) : 1000;
+    renderBalance();
   }
-
-  function updateBalance() {
-    elBalance.textContent = fmt(balance);
+  function saveBalance() {
     localStorage.setItem(LS_BAL, String(balance));
   }
-
-  function updateSoundBtn() {
-    elSound.textContent = soundOn ? "Звук: on" : "Звук: off";
-    localStorage.setItem(LS_SND, soundOn ? "1" : "0");
+  function renderBalance() {
+    if (!elBal) return;
+    // support both simple text and nested layout
+    if (elBal.dataset && elBal.dataset.balance !== undefined) {
+      elBal.dataset.balance = String(balance);
+    }
+    elBal.textContent = `${fmt(balance)} ₽`;
   }
 
-  function setStatus(text) {
-    elStatus.textContent = text;
+  /* =======================
+     Game State
+  ======================= */
+  const Picks = ["rock", "paper", "scissors"];
+  const PickName = { rock: "Камень", paper: "Бумага", scissors: "Ножницы" };
+  const PickIcon = { rock: "✊", paper: "✋", scissors: "✌️" };
+
+  let selectedPick = null;
+  let busy = false;
+
+  // Series
+  let seriesWins = 0;   // your wins in current series
+  let seriesLoss = 0;   // bot wins
+  let roundIndex = 0;   // how many rounds played in series
+
+  // bet
+  let bet = 100;
+
+  // payout (last)
+  let lastPayout = 0;
+
+  function setText(el, txt) { if (el) el.textContent = txt; }
+
+  function setStatus(txt) { setText(elStatus, txt); }
+  function setYour(txt) { setText(elYour, txt); }
+  function setBot(txt) { setText(elBot, txt); }
+  function setResult(txt) { setText(elResult, txt); }
+
+  function setWinValue(v) {
+    if (!payoutValue) return;
+    payoutValue.textContent = v ? `${fmt(v)} ₽` : "—";
   }
 
-  function setHeader() {
-    // status line includes series score + next multiplier hint
-    const nextIdx = Math.min(youWins + botWins + 1, LADDER.length - 1);
-    const nextX = LADDER[nextIdx];
-    const target = 3;
-
-    // optional: you may have spans in index, but we keep as plain text here
-    // Top pills:
-    // - statusText
-    // - yourPickText
-    // - botPickText
-    // - resultText
-    elYourPick.textContent = yourPick ? humanPick(yourPick) : "—";
-    elBotPick.textContent = (roundActive && lastOutcome === null) ? "..." : (botLastPick ? humanPick(botLastPick) : "—");
-
-    // result: handled elsewhere
-
-    // Ladder active step highlights
-    paintLadder();
-
-    // Can show series in status
-    // If your HTML already shows series elsewhere, this is still fine.
-    const score = `Серия: ${youWins}-${botWins} (до ${target} побед)`;
-    const hint = `След. победа: x${nextX.toFixed(2)}`;
-    setStatus(roundActive ? "Раунд..." : `${score} · ${hint}`);
+  function renderHands(botPick, yourPick) {
+    if (svgBotWrap) svgBotWrap.innerHTML = botPick ? SVG_BY_PICK[botPick] : SVG_Q;
+    if (svgYouWrap) svgYouWrap.innerHTML = yourPick ? SVG_BY_PICK[yourPick] : SVG_Q;
   }
 
-  function humanPick(p) {
-    if (p === "rock") return "Камень";
-    if (p === "paper") return "Бумага";
-    return "Ножницы";
+  function setHandStates(botTxt, youTxt) {
+    setText(botState, botTxt || "");
+    setText(youState, youTxt || "");
   }
 
-  function disableControls(disabled) {
-    [btnRock, btnPaper, btnScissors, btnPlay, btnReset, elBetInput, elPlus, elMinus, ...quickBtns].forEach((b) => {
-      if (!b) return;
-      b.disabled = disabled;
+  function clearActivePickButtons() {
+    pickBtns.forEach(b => b.classList.remove("is-active"));
+  }
+
+  function setActivePickButton(pick) {
+    clearActivePickButtons();
+    const btn = pickBtns.find(b => b.dataset.pick === pick) || null;
+    if (btn) btn.classList.add("is-active");
+  }
+
+  function setBusy(v) {
+    busy = v;
+    if (btnPlay) btnPlay.disabled = v;
+    if (btnReset) btnReset.disabled = v;
+    pickBtns.forEach(b => (b.disabled = v));
+  }
+
+  /* =======================
+     Ladder UI
+  ======================= */
+  function buildLadder() {
+    if (!elLadder) return;
+    elLadder.innerHTML = "";
+    X_STEPS.forEach((x, i) => {
+      const div = document.createElement("div");
+      div.className = "xChip";
+      div.dataset.i = String(i);
+      div.textContent = `x${x.toFixed(2)}`;
+      elLadder.appendChild(div);
+    });
+    highlightLadder(0);
+    updateLadderHint();
+  }
+
+  function highlightLadder(stepIdx) {
+    if (!elLadder) return;
+    $$(".xChip", elLadder).forEach((c, i) => {
+      c.classList.toggle("is-active", i === stepIdx);
     });
   }
 
-  function setActiveChoice() {
-    [btnRock, btnPaper, btnScissors].forEach((b) => b.classList.remove("active"));
-    if (yourPick === "rock") btnRock.classList.add("active");
-    if (yourPick === "paper") btnPaper.classList.add("active");
-    if (yourPick === "scissors") btnScissors.classList.add("active");
+  function currentStepIndex() {
+    // step is your wins count mapped to X_STEPS: 0 = x1.00, 1 = x1.20, ...
+    return clamp(seriesWins, 0, X_STEPS.length - 1);
   }
 
-  function clearHandFx() {
-    [handBot, handYou].forEach((h) => {
-      h.classList.remove("shake", "win", "lose", "draw", "ready");
-    });
+  function updateLadderHint() {
+    const stepIdx = currentStepIndex();
+    const nextIdx = clamp(stepIdx + 1, 0, X_STEPS.length - 1);
+    const cur = X_STEPS[stepIdx];
+    const next = X_STEPS[nextIdx];
+    const txt = `Серия: ${seriesWins}:${seriesLoss} (до ${SERIES_WINS_TO_FINISH} побед). След. победа: x${next.toFixed(
+      2
+    )}`;
+    setText(elLadderHint, txt);
+    highlightLadder(stepIdx);
   }
 
-  function paintLadder() {
-    // Determine current stage by wins in series (only your wins matter for "progress")
-    // But we also show last outcome by coloring current step.
-    steps.forEach((s) => s.classList.remove("active", "won", "lost"));
-
-    const stage = Math.min(youWins, LADDER.length - 1); // 0..6
-    // "active" indicates current x for cashout if you win next? We'll highlight current stage.
-    // Use stage index to highlight current multiplier.
-    if (steps[stage]) steps[stage].classList.add("active");
-
-    // last outcome feedback:
-    if (lastOutcome === "win" && steps[stage]) steps[stage].classList.add("won");
-    if (lastOutcome === "lose" && steps[Math.max(0, stage)] ) steps[Math.max(0, stage)].classList.add("lost");
+  /* =======================
+     Bet UI
+  ======================= */
+  function readBetFromInput() {
+    const n = Number(betInput?.value);
+    if (!Number.isFinite(n)) return bet;
+    return clamp(Math.floor(n), 1, 1_000_000);
+  }
+  function writeBetToInput(v) {
+    if (betInput) betInput.value = String(v);
+  }
+  function setBet(v) {
+    bet = clamp(Math.floor(v), 1, 1_000_000);
+    writeBetToInput(bet);
   }
 
-  // --------- GAME LOGIC ----------
-  let botLastPick = null;
-
-  function randomBotPick() {
-    const r = Math.random();
-    return r < 0.333 ? "rock" : r < 0.666 ? "paper" : "scissors";
+  function applyChip(v) {
+    sClick();
+    if (v === "MAX") setBet(balance > 0 ? balance : 1);
+    else setBet(v);
   }
 
-  function outcome(a, b) {
-    // returns "win" if a beats b, else "lose" or "draw"
-    if (a === b) return "draw";
-    if (
-      (a === "rock" && b === "scissors") ||
-      (a === "paper" && b === "rock") ||
-      (a === "scissors" && b === "paper")
-    ) return "win";
+  /* =======================
+     Rules
+  ======================= */
+  function judge(y, b) {
+    if (y === b) return "tie";
+    if (y === "rock" && b === "scissors") return "win";
+    if (y === "paper" && b === "rock") return "win";
+    if (y === "scissors" && b === "paper") return "win";
     return "lose";
   }
 
-  function getBet() {
-    const v = clampInt(elBetInput.value, 10, 1000000);
-    elBetInput.value = String(v);
-    return v;
+  function randomPick() {
+    return Picks[Math.floor(Math.random() * Picks.length)];
   }
 
-  function currentMultiplierIfWin() {
-    // When you win this round, the payout multiplier depends on ladder step for next win.
-    // If youWins=0 -> next win gives 1.20; if youWins=1 -> 1.50 ... etc.
-    const idx = Math.min(youWins + 1, LADDER.length - 1);
-    return LADDER[idx];
+  /* =======================
+     Animations (CSS classes)
+  ======================= */
+  function pop(el) {
+    if (!el) return;
+    el.classList.remove("is-pop");
+    // reflow
+    void el.offsetWidth;
+    el.classList.add("is-pop");
+  }
+  function shake(el) {
+    if (!el) return;
+    el.classList.remove("is-shaking");
+    void el.offsetWidth;
+    el.classList.add("is-shaking");
   }
 
-  function resetSeries(full = false) {
-    youWins = 0;
-    botWins = 0;
-    lastOutcome = null;
-    botLastPick = null;
-    yourPick = null;
-    roundActive = false;
-
-    clearHandFx();
-    setHand(handBot, "unknown");
-    setHand(handYou, "unknown");
-
-    setActiveChoice();
-
-    elResult.textContent = "—";
-    elBotPick.textContent = "—";
-    elYourPick.textContent = "—";
-
-    if (full) setStatus("Ожидание");
-    paintLadder();
+  function setArenaMessage(txt) {
+    // optional: reuse center note if exists
+    const note = $("#arenaNote") || $(".arenaNote");
+    if (note) note.textContent = txt;
   }
 
-  function setResultText(text, tone) {
-    elResult.textContent = text;
-    // optional: you can style result pill via data-attr if you want
-    // Here we keep it simple.
-  }
-
-  function finishMatch(winner) {
-    // winner: "you"|"bot"
-    roundActive = false;
-    disableControls(false);
-
-    if (winner === "you") {
-      setResultText("Победа в серии ✅", "win");
-      sWin();
-    } else {
-      setResultText("Поражение в серии ❌", "lose");
-      sLose();
-    }
-
-    // after short delay, auto reset series (keeps it flowing)
-    setTimeout(() => {
-      resetSeries(true);
-      setStatus("Ожидание");
-      setHeader();
-    }, 1100);
-  }
-
+  /* =======================
+     Round flow
+  ======================= */
   async function playRound() {
-    if (roundActive) return;
-    if (!yourPick) {
-      setStatus("Сначала выбери: камень / ножницы / бумага");
-      return;
-    }
+    if (!hasCore) return;
+    if (busy) return;
 
-    const bet = getBet();
-    if (balance < bet) {
-      setStatus("Недостаточно баланса");
-      return;
-    }
-
-    // start
-    roundActive = true;
-    disableControls(true);
-    lastOutcome = null;
-    botLastPick = null;
-
-    clearHandFx();
-    handBot.classList.add("ready");
-    handYou.classList.add("ready");
-
-    setResultText("Играем...", "neutral");
-    setStatus("Раунд...");
-    setHeader();
-
-    // pay bet upfront (like many games)
-    balance -= bet;
-    updateBalance();
-
-    // reveal animation sequence
-    sClick();
-
-    // shake a bit
-    handBot.classList.add("shake");
-    handYou.classList.add("shake");
-
-    // show unknown while shaking
-    setHand(handBot, "unknown");
-    setHand(handYou, "unknown");
-
-    await wait(520);
-
-    // decide bot
-    botLastPick = randomBotPick();
-
-    // set final hands
-    setHand(handBot, botLastPick);
-    setHand(handYou, yourPick);
-
-    // compute outcome
-    const out = outcome(yourPick, botLastPick);
-    lastOutcome = out;
-
-    clearHandFx();
-    // keep them slightly "ready"
-    handBot.classList.add("ready");
-    handYou.classList.add("ready");
-
-    if (out === "draw") {
-      // return bet
-      balance += bet;
-      updateBalance();
-
-      handBot.classList.add("draw");
-      handYou.classList.add("draw");
-
-      setResultText("Ничья 🤝", "draw");
-      setStatus("Ничья — ставка возвращена");
-      sDraw();
-      // no score change
-    }
-
-    if (out === "lose") {
-      botWins += 1;
-      handBot.classList.add("win");
-      handYou.classList.add("lose");
-
-      setResultText("Поражение ❌", "lose");
-      setStatus("Проигрыш — ставка сгорела");
-      sLose();
-    }
-
-    if (out === "win") {
-      youWins += 1;
-      const mult = currentMultiplierIfWin(); // based on updated youWins? careful
-
-      // Our function uses youWins + 1, but we already incremented.
-      // Let's compute correctly: payout for this win should correspond to youWins (after increment).
-      // If youWins=1 -> x1.20 ; if 2 -> x1.50 ... etc
-      const idx = Math.min(youWins, LADDER.length - 1);
-      const payoutX = LADDER[idx];
-
-      const winAmount = bet * payoutX;
-      balance += Math.round(winAmount);
-      updateBalance();
-
-      handBot.classList.add("lose");
-      handYou.classList.add("win");
-
-      setResultText(`Победа ✅ (+${Math.round(winAmount)} ₼)`, "win");
-      setStatus(`Ты выиграл раунд! x${payoutX.toFixed(2)}`);
-      sWin();
-    }
-
-    paintLadder();
-    setHeader();
-
-    await wait(650);
-
-    // check series end
-    const target = 3;
-    if (youWins >= target) {
-      finishMatch("you");
-      return;
-    }
-    if (botWins >= target) {
-      finishMatch("bot");
-      return;
-    }
-
-    // next
-    roundActive = false;
-    disableControls(false);
-    setStatus("Ожидание · выбери ход и нажми «Играть»");
-    setHeader();
-  }
-
-  function wait(ms) {
-    return new Promise((res) => setTimeout(res, ms));
-  }
-
-  // --------- EVENTS ----------
-  function pick(p) {
-    if (roundActive) return;
-    yourPick = p;
-    setActiveChoice();
-    setHand(handYou, p);
-    elYourPick.textContent = humanPick(p);
-    setStatus("Выбор сделан · нажми «Играть»");
-    sClick();
-    setHeader();
-  }
-
-  btnRock.addEventListener("click", () => pick("rock"));
-  btnPaper.addEventListener("click", () => pick("paper"));
-  btnScissors.addEventListener("click", () => pick("scissors"));
-
-  btnPlay.addEventListener("click", () => playRound());
-  btnReset.addEventListener("click", () => {
-    if (roundActive) return;
-    sClick();
-    resetSeries(true);
-    setStatus("Ожидание");
-    setHeader();
-  });
-
-  elPlus.addEventListener("click", () => {
-    const v = clampInt(elBetInput.value, 10, 1000000);
-    elBetInput.value = String(v + 10);
-    sClick();
-  });
-  elMinus.addEventListener("click", () => {
-    const v = clampInt(elBetInput.value, 10, 1000000);
-    elBetInput.value = String(Math.max(10, v - 10));
-    sClick();
-  });
-
-  quickBtns.forEach((b) => {
-    b.addEventListener("click", () => {
-      const add = parseInt(b.getAttribute("data-bet"), 10);
-      const v = clampInt(elBetInput.value, 10, 1000000);
-      elBetInput.value = String(v + add);
+    // require pick
+    if (!selectedPick) {
+      shake(cardYou);
       sClick();
-    });
-  });
+      setArenaMessage("Сначала выбери: камень / ножницы / бумага");
+      return;
+    }
 
-  elBetInput.addEventListener("input", () => {
-    elBetInput.value = String(clampInt(elBetInput.value, 10, 1000000));
-  });
+    // bet
+    setBet(readBetFromInput());
+    if (bet > balance) {
+      shake($(".betPanel") || $("#betPanel") || document.body);
+      setArenaMessage("Недостаточно баланса");
+      return;
+    }
 
-  elSound.addEventListener("click", async () => {
-    soundOn = !soundOn;
-    updateSoundBtn();
-    // resume audio context after user gesture
-    try {
-      if (soundOn) {
-        const ctx = getCtx();
-        if (ctx.state === "suspended") await ctx.resume();
-        sClick();
+    setBusy(true);
+    setStatus("Раунд...");
+    setResult("—");
+    setWinValue(0);
+    lastPayout = 0;
+
+    // “Shuffle” animation
+    renderHands(null, selectedPick);
+    setHandStates("Думаю...", "Готов");
+    pop(cardYou);
+    pop(cardBot);
+    setArenaMessage("Идёт выбор...");
+    sShuffle();
+
+    // small fake delay
+    await sleep(550);
+
+    const botPick = randomPick();
+
+    // Reveal
+    renderHands(botPick, selectedPick);
+    setYour(`${PickIcon[selectedPick]} ${PickName[selectedPick]}`);
+    setBot(`${PickIcon[botPick]} ${PickName[botPick]}`);
+
+    pop(cardBot);
+    pop(cardYou);
+
+    const res = judge(selectedPick, botPick);
+
+    roundIndex++;
+
+    if (res === "win") {
+      seriesWins++;
+      setResult("Победа ✅");
+      setStatus("Победа");
+      sWin();
+      // win payout based on next step X (or current?) — логика:
+      // при победе выплата = ставка * текущий X после увеличения серии
+      const stepIdx = currentStepIndex();
+      const x = X_STEPS[stepIdx];
+      const gain = Math.floor(bet * x); // total back
+      const profit = gain - bet;
+
+      balance += profit; // возвращаем ставку + профит -> проще: balance = balance - bet + gain => += gain - bet
+      saveBalance();
+      renderBalance();
+
+      lastPayout = gain;
+      setWinValue(gain);
+
+      setHandStates("Проиграл", "Выиграл");
+      updateLadderHint();
+
+      // check series finish
+      if (seriesWins >= SERIES_WINS_TO_FINISH) {
+        await sleep(450);
+        setStatus("Серия выиграна 🎉");
+        setArenaMessage(`Серия завершена! Итоговый шаг: x${X_STEPS[currentStepIndex()].toFixed(2)}`);
       }
-    } catch {}
-  });
+    } else if (res === "lose") {
+      seriesLoss++;
+      setResult("Поражение ❌");
+      setStatus("Поражение");
+      sLose();
 
-  // --------- INIT ----------
-  function init() {
-    updateBalance();
-    updateSoundBtn();
+      balance -= bet;
+      if (balance < 0) balance = 0;
+      saveBalance();
+      renderBalance();
 
-    // default bet
-    if (!elBetInput.value) elBetInput.value = "100";
-    elBetInput.value = String(clampInt(elBetInput.value, 10, 1000000));
+      setWinValue(0);
+      setHandStates("Выиграл", "Проиграл");
+      updateLadderHint();
 
-    resetSeries(true);
+      await sleep(250);
+      shake(cardYou);
 
-    // initial hands
-    setHand(handBot, "unknown");
-    setHand(handYou, "unknown");
+      // серия сбрасывается при поражении (как Stake-подобно)
+      await sleep(300);
+      resetSeries(false);
+      setArenaMessage("Серия сброшена. Начни заново.");
+    } else {
+      setResult("Ничья 🤝");
+      setStatus("Ничья");
+      sTie();
 
-    setStatus("Ожидание · выбери ход");
-    setHeader();
+      // tie: ставка возвращается, бал не меняем
+      lastPayout = bet;
+      setWinValue(bet);
+      setHandStates("Ничья", "Ничья");
+      updateLadderHint();
+    }
 
-    // Ensure buttons really clickable (some old css could set pointer-events none)
-    [btnRock, btnPaper, btnScissors, btnPlay, btnReset].forEach((b) => {
-      if (b) b.style.pointerEvents = "auto";
-    });
+    setBusy(false);
   }
 
-  init();
+  function resetSeries(full = true) {
+    // reset ladder progression, not necessarily UI picks
+    seriesWins = 0;
+    seriesLoss = 0;
+    roundIndex = 0;
+    highlightLadder(0);
+    updateLadderHint();
+
+    if (full) {
+      selectedPick = null;
+      clearActivePickButtons();
+      renderHands(null, null);
+      setYour("—");
+      setBot("—");
+      setResult("—");
+      setStatus("Ожидание");
+      setWinValue(0);
+      setHandStates("Готов", "Готов");
+      setArenaMessage("Выбери ход и нажми «Играть»");
+    }
+  }
+
+  /* =======================
+     Wiring events
+  ======================= */
+  function bind() {
+    // picks
+    pickBtns.forEach((b) => {
+      // ensure it’s clickable even if inside forms
+      b.type = "button";
+      b.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (busy) return;
+        const pick = b.dataset.pick;
+        if (!pick) return;
+        sClick();
+        selectedPick = pick;
+        setActivePickButton(pick);
+        setYour(`${PickIcon[pick]} ${PickName[pick]}`);
+        renderHands(null, pick);
+        pop(cardYou);
+        setHandStates("Готов", "Готов");
+        setArenaMessage("Теперь нажми «Играть»");
+      }, { passive: false });
+    });
+
+    // play
+    if (btnPlay) {
+      btnPlay.type = "button";
+      btnPlay.addEventListener("click", (e) => {
+        e.preventDefault();
+        playRound();
+      }, { passive: false });
+    }
+
+    // reset
+    if (btnReset) {
+      btnReset.type = "button";
+      btnReset.addEventListener("click", (e) => {
+        e.preventDefault();
+        sClick();
+        resetSeries(true);
+      }, { passive: false });
+    }
+
+    // chips
+    chipBtns.forEach((c) => {
+      c.type = "button";
+      c.addEventListener("click", (e) => {
+        e.preventDefault();
+        const t = (c.textContent || "").trim().toUpperCase();
+        if (t.includes("MAX")) return applyChip("MAX");
+        const n = Number((c.dataset.value || "").replace(",", "."));
+        if (Number.isFinite(n)) return applyChip(n);
+        // fallback parse from text like "100"
+        const nn = Number(t.replace(/[^\d]/g, ""));
+        if (Number.isFinite(nn) && nn > 0) applyChip(nn);
+      }, { passive: false });
+    });
+
+    // +/- buttons
+    if (btnMinus) {
+      btnMinus.type = "button";
+      btnMinus.addEventListener("click", (e) => {
+        e.preventDefault();
+        sClick();
+        setBet(readBetFromInput() - 10);
+      }, { passive: false });
+    }
+    if (btnPlus) {
+      btnPlus.type = "button";
+      btnPlus.addEventListener("click", (e) => {
+        e.preventDefault();
+        sClick();
+        setBet(readBetFromInput() + 10);
+      }, { passive: false });
+    }
+
+    // input
+    if (betInput) {
+      betInput.addEventListener("input", () => {
+        const v = readBetFromInput();
+        writeBetToInput(v);
+      });
+    }
+
+    // sound
+    if (btnSound) {
+      btnSound.type = "button";
+      btnSound.addEventListener("click", (e) => {
+        e.preventDefault();
+        soundOn = !soundOn;
+        localStorage.setItem(LS_SOUND, soundOn ? "1" : "0");
+        syncSoundUI();
+        sClick();
+      }, { passive: false });
+    }
+
+    // allow first user gesture to unlock audio on mobile
+    window.addEventListener("pointerdown", () => {
+      if (!soundOn) return;
+      try {
+        ensureAudio();
+        if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+      } catch (_) {}
+    }, { once: true, passive: true });
+  }
+
+  /* =======================
+     Init
+  ======================= */
+  function init() {
+    loadBalance();
+    loadSoundPref();
+
+    // set default bet
+    setBet(bet);
+
+    // ladder
+    buildLadder();
+
+    // init UI
+    renderHands(null, null);
+    setStatus("Ожидание");
+    setYour("—");
+    setBot("—");
+    setResult("—");
+    setWinValue(0);
+    setHandStates("Готов", "Готов");
+    setArenaMessage("Выбери ход и нажми «Играть»");
+
+    bind();
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // Run
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
