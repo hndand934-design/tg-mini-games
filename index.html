@@ -1,70 +1,74 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RPS</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=1" />
 </head>
 <body>
   <div class="bg"></div>
-  <div class="wrap">
+
+  <main class="wrap">
     <header class="topbar">
       <div class="brand">
-        <div class="title">RPS</div>
-        <div class="subtitle">Камень • Ножницы • Бумага</div>
+        <div class="brandTitle">RPS</div>
+        <div class="brandSub">Камень · Ножницы · Бумага</div>
       </div>
 
-      <div class="top-actions">
-        <button id="soundBtn" class="chip" type="button" aria-pressed="false" title="Звук">
-          <span class="dot"></span>
-          <span id="soundText">Звук: off</span>
+      <div class="topRight">
+        <button id="soundBtn" class="pillBtn" type="button" aria-label="Звук">
+          <span class="dot" id="soundDot"></span>
+          <span id="soundText">Звук: on</span>
         </button>
-        <div class="balance">
-          <div class="balance-label">Баланс</div>
-          <div class="balance-val"><span id="balance">1000</span> ₽</div>
+
+        <div class="balanceBox">
+          <div class="balanceLabel">Баланс</div>
+          <div class="balanceValue"><span id="balance">1000</span> ₽</div>
         </div>
       </div>
     </header>
 
-    <main class="grid">
-      <!-- LEFT: GAME -->
-      <section class="card game">
-        <div class="infoRow">
-          <div class="info">
+    <section class="grid">
+      <!-- LEFT / GAME -->
+      <section class="panel panelGame">
+        <div class="statusRow">
+          <div class="statusCard">
             <div class="k">Статус</div>
             <div class="v" id="status">Ожидание</div>
           </div>
-          <div class="info">
+          <div class="statusCard">
             <div class="k">Твой выбор</div>
-            <div class="v" id="youPick">—</div>
+            <div class="v" id="youPickText">—</div>
           </div>
-          <div class="info">
+          <div class="statusCard">
             <div class="k">Бот</div>
-            <div class="v" id="botPick">—</div>
+            <div class="v" id="botPickText">—</div>
           </div>
-          <div class="info">
+          <div class="statusCard">
             <div class="k">Результат</div>
-            <div class="v" id="result">—</div>
+            <div class="v" id="resultText">—</div>
           </div>
         </div>
 
         <div class="ladder">
-          <div class="ladderTitle">Лестница X</div>
-          <div class="ladderHint">Победы подряд — X растёт. Проиграл — серия в ноль.</div>
-          <div class="steps" id="steps"></div>
+          <div class="ladderTop">
+            <div class="ladderTitle">Лестница X</div>
+            <div class="ladderHint">Выигрывай подряд — X растёт. Проиграл — серия в ноль.</div>
+          </div>
+          <div class="ladderSteps" id="ladderSteps"></div>
         </div>
 
-        <div class="seriesRow">
-          <div class="seriesItem">
+        <div class="metaRow">
+          <div class="metaBox">
             <div class="k">Серия</div>
             <div class="v"><span id="streak">0</span> побед</div>
           </div>
-          <div class="seriesItem">
+          <div class="metaBox">
             <div class="k">Текущий X</div>
-            <div class="v">x<span id="curX">1.00</span></div>
+            <div class="v">x<span id="currentX">1.00</span></div>
           </div>
-          <div class="seriesItem">
+          <div class="metaBox">
             <div class="k">Потенциал</div>
             <div class="v"><span id="potential">0</span> ₽</div>
           </div>
@@ -73,65 +77,60 @@
         <div class="arena">
           <div class="side">
             <div class="sideTitle">Бот</div>
-            <div class="handCard" id="botCard">
-              <div class="handSvg" id="botHand"></div>
-              <div class="ready" id="botReady">Готов</div>
+            <div class="handCard" id="botHand">
+              <div class="q">?</div>
             </div>
+            <div class="sideSub" id="botReady">Готов</div>
           </div>
 
           <div class="vs">VS</div>
 
           <div class="side">
             <div class="sideTitle">Ты</div>
-            <div class="handCard" id="youCard">
-              <div class="handSvg" id="youHand"></div>
-              <div class="ready" id="youReady">Готов</div>
+            <div class="handCard" id="youHand">
+              <div class="q">?</div>
             </div>
+            <div class="sideSub" id="youReady">Готов</div>
           </div>
-
-          <div class="sparkLayer" id="sparks"></div>
         </div>
 
         <div class="pickRow">
-          <button class="pickBtn" id="pickRock" type="button" data-pick="rock">
-            <span class="miniSvg" id="miniRock"></span>
-            <span>Камень</span>
+          <button class="pickBtn" id="pickRock" type="button">
+            <span class="pickEmoji">✊🏻</span><span>Камень</span>
           </button>
-          <button class="pickBtn" id="pickScissors" type="button" data-pick="scissors">
-            <span class="miniSvg" id="miniScissors"></span>
-            <span>Ножницы</span>
+          <button class="pickBtn" id="pickScissors" type="button">
+            <span class="pickEmoji">✌🏻</span><span>Ножницы</span>
           </button>
-          <button class="pickBtn" id="pickPaper" type="button" data-pick="paper">
-            <span class="miniSvg" id="miniPaper"></span>
-            <span>Бумага</span>
+          <button class="pickBtn" id="pickPaper" type="button">
+            <span class="pickEmoji">✋🏻</span><span>Бумага</span>
           </button>
         </div>
 
-        <div class="footHint">
-          Нажми выбор → <b>Играть</b>. После победы можно <b>Забрать (Cashout)</b>.
+        <div class="footerHint">
+          Нажми выбор → <b>Играть</b>. После победы можно <b>Забрать</b> (Cashout).
         </div>
       </section>
 
-      <!-- RIGHT: BET -->
-      <aside class="card bet">
-        <div class="betHead">
+      <!-- RIGHT / BET -->
+      <aside class="panel panelBet">
+        <div class="betHeader">
           <div class="betTitle">Ставка</div>
-          <button id="add1000" class="chip" type="button">+1000 ₽</button>
+          <button id="add1000" class="chip add" type="button">+1000 ₽</button>
         </div>
 
-        <div class="quick">
-          <button class="q" data-add="10" type="button">10</button>
-          <button class="q" data-add="50" type="button">50</button>
-          <button class="q" data-add="100" type="button">100</button>
-          <button class="q" data-add="250" type="button">250</button>
-          <button class="q" data-add="500" type="button">500</button>
-          <button class="q" data-add="max" type="button">MAX</button>
+        <div class="chips">
+          <button class="chip" data-chip="10" type="button">10</button>
+          <button class="chip" data-chip="50" type="button">50</button>
+          <button class="chip" data-chip="100" type="button">100</button>
+          <button class="chip" data-chip="250" type="button">250</button>
+          <button class="chip" data-chip="500" type="button">500</button>
+          <button class="chip" data-chip="max" type="button">MAX</button>
         </div>
 
-        <div class="amount">
-          <button id="minus" class="step" type="button">−</button>
-          <input id="betAmount" class="inp" value="100" inputmode="numeric" />
-          <button id="plus" class="step" type="button">+</button>
+        <div class="betBox">
+          <button id="betMinus" class="step" type="button">−</button>
+          <input id="betInput" class="betInput" value="100" inputmode="numeric" />
+          <button id="betPlus" class="step" type="button">+</button>
         </div>
 
         <div class="actions">
@@ -139,22 +138,22 @@
           <button id="cashoutBtn" class="btn ghost" type="button" disabled>Забрать</button>
         </div>
 
-        <div class="payout">
-          <div class="k">Выигрыш</div>
-          <div class="v"><span id="win">—</span></div>
+        <div class="payoutRow">
+          <div class="payoutLabel">Выигрыш:</div>
+          <div class="payoutValue" id="payout">—</div>
         </div>
 
-        <div class="note">
-          • Ставка списывается <b>один раз</b> при старте серии.<br/>
-          • Ничья — X не растёт, серия продолжается.<br/>
-          • Проигрыш — серия в ноль, ставка сгорает.
+        <div class="rules">
+          <div>• Ставка списывается один раз при старте серии.</div>
+          <div>• Ничья — X не меняется, серия продолжается.</div>
+          <div>• Проигрыш — серия в ноль, ставка сгорает.</div>
         </div>
 
-        <div class="ver">v1 • режим RPS</div>
+        <div class="ver">v1 · режим RPS</div>
       </aside>
-    </main>
-  </div>
+    </section>
+  </main>
 
-  <script src="app.js" defer></script>
+  <script src="app.js?v=1"></script>
 </body>
 </html>
