@@ -1,107 +1,159 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>RPS</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="./style.css?v=1" />
 </head>
 <body>
-  <div class="app">
+  <div class="bg"></div>
 
-    <!-- HEADER -->
-    <div class="topbar">
-      <div class="title">
-        <h1>RPS</h1>
-        <span>Камень · Ножницы · Бумага</span>
+  <div class="wrap">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__title">RPS</div>
+        <div class="brand__sub">Камень • Ножницы • Бумага</div>
       </div>
+
       <div class="balance">
-        Баланс: <b id="balanceValue">1000</b> ₮
+        <div class="balance__label">Баланс</div>
+        <div class="balance__value"><span id="balanceValue">0</span> <span class="coin">₽</span></div>
       </div>
-    </div>
+    </header>
 
-    <!-- STATUS BAR -->
-    <div class="status-bar">
-      <div class="pill">Статус: <b id="status">Ожидание</b></div>
-      <div class="pill">Твой выбор: <b id="yourPick">—</b></div>
-      <div class="pill">Бот: <b id="botPick">—</b></div>
-      <div class="pill">Результат: <b id="result">—</b></div>
-    </div>
-
-    <!-- LADDER -->
-    <div class="ladder" id="ladder">
-      <div class="step active">x1.00</div>
-      <div class="step">x1.20</div>
-      <div class="step">x1.50</div>
-      <div class="step">x2.00</div>
-      <div class="step">x3.00</div>
-      <div class="step">x5.00</div>
-      <div class="step">x10.00</div>
-    </div>
-
-    <!-- ARENA -->
-    <div class="arena">
-
-      <div class="player bot">
-        <div class="label">Бот</div>
-        <div class="hand" id="botHand">?</div>
+    <!-- STATUS PILLS -->
+    <section class="statusRow">
+      <div class="pill">
+        <div class="pill__label">Статус</div>
+        <div class="pill__value" id="statusText">Ожидание</div>
       </div>
-
-      <div class="vs">VS</div>
-
-      <div class="player you">
-        <div class="label">Ты</div>
-        <div class="hand" id="youHand">?</div>
+      <div class="pill">
+        <div class="pill__label">Твой выбор</div>
+        <div class="pill__value" id="youPickText">—</div>
       </div>
+      <div class="pill">
+        <div class="pill__label">Бот</div>
+        <div class="pill__value" id="botPickText">—</div>
+      </div>
+      <div class="pill">
+        <div class="pill__label">Результат</div>
+        <div class="pill__value" id="resultText">—</div>
+      </div>
+    </section>
 
-    </div>
-
-    <!-- CHOICES -->
-    <div class="choices">
-      <button class="choice" id="pickRock">✊ Камень</button>
-      <button class="choice" id="pickScissors">✌ Ножницы</button>
-      <button class="choice" id="pickPaper">✋ Бумага</button>
-    </div>
-
-    <!-- BET PANEL -->
-    <div class="panel">
-      <div class="bet">
-        <div class="row">
-          <span>Ставка</span>
-          <div class="quick">
-            <button data-bet="10">10</button>
-            <button data-bet="50">50</button>
-            <button data-bet="100">100</button>
-            <button data-bet="250">250</button>
-            <button data-bet="500">500</button>
-            <button data-bet="max">MAX</button>
+    <main class="grid">
+      <!-- LEFT: GAME -->
+      <section class="panel gamePanel">
+        <!-- X ladder -->
+        <div class="ladder">
+          <div class="ladder__title">Лестница X</div>
+          <div class="ladder__row" id="ladderRow">
+            <!-- JS заполнит -->
+          </div>
+          <div class="ladder__hint" id="ladderHint">
+            Серия: <b id="seriesText">0</b> побед(ы) подряд • След. x: <b id="nextXText">x1.20</b>
           </div>
         </div>
 
-        <div class="row">
-          <button id="minus">-</button>
-          <input type="number" id="betInput" value="100" />
-          <button id="plus">+</button>
+        <!-- Arena -->
+        <div class="arena">
+          <div class="arena__side">
+            <div class="arena__who">Бот</div>
+            <div class="handCard" id="botCard">
+              <div class="handSvg" id="botHand">
+                <!-- JS вставит SVG -->
+              </div>
+              <div class="handState" id="botState">Готов</div>
+            </div>
+          </div>
+
+          <div class="arena__mid">
+            <div class="vs">VS</div>
+            <div class="arenaNote" id="arenaNote">Выбери ход снизу и нажми «Играть»</div>
+          </div>
+
+          <div class="arena__side">
+            <div class="arena__who">Ты</div>
+            <div class="handCard" id="youCard">
+              <div class="handSvg" id="youHand">
+                <!-- JS вставит SVG -->
+              </div>
+              <div class="handState" id="youState">Готов</div>
+            </div>
+          </div>
         </div>
 
-        <div class="row">
-          <button class="primary" id="btnPlay">Играть</button>
-          <button class="secondary" id="btnReset">Сброс</button>
+        <!-- PICK BUTTONS -->
+        <div class="pickRow" aria-label="Выбор хода">
+          <button class="pickBtn" id="pickRock" type="button" data-pick="rock">
+            <span class="pickIco" id="icoRock"></span>
+            <span class="pickTxt">Камень</span>
+          </button>
+
+          <button class="pickBtn" id="pickScissors" type="button" data-pick="scissors">
+            <span class="pickIco" id="icoScissors"></span>
+            <span class="pickTxt">Ножницы</span>
+          </button>
+
+          <button class="pickBtn" id="pickPaper" type="button" data-pick="paper">
+            <span class="pickIco" id="icoPaper"></span>
+            <span class="pickTxt">Бумага</span>
+          </button>
         </div>
 
-        <div class="row small">
-          Выигрыш: <b id="winLine">—</b>
+        <div class="tinyHint">
+          Победа = серия растёт и X повышается • Ничья = ставка возвращается • Поражение = серия сбрасывается
+        </div>
+      </section>
+
+      <!-- RIGHT: BET PANEL -->
+      <aside class="panel betPanel">
+        <div class="betHeader">
+          <div>
+            <div class="betTitle">Ставка</div>
+            <div class="betSub">Монеты виртуальные, без вывода.</div>
+          </div>
+
+          <button class="chipPlus" id="add1000" type="button">+1000</button>
         </div>
 
-        <div class="row small">
-          <button id="soundToggle">Звук: on</button>
+        <div class="chips">
+          <button class="chip" data-add="10" type="button">10</button>
+          <button class="chip" data-add="50" type="button">50</button>
+          <button class="chip" data-add="100" type="button">100</button>
+          <button class="chip" data-add="250" type="button">250</button>
+          <button class="chip" data-add="500" type="button">500</button>
+          <button class="chip chip--max" id="chipMax" type="button">MAX</button>
         </div>
-      </div>
-    </div>
 
+        <div class="betRow">
+          <button class="betStep" id="betMinus" type="button">–</button>
+          <input class="betInput" id="betInput" type="number" min="1" step="1" value="100" />
+          <button class="betStep" id="betPlus" type="button">+</button>
+        </div>
+
+        <div class="actions">
+          <button class="btnPrimary" id="playBtn" type="button">Играть</button>
+          <button class="btnGhost" id="resetBtn" type="button">Сброс</button>
+        </div>
+
+        <div class="payout">
+          <div class="payout__label">Выигрыш</div>
+          <div class="payout__value" id="payoutText">—</div>
+        </div>
+
+        <button class="soundBtn" id="soundToggle" type="button">
+          <span class="dot" id="soundDot"></span>
+          <span id="soundText">Звук: on</span>
+        </button>
+
+        <div class="footerNote">v1 • режим RPS</div>
+      </aside>
+    </main>
   </div>
 
-  <script src="app.js"></script>
+  <script src="./app.js?v=1"></script>
 </body>
 </html>
