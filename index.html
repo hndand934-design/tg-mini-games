@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>RPS</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -10,125 +10,133 @@
   <div class="bg"></div>
 
   <div class="wrap">
-    <header class="topbar">
+    <!-- Header -->
+    <header class="topbar glass">
       <div class="brand">
         <div class="brandTitle">RPS</div>
-        <div class="brandSub">Открыто вне Telegram</div>
+        <div class="brandSub">Открыто via Telegram</div>
       </div>
 
-      <div class="balCard">
-        <div class="balLabel">Баланс</div>
-        <div class="balVal"><span id="balance">0</span> 🪙</div>
+      <div class="topRight">
+        <div class="pill glass">
+          <div class="pillLabel">Баланс</div>
+          <div class="pillValue"><span id="balance">0</span> 🪙</div>
+        </div>
       </div>
     </header>
 
-    <main class="layout">
-      <!-- LEFT: ARENA -->
-      <section class="left">
-        <div class="hudRow">
-          <div class="hudCard">
+    <main class="grid">
+      <!-- Left / Game -->
+      <section class="left glass">
+        <!-- HUD -->
+        <div class="hud">
+          <div class="hudCard glass">
             <div class="hudLabel">Статус</div>
             <div class="hudValue" id="hudStatus">Ожидание</div>
           </div>
-          <div class="hudCard">
+          <div class="hudCard glass">
             <div class="hudLabel">Твой выбор</div>
             <div class="hudValue" id="hudYou">—</div>
           </div>
-          <div class="hudCard">
+          <div class="hudCard glass">
             <div class="hudLabel">Выбор бота</div>
             <div class="hudValue" id="hudBot">—</div>
           </div>
-          <div class="hudCard">
+          <div class="hudCard glass">
             <div class="hudLabel">Результат</div>
             <div class="hudValue" id="hudResult">—</div>
           </div>
         </div>
 
-        <div class="arena" id="arena">
-          <div class="arenaTop">
-            <div class="series" id="seriesText">Серия: 0–0 (до 3 побед)</div>
+        <!-- Ladder -->
+        <div class="ladder glass">
+          <div class="ladderTop">
+            <div class="ladderTitle">Лестница X</div>
+            <div class="ladderMeta" id="ladderMeta">Серия: 0 • След. победа: x2.00</div>
+          </div>
+          <div class="ladderRow" id="ladderRow"></div>
+        </div>
+
+        <!-- Arena -->
+        <div class="arena glass" id="arena">
+          <div class="side">
+            <div class="sideTitle">Бот</div>
+            <div class="card glass card3d" id="botCard">
+              <div class="cardInner">
+                <div class="face" id="botFace"></div>
+              </div>
+            </div>
+            <div class="hint" id="botHint">Готов</div>
           </div>
 
-          <div class="cards">
-            <div class="side">
-              <div class="sideTitle">Бот</div>
-              <div class="handCard" id="botCard">
-                <div class="handFace" id="botFace">?</div>
-              </div>
-              <div class="sideHint" id="botHint">Готов</div>
-            </div>
-
-            <div class="vs">
-              <div class="vsTitle">Выбери</div>
-              <div class="vsSub">камень / ножницы / бумага</div>
-              <div class="vsDots">
-                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-              </div>
-              <div class="vsMark">VS</div>
-            </div>
-
-            <div class="side">
-              <div class="sideTitle">Ты</div>
-              <div class="handCard" id="youCard">
-                <div class="handFace" id="youFace">?</div>
-              </div>
-              <div class="sideHint" id="youHint">Готов</div>
-            </div>
+          <div class="mid">
+            <div class="vsTitle">Выбери</div>
+            <div class="vsSub">камень / ножницы / бумага</div>
+            <div class="vs">VS</div>
+            <div class="note" id="note">Выбирай ход и жми “Играть”.</div>
           </div>
 
-          <div class="choiceRow">
-            <button class="pick" id="pickRock">✊ <span>Камень</span></button>
-            <button class="pick" id="pickScissors">✌️ <span>Ножницы</span></button>
-            <button class="pick" id="pickPaper">✋ <span>Бумага</span></button>
+          <div class="side">
+            <div class="sideTitle">Ты</div>
+            <div class="card glass card3d" id="youCard">
+              <div class="cardInner">
+                <div class="face" id="youFace"></div>
+              </div>
+            </div>
+            <div class="hint" id="youHint">Готов</div>
           </div>
 
-          <div class="arenaNote" id="note">
-            Выбирай ход и жми “Играть”. Серия — до 3 побед.
+          <div class="picks">
+            <button class="pick glass" id="pickRock" type="button">
+              <span class="pickIcon" id="pickIconRock"></span>
+              <span class="pickText">Камень</span>
+            </button>
+            <button class="pick glass" id="pickScissors" type="button">
+              <span class="pickIcon" id="pickIconScissors"></span>
+              <span class="pickText">Ножницы</span>
+            </button>
+            <button class="pick glass" id="pickPaper" type="button">
+              <span class="pickIcon" id="pickIconPaper"></span>
+              <span class="pickText">Бумага</span>
+            </button>
           </div>
         </div>
       </section>
 
-      <!-- RIGHT: BET PANEL -->
-      <aside class="right">
-        <div class="panel">
-          <div class="panelTop">
-            <div class="panelTitle">Ставка</div>
-            <button class="chip small" id="add1000">+1000 🪙</button>
-          </div>
+      <!-- Right / Bet panel -->
+      <aside class="right glass">
+        <div class="panelTitle">Ставка</div>
+        <div class="panelSub">Монеты виртуальные, без вывода.</div>
 
-          <div class="chips">
-            <button class="chip" data-bet="10">10</button>
-            <button class="chip" data-bet="50">50</button>
-            <button class="chip" data-bet="100">100</button>
-            <button class="chip" data-bet="250">250</button>
-            <button class="chip" data-bet="500">500</button>
-            <button class="chip" data-bet="max">MAX</button>
-          </div>
-
-          <div class="betRow">
-            <button class="betBtn" id="betMinus">-</button>
-            <input class="betInput" id="betInput" type="number" min="1" step="1" value="100" />
-            <button class="betBtn" id="betPlus">+</button>
-          </div>
-
-          <div class="btnRow">
-            <button class="btn primary" id="btnPlay">Играть</button>
-            <button class="btn ghost" id="btnReset">Сброс</button>
-          </div>
-
-          <div class="winBox">
-            <div class="winLabel">Выигрыш:</div>
-            <div class="winVal" id="winText">—</div>
-          </div>
-
-          <button class="soundBtn" id="btnSound">Звук: off</button>
-
-          <div class="hint">
-            * Выигрыш только при победе. При ничьей — ставка возвращается.
-          </div>
-
-          <div class="ver">v1 · режим RPS</div>
+        <div class="chips">
+          <button class="chip glass" data-bet="10" type="button">10</button>
+          <button class="chip glass" data-bet="50" type="button">50</button>
+          <button class="chip glass" data-bet="100" type="button">100</button>
+          <button class="chip glass" data-bet="250" type="button">250</button>
+          <button class="chip glass" data-bet="500" type="button">500</button>
+          <button class="chip glass" data-bet="max" type="button">MAX</button>
+          <button class="chip glass chipPlus" id="add1000" type="button">+1000 🪙</button>
         </div>
+
+        <div class="betRow">
+          <button class="betBtn glass" id="betMinus" type="button">–</button>
+          <input class="betInput glass" id="betInput" inputmode="numeric" value="100" />
+          <button class="betBtn glass" id="betPlus" type="button">+</button>
+        </div>
+
+        <div class="btnRow">
+          <button class="btnPrimary" id="btnPlay" type="button">Играть</button>
+          <button class="btnGhost" id="btnReset" type="button">Сброс</button>
+        </div>
+
+        <div class="payout glass">
+          <div class="payoutLabel">Выигрыш:</div>
+          <div class="payoutValue" id="winText">—</div>
+        </div>
+
+        <button class="soundBtn glass" id="btnSound" type="button">Звук: off</button>
+
+        <div class="footerText">v1 • режим RPS</div>
       </aside>
     </main>
   </div>
