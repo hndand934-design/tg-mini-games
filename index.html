@@ -2,158 +2,149 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>RPS</title>
-  <link rel="stylesheet" href="style.css?v=1" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
+
 <body>
   <div class="bg"></div>
 
-  <main class="wrap">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brandTitle">RPS</div>
-        <div class="brandSub">Камень · Ножницы · Бумага</div>
+  <div class="wrap">
+    <header class="topbar glass">
+      <div>
+        <div class="title">RPS</div>
+        <div class="subtitle">Камень • Ножницы • Бумага</div>
       </div>
 
-      <div class="topRight">
-        <button id="soundBtn" class="pillBtn" type="button" aria-label="Звук">
-          <span class="dot" id="soundDot"></span>
-          <span id="soundText">Звук: on</span>
-        </button>
-
-        <div class="balanceBox">
-          <div class="balanceLabel">Баланс</div>
-          <div class="balanceValue"><span id="balance">1000</span> ₽</div>
+      <div class="topbar-right">
+        <button class="pill-btn" id="soundBtn" type="button">Звук: on</button>
+        <div class="balance glass">
+          <div class="balance-label">Баланс</div>
+          <div class="balance-val"><span id="balanceVal">1000</span> ₽</div>
         </div>
       </div>
     </header>
 
-    <section class="grid">
-      <!-- LEFT / GAME -->
-      <section class="panel panelGame">
-        <div class="statusRow">
-          <div class="statusCard">
-            <div class="k">Статус</div>
-            <div class="v" id="status">Ожидание</div>
+    <main class="grid">
+      <!-- LEFT -->
+      <section class="panel glass">
+        <div class="pills">
+          <div class="pill glass">
+            <div class="pill-k">Статус</div>
+            <div class="pill-v" id="pillStatus">Ожидание</div>
           </div>
-          <div class="statusCard">
-            <div class="k">Твой выбор</div>
-            <div class="v" id="youPickText">—</div>
+          <div class="pill glass">
+            <div class="pill-k">Твой выбор</div>
+            <div class="pill-v" id="pillYour">—</div>
           </div>
-          <div class="statusCard">
-            <div class="k">Бот</div>
-            <div class="v" id="botPickText">—</div>
+          <div class="pill glass">
+            <div class="pill-k">Бот</div>
+            <div class="pill-v" id="pillBot">—</div>
           </div>
-          <div class="statusCard">
-            <div class="k">Результат</div>
-            <div class="v" id="resultText">—</div>
-          </div>
-        </div>
-
-        <div class="ladder">
-          <div class="ladderTop">
-            <div class="ladderTitle">Лестница X</div>
-            <div class="ladderHint">Выигрывай подряд — X растёт. Проиграл — серия в ноль.</div>
-          </div>
-          <div class="ladderSteps" id="ladderSteps"></div>
-        </div>
-
-        <div class="metaRow">
-          <div class="metaBox">
-            <div class="k">Серия</div>
-            <div class="v"><span id="streak">0</span> побед</div>
-          </div>
-          <div class="metaBox">
-            <div class="k">Текущий X</div>
-            <div class="v">x<span id="currentX">1.00</span></div>
-          </div>
-          <div class="metaBox">
-            <div class="k">Потенциал</div>
-            <div class="v"><span id="potential">0</span> ₽</div>
+          <div class="pill glass">
+            <div class="pill-k">Результат</div>
+            <div class="pill-v" id="pillResult">—</div>
           </div>
         </div>
 
-        <div class="arena">
+        <div class="ladder-wrap glass">
+          <div class="ladder-head">
+            <div class="ladder-title">Лестница</div>
+            <div class="ladder-hint">Выигрывай подряд — X растёт. Проиграл — серия в ноль.</div>
+          </div>
+          <div class="ladder" id="ladder"></div>
+        </div>
+
+        <div class="meta">
+          <div class="meta-card glass">
+            <div class="meta-k">Серия</div>
+            <div class="meta-v"><span id="seriesWins">0</span> побед</div>
+          </div>
+          <div class="meta-card glass">
+            <div class="meta-k">Текущий X</div>
+            <div class="meta-v"><span id="currentX">x1.00</span></div>
+          </div>
+          <div class="meta-card glass">
+            <div class="meta-k">Потенциал</div>
+            <div class="meta-v"><span id="potential">100</span> ₽</div>
+          </div>
+        </div>
+
+        <div class="arena glass">
           <div class="side">
-            <div class="sideTitle">Бот</div>
-            <div class="handCard" id="botHand">
-              <div class="q">?</div>
+            <div class="side-title">Бот</div>
+            <div class="handbox" id="botHandBox">
+              <div class="hand" id="botHand">?</div>
             </div>
-            <div class="sideSub" id="botReady">Готов</div>
+            <div class="side-sub" id="botSub">Готов</div>
           </div>
 
           <div class="vs">VS</div>
 
           <div class="side">
-            <div class="sideTitle">Ты</div>
-            <div class="handCard" id="youHand">
-              <div class="q">?</div>
+            <div class="side-title">Ты</div>
+            <div class="handbox" id="youHandBox">
+              <div class="hand" id="youHand">?</div>
             </div>
-            <div class="sideSub" id="youReady">Готов</div>
+            <div class="side-sub" id="youSub">Готов</div>
           </div>
         </div>
 
-        <div class="pickRow">
-          <button class="pickBtn" id="pickRock" type="button">
-            <span class="pickEmoji">✊🏻</span><span>Камень</span>
-          </button>
-          <button class="pickBtn" id="pickScissors" type="button">
-            <span class="pickEmoji">✌🏻</span><span>Ножницы</span>
-          </button>
-          <button class="pickBtn" id="pickPaper" type="button">
-            <span class="pickEmoji">✋🏻</span><span>Бумага</span>
-          </button>
+        <div class="moves glass">
+          <button class="move-btn" type="button" data-move="rock">✊🏻 <span>Камень</span></button>
+          <button class="move-btn" type="button" data-move="scissors">✌🏻 <span>Ножницы</span></button>
+          <button class="move-btn" type="button" data-move="paper">🤚🏻 <span>Бумага</span></button>
         </div>
 
-        <div class="footerHint">
+        <div class="footnote">
           Нажми выбор → <b>Играть</b>. После победы можно <b>Забрать</b> (Cashout).
         </div>
       </section>
 
-      <!-- RIGHT / BET -->
-      <aside class="panel panelBet">
-        <div class="betHeader">
-          <div class="betTitle">Ставка</div>
-          <button id="add1000" class="chip add" type="button">+1000 ₽</button>
+      <!-- RIGHT -->
+      <aside class="panel glass betpanel">
+        <div class="bethead">
+          <div class="bettitle">Ставка</div>
+          <button class="chip add" type="button" id="add1000">+1000 ₽</button>
         </div>
 
         <div class="chips">
-          <button class="chip" data-chip="10" type="button">10</button>
-          <button class="chip" data-chip="50" type="button">50</button>
-          <button class="chip" data-chip="100" type="button">100</button>
-          <button class="chip" data-chip="250" type="button">250</button>
-          <button class="chip" data-chip="500" type="button">500</button>
-          <button class="chip" data-chip="max" type="button">MAX</button>
+          <button class="chip" type="button" data-bet="10">10</button>
+          <button class="chip" type="button" data-bet="50">50</button>
+          <button class="chip" type="button" data-bet="100">100</button>
+          <button class="chip" type="button" data-bet="250">250</button>
+          <button class="chip" type="button" data-bet="500">500</button>
+          <button class="chip" type="button" data-bet="max">MAX</button>
         </div>
 
-        <div class="betBox">
-          <button id="betMinus" class="step" type="button">−</button>
-          <input id="betInput" class="betInput" value="100" inputmode="numeric" />
-          <button id="betPlus" class="step" type="button">+</button>
+        <div class="betrow">
+          <button class="betbtn" type="button" data-bet-delta="-10">−</button>
+          <input class="betinput" id="betInput" value="100" inputmode="numeric" />
+          <button class="betbtn" type="button" data-bet-delta="10">+</button>
         </div>
 
         <div class="actions">
-          <button id="playBtn" class="btn primary" type="button">Играть</button>
-          <button id="cashoutBtn" class="btn ghost" type="button" disabled>Забрать</button>
+          <button class="primary" id="playBtn" type="button">Играть</button>
+          <button class="secondary" id="cashoutBtn" type="button" disabled>Забрать</button>
         </div>
 
-        <div class="payoutRow">
-          <div class="payoutLabel">Выигрыш:</div>
-          <div class="payoutValue" id="payout">—</div>
+        <div class="winbox glass">
+          <div class="winlabel">Выигрыш:</div>
+          <div class="winval" id="winLine">—</div>
         </div>
 
-        <div class="rules">
+        <div class="rules glass">
           <div>• Ставка списывается один раз при старте серии.</div>
           <div>• Ничья — X не меняется, серия продолжается.</div>
           <div>• Проигрыш — серия в ноль, ставка сгорает.</div>
         </div>
 
-        <div class="ver">v1 · режим RPS</div>
+        <div class="ver">v1 • режим RPS</div>
       </aside>
-    </section>
-  </main>
+    </main>
+  </div>
 
-  <script src="app.js?v=1"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
