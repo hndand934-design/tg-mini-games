@@ -518,4 +518,5 @@ body{
   .ladderSteps{ grid-template-columns: repeat(4, 1fr); }
   .arena{ grid-template-columns: 1fr; }
   .vs{ justify-self:center; }
+  [data-move], [data-action] { pointer-events: auto !important; z-index: 20; position: relative; }
 }
