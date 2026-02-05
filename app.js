@@ -1,519 +1,379 @@
-/* RPS (Rock Paper Scissors) — стабильная версия с серией, лестницей X и cashout
-   Важно: кнопки выбора должны иметь data-move="rock|paper|scissors"
-   Кнопка "Играть" — data-action="play"
-   Кнопка "Забрать" — data-action="cashout"
-   Кнопка звука — data-action="sound"
-*/
-
 (() => {
   "use strict";
 
-  // ---------- helpers ----------
-  const $  = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const $  = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const fmt = (n) => (Math.round(n * 100) / 100).toFixed(2);
+  // Лестница множителей (видимая всегда)
+  const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00];
 
-  // ---------- DOM (гибкий поиск) ----------
-  const ui = {
-    // pills / labels (если есть — обновим; если нет — пропустим)
-    status:      $('[data-ui="status"]')      || $('#status')      || $('#pillStatus'),
-    yourPick:    $('[data-ui="yourPick"]')    || $('#yourPick')    || $('#pillYour'),
-    botPick:     $('[data-ui="botPick"]')     || $('#botPick')     || $('#pillBot'),
-    result:      $('[data-ui="result"]')      || $('#result')      || $('#pillResult'),
+  const MOVES = ["rock","paper","scissors"];
+  const RU = { rock:"Камень", paper:"Бумага", scissors:"Ножницы" };
+  const EMOJI = { rock:"✊🏻", paper:"🤚🏻", scissors:"✌🏻" };
 
-    // arena
-    botCard:     $('[data-ui="botCard"]')     || $('#botCard'),
-    youCard:     $('[data-ui="youCard"]')     || $('#youCard'),
-    botHand:     $('[data-ui="botHand"]')     || $('#botHand'),
-    youHand:     $('[data-ui="youHand"]')     || $('#youHand'),
+  // DOM
+  const el = {
+    balanceVal: $("#balanceVal"),
+    soundBtn: $("#soundBtn"),
 
-    // ladder / meta
-    ladder:      $('[data-ui="ladder"]')      || $('#ladder'),
-    series:      $('[data-ui="series"]')      || $('#series'),
-    currentX:    $('[data-ui="currentX"]')    || $('#currentX'),
-    potential:   $('[data-ui="potential"]')   || $('#potential'),
+    pillStatus: $("#pillStatus"),
+    pillYour: $("#pillYour"),
+    pillBot: $("#pillBot"),
+    pillResult: $("#pillResult"),
 
-    // bet panel
-    balance:     $('[data-ui="balance"]')     || $('#balance'),
-    betInput:    $('[data-ui="betInput"]')    || $('#betInput'),
-    winLine:     $('[data-ui="winLine"]')     || $('#winLine'),
+    ladder: $("#ladder"),
+    seriesWins: $("#seriesWins"),
+    currentX: $("#currentX"),
+    potential: $("#potential"),
 
-    // controls
-    playBtn:     $('[data-action="play"]')    || $('#playBtn'),
-    cashoutBtn:  $('[data-action="cashout"]') || $('#cashoutBtn') || $('#takeBtn'),
-    soundBtn:    $('[data-action="sound"]')   || $('#soundBtn'),
+    botHand: $("#botHand"),
+    youHand: $("#youHand"),
+    botHandBox: $("#botHandBox"),
+    youHandBox: $("#youHandBox"),
 
-    // moves buttons
-    moveBtns:    $$('[data-move]') // must exist
-  };
+    betInput: $("#betInput"),
+    playBtn: $("#playBtn"),
+    cashoutBtn: $("#cashoutBtn"),
+    winLine: $("#winLine"),
 
-  // ---------- ensure buttons clickable (фикс “не нажимается”) ----------
-  function forceClickable(el) {
-    if (!el) return;
-    el.style.pointerEvents = "auto";
-    el.style.position = el.style.position || "relative";
-    el.style.zIndex = el.style.zIndex || "10";
-  }
-  [...ui.moveBtns, ui.playBtn, ui.cashoutBtn, ui.soundBtn].forEach(forceClickable);
-
-  // Если вдруг поверх лежит оверлей — часто у него класс overlay/glass и pointer-events:auto
-  // Мы аккуратно отключим pointer-events только у явных оверлеев, чтобы не ломать UI.
-  $$('[class*="overlay"], [class*="Overlay"], [class*="glass"], [data-overlay="true"]').forEach(el => {
-    const pe = getComputedStyle(el).pointerEvents;
-    if (pe !== "none") el.style.pointerEvents = "none";
-  });
-
-  // ---------- game config ----------
-  // Лестница X (как на твоём варианте)
-  const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00]; // шаги
-  const WIN_TO_COMPLETE = LADDER.length - 1; // сколько побед до конца лестницы
-
-  const MOVES = ["rock", "paper", "scissors"];
-  const MOVE_RU = { rock: "Камень", paper: "Бумага", scissors: "Ножницы" };
-
-  // “Белые руки” — аккуратные 2D-иконки (SVG inline) без внешних картинок
-  // (не “кривые”, полностью рука)
-  const HAND_SVG = {
-    rock: `
-      <svg viewBox="0 0 128 128" width="96" height="96" aria-label="rock" role="img">
-        <defs>
-          <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,255,255,.98)"/>
-            <stop offset="1" stop-color="rgba(255,255,255,.78)"/>
-          </linearGradient>
-        </defs>
-        <path d="M42 62c-2-11 2-21 12-25 9-4 19 1 23 10l3 7 6 0c6 0 10 5 10 11v14c0 16-13 29-29 29H58c-13 0-24-9-26-21l-2-12c-1-6 3-12 9-13l3 0z"
-              fill="url(#g)" stroke="rgba(0,0,0,.15)" stroke-width="4" stroke-linejoin="round"/>
-        <path d="M53 52c2-7 10-9 15-4" fill="none" stroke="rgba(0,0,0,.12)" stroke-width="4" stroke-linecap="round"/>
-      </svg>
-    `,
-    paper: `
-      <svg viewBox="0 0 128 128" width="96" height="96" aria-label="paper" role="img">
-        <defs>
-          <linearGradient id="g2" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,255,255,.98)"/>
-            <stop offset="1" stop-color="rgba(255,255,255,.78)"/>
-          </linearGradient>
-        </defs>
-        <path d="M42 30c8-6 20-6 28 0l18 14c6 5 10 13 10 21v20c0 9-7 16-16 16H46c-9 0-16-7-16-16V46c0-6 5-12 12-16z"
-              fill="url(#g2)" stroke="rgba(0,0,0,.15)" stroke-width="4" stroke-linejoin="round"/>
-        <path d="M46 52h36M46 66h36M46 80h30" stroke="rgba(0,0,0,.10)" stroke-width="4" stroke-linecap="round"/>
-      </svg>
-    `,
-    scissors: `
-      <svg viewBox="0 0 128 128" width="96" height="96" aria-label="scissors" role="img">
-        <defs>
-          <linearGradient id="g3" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stop-color="rgba(255,255,255,.98)"/>
-            <stop offset="1" stop-color="rgba(255,255,255,.78)"/>
-          </linearGradient>
-        </defs>
-        <path d="M46 36c6 0 11 5 11 11v10l16-10c8-5 17 1 17 10 0 4-2 7-5 9l-11 7 11 7c3 2 5 5 5 9 0 9-9 15-17 10L57 96V86c0 6-5 11-11 11s-11-5-11-11 5-11 11-11c4 0 8 2 10 5V58c-2 3-6 5-10 5-6 0-11-5-11-11s5-11 11-11z"
-              fill="url(#g3)" stroke="rgba(0,0,0,.15)" stroke-width="4" stroke-linejoin="round"/>
-        <path d="M60 62l16 10M60 66l16-10" stroke="rgba(0,0,0,.10)" stroke-width="4" stroke-linecap="round"/>
-      </svg>
-    `
-  };
-
-  // ---------- audio (простой, приятный, негромкий) ----------
-  let audioOn = true;
-  let audioCtx = null;
-  function beep(type = "tap") {
-    if (!audioOn) return;
-    try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const t0 = audioCtx.currentTime;
-
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-
-      let f1 = 440, f2 = 660, dur = 0.07, vol = 0.03;
-      if (type === "tap")   { f1 = 520; f2 = 520; dur = 0.05; vol = 0.02; }
-      if (type === "start") { f1 = 380; f2 = 520; dur = 0.09; vol = 0.03; }
-      if (type === "win")   { f1 = 520; f2 = 820; dur = 0.10; vol = 0.035; }
-      if (type === "lose")  { f1 = 300; f2 = 180; dur = 0.12; vol = 0.03; }
-      if (type === "cash")  { f1 = 700; f2 = 980; dur = 0.09; vol = 0.03; }
-
-      gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(f1, t0);
-      osc.frequency.linearRampToValueAtTime(f2, t0 + dur);
-
-      osc.start(t0);
-      osc.stop(t0 + dur + 0.02);
-    } catch (_) {}
-  }
-
-  function setSoundUI() {
-    if (!ui.soundBtn) return;
-    ui.soundBtn.textContent = audioOn ? "Звук: on" : "Звук: off";
-    ui.soundBtn.classList.toggle("is-off", !audioOn);
-  }
-
-  // ---------- state ----------
-  const state = {
-    selectedMove: null,
-    inAnim: false,
-
-    // series
-    seriesActive: false,
-    seriesWins: 0,     // сколько побед подряд в серии
-    currentX: 1.00,    // текущий X по лестнице
-    bet: 100,
-
-    balance: 1000
+    add1000: $("#add1000")
   };
 
   // ---------- storage ----------
-  const LS_BAL = "rps_balance_v1";
-  function loadBalance() {
-    const v = Number(localStorage.getItem(LS_BAL));
-    if (Number.isFinite(v) && v >= 0) state.balance = Math.floor(v);
+  const LS_BAL = "rps_balance_v2";
+  const LS_SND = "rps_sound_v2";
+
+  const state = {
+    balance: 1000,
+    bet: 100,
+    selected: null,
+
+    // серия
+    seriesActive: false,
+    wins: 0,          // побед подряд
+    x: 1.00,
+
+    busy: false,
+    sound: true
+  };
+
+  function load() {
+    const b = Number(localStorage.getItem(LS_BAL));
+    if (Number.isFinite(b) && b >= 0) state.balance = Math.floor(b);
+
+    const s = localStorage.getItem(LS_SND);
+    if (s === "0") state.sound = false;
   }
-  function saveBalance() {
+  function save() {
     localStorage.setItem(LS_BAL, String(state.balance));
+    localStorage.setItem(LS_SND, state.sound ? "1":"0");
   }
 
-  // ---------- UI update ----------
-  function setText(el, text) { if (el) el.textContent = text; }
-  function setHTML(el, html) { if (el) el.innerHTML = html; }
+  // ---------- audio (просто/тихо) ----------
+  let audioCtx = null;
+  function beep(kind="tap"){
+    if (!state.sound) return;
+    try{
+      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
 
-  function updateTop() {
-    setText(ui.balance, `${state.balance} ₽`);
-    if (ui.betInput) ui.betInput.value = String(state.bet);
-    setText(ui.series, `${state.seriesWins} побед`);
-    setText(ui.currentX, `x${fmt(state.currentX)}`);
-    setText(ui.potential, `${Math.floor(state.bet * state.currentX)} ₽`);
+      let f1=520,f2=520,d=0.05,vol=0.02;
+      if(kind==="start"){f1=380;f2=520;d=0.09;vol=0.025;}
+      if(kind==="win"){f1=560;f2=860;d=0.10;vol=0.03;}
+      if(kind==="lose"){f1=280;f2=180;d=0.12;vol=0.028;}
+      if(kind==="cash"){f1=720;f2=980;d=0.09;vol=0.028;}
+
+      g.gain.setValueAtTime(0.0001,t0);
+      g.gain.exponentialRampToValueAtTime(vol,t0+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+d);
+
+      o.type="sine";
+      o.frequency.setValueAtTime(f1,t0);
+      o.frequency.linearRampToValueAtTime(f2,t0+d);
+      o.start(t0);
+      o.stop(t0+d+0.02);
+    }catch(_){}
   }
 
-  function updatePills({ status, your, bot, result } = {}) {
-    if (status !== undefined) setText(ui.status, status);
-    if (your !== undefined) setText(ui.yourPick, your);
-    if (bot !== undefined) setText(ui.botPick, bot);
-    if (result !== undefined) setText(ui.result, result);
+  // ---------- UI ----------
+  function setPills({status, your, bot, result}){
+    if(status!==undefined) el.pillStatus.textContent = status;
+    if(your!==undefined)   el.pillYour.textContent = your;
+    if(bot!==undefined)    el.pillBot.textContent = bot;
+    if(result!==undefined) el.pillResult.textContent = result;
   }
 
-  function highlightMoveButtons() {
-    ui.moveBtns.forEach(btn => {
-      const mv = btn.getAttribute("data-move");
-      btn.classList.toggle("is-active", mv === state.selectedMove);
-    });
-  }
-
-  function setControls() {
-    const canPlay = !!state.selectedMove && !state.inAnim;
-    if (ui.playBtn) {
-      ui.playBtn.disabled = !canPlay;
-      ui.playBtn.classList.toggle("is-disabled", !canPlay);
-    }
-
-    const canCash = state.seriesActive && state.seriesWins > 0 && !state.inAnim;
-    if (ui.cashoutBtn) {
-      ui.cashoutBtn.disabled = !canCash;
-      ui.cashoutBtn.classList.toggle("is-disabled", !canCash);
-    }
-  }
-
-  function renderLadder() {
-    if (!ui.ladder) return;
-
-    // если лестница уже размечена в HTML — мы просто подсветим
-    const items = $$(".xstep", ui.ladder);
-    if (items.length) {
-      items.forEach((it, idx) => {
-        it.classList.toggle("is-current", idx === state.seriesWins);
-        it.classList.toggle("is-done", idx < state.seriesWins);
-      });
-      return;
-    }
-
-    // иначе строим сами
-    ui.ladder.innerHTML = "";
+  function renderLadder(){
+    el.ladder.innerHTML = "";
     LADDER.forEach((x, idx) => {
       const d = document.createElement("div");
       d.className = "xstep";
-      d.innerHTML = `<div class="xstep__t">${idx === 0 ? "Старт" : `Шаг ${idx}`}</div><div class="xstep__x">x${fmt(x)}</div>`;
-      if (idx === state.seriesWins) d.classList.add("is-current");
-      if (idx < state.seriesWins) d.classList.add("is-done");
-      ui.ladder.appendChild(d);
+      d.innerHTML = `<div class="t">${idx===0?"Старт":`Шаг ${idx}`}</div><div class="x">x${x.toFixed(2)}</div>`;
+      if(idx < state.wins) d.classList.add("is-done");
+      if(idx === state.wins) d.classList.add("is-current");
+      el.ladder.appendChild(d);
     });
   }
 
-  function renderHands(botMove, youMove, reveal = false) {
-    const q = `<div class="hand-q">?</div>`;
-    if (!reveal) {
-      setHTML(ui.botHand, q);
-      setHTML(ui.youHand, q);
-      return;
-    }
-    setHTML(ui.botHand, HAND_SVG[botMove] || q);
-    setHTML(ui.youHand, HAND_SVG[youMove] || q);
+  function updateMeta(){
+    el.balanceVal.textContent = String(state.balance);
+    el.seriesWins.textContent = String(state.wins);
+    el.currentX.textContent = `x${state.x.toFixed(2)}`;                 // ✅ один "x"
+    el.potential.textContent = String(Math.floor(state.bet * state.x));  // ✅ один "₽" (в HTML)
+    el.betInput.value = String(state.bet);
+    el.soundBtn.textContent = state.sound ? "Звук: on" : "Звук: off";
+
+    // кнопки
+    const canPlay = !!state.selected && !state.busy;
+    el.playBtn.disabled = !canPlay;
+
+    const canCash = state.seriesActive && state.wins > 0 && !state.busy;
+    el.cashoutBtn.disabled = !canCash;
   }
 
-  function setWinLine(text) {
-    if (!ui.winLine) return;
-    ui.winLine.textContent = text || "—";
+  function setHands(bot=null, you=null){
+    el.botHand.textContent = bot ? EMOJI[bot] : "?";
+    el.youHand.textContent = you ? EMOJI[you] : "?";
   }
 
-  // ---------- game logic ----------
-  function outcome(you, bot) {
-    if (you === bot) return "draw";
-    if (
-      (you === "rock" && bot === "scissors") ||
-      (you === "paper" && bot === "rock") ||
-      (you === "scissors" && bot === "paper")
-    ) return "win";
+  function setWinLine(t){
+    el.winLine.textContent = t || "—";
+  }
+
+  function highlightMoveButtons(){
+    $$("[data-move]").forEach(btn=>{
+      btn.classList.toggle("is-active", btn.getAttribute("data-move")===state.selected);
+    });
+  }
+
+  // ---------- logic ----------
+  function outcome(you, bot){
+    if(you===bot) return "draw";
+    if((you==="rock" && bot==="scissors") || (you==="paper" && bot==="rock") || (you==="scissors" && bot==="paper")) return "win";
     return "lose";
   }
 
-  function nextX(wins) {
-    return LADDER[clamp(wins, 0, WIN_TO_COMPLETE)];
+  function nextX(){
+    const idx = clamp(state.wins, 0, LADDER.length-1);
+    state.x = LADDER[idx];
   }
 
-  function startSeriesIfNeeded() {
-    if (state.seriesActive) return true;
+  function startSeriesIfNeeded(){
+    if(state.seriesActive) return true;
 
-    // ставка списывается 1 раз при старте серии
-    if (state.bet <= 0) return false;
-    if (state.balance < state.bet) {
-      updatePills({ result: "Недостаточно средств" });
-      setWinLine("—");
+    if(state.balance < state.bet){
+      setPills({result:"Недостаточно средств"});
       beep("lose");
       return false;
     }
 
-    state.balance -= state.bet;
+    state.balance -= state.bet; // ставка списывается 1 раз
     state.seriesActive = true;
-    state.seriesWins = 0;
-    state.currentX = 1.00;
-    saveBalance();
+    state.wins = 0;
+    state.x = 1.00;
+    save();
     return true;
   }
 
-  async function playRound() {
-    if (state.inAnim) return;
-    if (!state.selectedMove) return;
+  async function play(){
+    if(state.busy) return;
+    if(!state.selected) return;
 
-    // старт серии при первом ходе
-    if (!startSeriesIfNeeded()) {
-      setControls();
-      updateTop();
+    if(!startSeriesIfNeeded()){
+      updateMeta();
       return;
     }
 
-    state.inAnim = true;
-    setControls();
+    state.busy = true;
+    updateMeta();
 
-    updatePills({
-      status: "Раунд...",
-      your: MOVE_RU[state.selectedMove],
-      bot: "…",
-      result: "Идёт бой"
-    });
-
+    setPills({status:"Раунд...", your: RU[state.selected], bot:"…", result:"Идёт бой"});
     setWinLine("—");
-    renderHands(null, null, false);
     beep("start");
 
-    // анимация “перемешивания”
-    const shuffleSteps = 10;
-    for (let i = 0; i < shuffleSteps; i++) {
-      const b = MOVES[(Math.random() * 3) | 0];
-      const y = MOVES[(Math.random() * 3) | 0];
-      setHTML(ui.botHand, HAND_SVG[b]);
-      setHTML(ui.youHand, HAND_SVG[y]);
-      await new Promise(r => setTimeout(r, 55));
+    // shuffle animation (коротко, без лагов)
+    for(let i=0;i<9;i++){
+      const bm = MOVES[(Math.random()*3)|0];
+      const ym = MOVES[(Math.random()*3)|0];
+      setHands(bm, ym);
+      await new Promise(r=>setTimeout(r, 55));
     }
 
-    const botMove = MOVES[(Math.random() * 3) | 0];
-    const youMove = state.selectedMove;
-    renderHands(botMove, youMove, true);
+    const botMove = MOVES[(Math.random()*3)|0];
+    const youMove = state.selected;
 
-    updatePills({ bot: MOVE_RU[botMove] });
+    // ударная анимация
+    el.botHandBox.classList.remove("shake-left");
+    el.youHandBox.classList.remove("shake-right");
+    void el.botHandBox.offsetWidth;
+    el.botHandBox.classList.add("shake-left");
+    el.youHandBox.classList.add("shake-right");
+
+    setHands(botMove, youMove);
+    setPills({bot: RU[botMove]});
 
     const res = outcome(youMove, botMove);
 
-    if (res === "draw") {
-      updatePills({ status: "Ничья", result: "Серия продолжается" });
+    if(res==="draw"){
+      setPills({status:"Ничья", result:"Серия продолжается"});
       setWinLine("0 ₽ (ничья)");
-      // в ничью серия не сбрасывается и деньги не добавляются
       beep("tap");
     }
 
-    if (res === "win") {
-      state.seriesWins = clamp(state.seriesWins + 1, 0, WIN_TO_COMPLETE);
-      state.currentX = nextX(state.seriesWins);
-
-      updatePills({ status: "Победа", result: `+ шаг (${state.seriesWins}/${WIN_TO_COMPLETE})` });
-
-      // показываем “потенциал”
-      const pot = Math.floor(state.bet * state.currentX);
+    if(res==="win"){
+      state.wins = clamp(state.wins + 1, 0, LADDER.length-1);
+      nextX();
+      const pot = Math.floor(state.bet * state.x);
+      setPills({status:"Победа", result:`Шаг +1 (${state.wins}/${LADDER.length-1})`});
       setWinLine(`Потенциал: ${pot} ₽`);
       beep("win");
 
-      // если дошёл до конца лестницы — автокэш-аут
-      if (state.seriesWins >= WIN_TO_COMPLETE) {
-        await new Promise(r => setTimeout(r, 450));
-        doCashout(true);
+      // если дошёл до конца — авто cashout
+      if(state.wins >= LADDER.length-1){
+        await new Promise(r=>setTimeout(r, 450));
+        cashout(true);
       }
     }
 
-    if (res === "lose") {
-      updatePills({ status: "Поражение", result: "Серия в ноль" });
+    if(res==="lose"){
+      setPills({status:"Поражение", result:"Серия в ноль"});
       setWinLine(`-${state.bet} ₽`);
       beep("lose");
-      // серия сгорает
+
+      // ✅ сброс серии
       state.seriesActive = false;
-      state.seriesWins = 0;
-      state.currentX = 1.00;
+      state.wins = 0;
+      state.x = 1.00;
     }
 
     renderLadder();
-    updateTop();
+    updateMeta();
 
-    state.inAnim = false;
-    setControls();
+    state.busy = false;
+    updateMeta();
   }
 
-  function doCashout(auto = false) {
-    if (!state.seriesActive || state.seriesWins <= 0) return;
+  function cashout(auto=false){
+    if(!state.seriesActive || state.wins<=0) return;
 
-    const win = Math.floor(state.bet * state.currentX);
+    const win = Math.floor(state.bet * state.x);
     state.balance += win;
-    saveBalance();
+    save();
 
-    updatePills({
-      status: auto ? "Финиш" : "Забрал",
-      result: `+${win} ₽`
-    });
+    setPills({status: auto ? "Финиш" : "Забрал", result: `+${win} ₽`});
     setWinLine(`Выигрыш: +${win} ₽`);
     beep("cash");
 
     // сброс серии
     state.seriesActive = false;
-    state.seriesWins = 0;
-    state.currentX = 1.00;
+    state.wins = 0;
+    state.x = 1.00;
 
     renderLadder();
-    updateTop();
-    setControls();
+    updateMeta();
   }
 
-  // ---------- events ----------
-  function onMoveClick(e) {
-    const btn = e.target.closest("[data-move]");
-    if (!btn) return;
-    if (state.inAnim) return;
-
-    state.selectedMove = btn.getAttribute("data-move");
-    highlightMoveButtons();
-    updatePills({ your: MOVE_RU[state.selectedMove] });
-    beep("tap");
-    setControls();
+  // ---------- events (фикс кликов) ----------
+  function forceClickableAll(){
+    // убираем возможность, что слой ловит клики
+    $$("[class*='bg'], .bg, .decor, .overlay").forEach(n => n.style.pointerEvents="none");
+    // кнопки — точно кликабельны
+    $$("button, [data-move], [data-bet], [data-bet-delta]").forEach(n=>{
+      n.style.pointerEvents="auto";
+      n.style.position = n.style.position || "relative";
+      n.style.zIndex = n.style.zIndex || "20";
+    });
   }
 
-  function onActionClick(e) {
-    const a = e.target.closest("[data-action]");
-    if (!a) return;
-    const act = a.getAttribute("data-action");
-
-    if (act === "sound") {
-      audioOn = !audioOn;
-      setSoundUI();
-      beep("tap");
-      return;
-    }
-
-    if (act === "play") {
-      playRound();
-      return;
-    }
-
-    if (act === "cashout") {
-      doCashout(false);
-      return;
-    }
-  }
-
-  function hookBetControls() {
-    // если у тебя есть чипсы/кнопки ставок с data-bet="50" и т.п.
-    $$("[data-bet]").forEach(btn => {
-      forceClickable(btn);
-      btn.addEventListener("click", () => {
-        const v = Number(btn.getAttribute("data-bet"));
-        if (Number.isFinite(v) && v > 0) {
-          state.bet = v;
-          updateTop();
-          setControls();
-          beep("tap");
-        }
+  function bind(){
+    // выбор фигуры
+    $$("[data-move]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        if(state.busy) return;
+        state.selected = btn.getAttribute("data-move");
+        highlightMoveButtons();
+        setPills({your: RU[state.selected]});
+        beep("tap");
+        updateMeta();
       });
     });
 
-    // +/- если есть
-    $$("[data-bet-delta]").forEach(btn => {
-      forceClickable(btn);
-      btn.addEventListener("click", () => {
-        const d = Number(btn.getAttribute("data-bet-delta"));
-        if (!Number.isFinite(d)) return;
-        state.bet = clamp(state.bet + d, 1, 1000000);
-        updateTop();
-        setControls();
+    // play/cashout
+    el.playBtn.addEventListener("click", play);
+    el.cashoutBtn.addEventListener("click", ()=>cashout(false));
+
+    // sound
+    el.soundBtn.addEventListener("click", ()=>{
+      state.sound = !state.sound;
+      save();
+      updateMeta();
+      beep("tap");
+    });
+
+    // bet chips
+    $$("[data-bet]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const v = btn.getAttribute("data-bet");
+        if(v==="max"){
+          state.bet = clamp(state.balance, 1, 1000000);
+        } else {
+          state.bet = clamp(Number(v)||state.bet, 1, 1000000);
+        }
+        nextX();
+        updateMeta();
         beep("tap");
       });
     });
 
-    if (ui.betInput) {
-      ui.betInput.addEventListener("input", () => {
-        const v = Number(String(ui.betInput.value).replace(/[^\d]/g, ""));
-        if (Number.isFinite(v) && v > 0) {
-          state.bet = clamp(Math.floor(v), 1, 1000000);
-          updateTop();
-          setControls();
-        }
+    // bet +/-
+    $$("[data-bet-delta]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const d = Number(btn.getAttribute("data-bet-delta"))||0;
+        state.bet = clamp(state.bet + d, 1, 1000000);
+        nextX();
+        updateMeta();
+        beep("tap");
       });
-    }
-  }
-
-  // ---------- init ----------
-  function init() {
-    loadBalance();
-    setSoundUI();
-
-    // дефолтные тексты
-    updatePills({
-      status: "Ожидание",
-      your: "—",
-      bot: "—",
-      result: "—"
     });
 
-    renderHands(null, null, false);
-    renderLadder();
-    updateTop();
+    // bet input
+    el.betInput.addEventListener("input", ()=>{
+      const v = Number(String(el.betInput.value).replace(/[^\d]/g,""));
+      if(Number.isFinite(v) && v>0){
+        state.bet = clamp(Math.floor(v), 1, 1000000);
+        nextX();
+        updateMeta();
+      }
+    });
+
+    // +1000
+    el.add1000.addEventListener("click", ()=>{
+      state.balance += 1000;
+      save();
+      updateMeta();
+      beep("tap");
+    });
+  }
+
+  function init(){
+    load();
+    forceClickableAll();
+
+    state.bet = clamp(state.bet, 1, 1000000);
+    nextX();
+
+    setHands(null,null);
+    setPills({status:"Ожидание", your:"—", bot:"—", result:"—"});
     setWinLine("—");
-
-    // навешиваем клики (делегирование)
-    document.addEventListener("click", (e) => {
-      onMoveClick(e);
-      onActionClick(e);
-    });
-
-    hookBetControls();
-    setControls();
+    renderLadder();
+    updateMeta();
+    bind();
   }
 
-  // старт
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();
