@@ -1,215 +1,178 @@
 /* =========================
-   Dragon Tower — app.js
-   (финал: клики работают, модалка не залипает,
-   X-скейл без "ползунка", 2 режима, честный RNG,
-   математика в "Обычном" ослаблена, звук (тихий) + toggle)
+   Dragon Tower — app.js (WORKING)
+   - ставка 100% запускает раунд
+   - 2 режима: normal (3 safe), hard (1 safe)
+   - честный RNG, фикс кликов
+   - кэшаут считает payout = bet * currentX
+   - модалка не залипает
+   - декор (мини-башни) не перекрывает клики (CSS z-index уже)
+   - тихие звуки + toggle
    ========================= */
 
 (() => {
   "use strict";
 
-  /* ---------- DOM helpers ---------- */
-  const $ = (sel, root = document) => root.querySelector(sel);
+  /* ---------- helpers ---------- */
+  const $ = (id) => document.getElementById(id);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const fmtRub = (n) => `${Math.max(0, Math.floor(n))} ₽`;
   const fmtX = (x) => `x${Number(x).toFixed(2)}`;
 
-  /* ---------- Elements (ожидаемые id из index.html) ---------- */
+  /* ---------- DOM ---------- */
   const el = {
-    modeNormal: $("#modeNormal"),
-    modeHard: $("#modeHard"),
-    betInput: $("#betInput"),
-    betMinus: $("#betMinus"),
-    betPlus: $("#betPlus"),
-    chips: $$("#betChips button[data-chip]"),
-    chipMax: $("#chipMax"),
+    modeNormal: $("modeNormal"),
+    modeHard: $("modeHard"),
+    towerHint: $("towerHint"),
 
-    btnBet: $("#btnBet"),
-    btnCashout: $("#btnCashout"),
+    betInput: $("betInput"),
+    betMinus: $("betMinus"),
+    betPlus: $("betPlus"),
+    chipMax: $("chipMax"),
 
-    board: $("#board"),
-    dragonImg: $("#dragonImg"),
-    dragonWrap: $("#dragonWrap"),
+    btnBet: $("btnBet"),
+    btnCashout: $("btnCashout"),
 
-    xList: $("#xList"),
+    board: $("board"),
+    xList: $("xList"),
 
-    status: $("#stStatus"),
-    stX: $("#stX"),
-    stPotential: $("#stPotential"),
+    stStatus: $("stStatus"),
+    stX: $("stX"),
+    stPotential: $("stPotential"),
 
-    rsLast: $("#rsLast"),
-    rsWin: $("#rsWin"),
+    rsLast: $("rsLast"),
+    rsWin: $("rsWin"),
 
-    balance: $("#balanceValue"),
+    balanceValue: $("balanceValue"),
 
-    soundToggle: $("#soundToggle"),
+    soundToggle: $("soundToggle"),
 
-    // Modal
-    modal: $("#modal"),
-    modalText: $("#modalText"),
-    modalOk: $("#modalOk"),
-    modalBackdrop: $("#modalBackdrop"),
+    modal: $("modal"),
+    modalBackdrop: $("modalBackdrop"),
+    modalText: $("modalText"),
+    modalOk: $("modalOk"),
   };
 
-  /* ---------- Safe guards ---------- */
-  const must = [
-    "modeNormal",
-    "modeHard",
-    "betInput",
-    "btnBet",
-    "btnCashout",
-    "board",
-    "xList",
-    "balance",
-    "soundToggle",
-    "modal",
-    "modalOk",
-    "modalBackdrop",
-  ];
-
-  const missing = must.filter((k) => !el[k]);
-  if (missing.length) {
-    console.warn("[DragonTower] Missing elements:", missing);
-  }
-
-  /* ---------- Settings / Storage ---------- */
-  const LS_BAL = "dt_balance_v1";
-  const LS_SND = "dt_sound_v1";
+  /* ---------- storage ---------- */
+  const LS_BAL = "dt_balance_v2";
+  const LS_SND = "dt_sound_v2";
 
   let balance = Number(localStorage.getItem(LS_BAL) ?? 1000);
   if (!Number.isFinite(balance) || balance < 0) balance = 1000;
 
   let soundOn = (localStorage.getItem(LS_SND) ?? "1") === "1";
 
-  /* ---------- Audio (тихий) ---------- */
-  let audioCtx = null;
+  /* ---------- audio (quiet) ---------- */
+  let ac = null;
   const ensureAudio = () => {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume().catch(() => {});
   };
-
-  const playTone = (freq, durMs, type = "sine", gain = 0.04, glideTo = null) => {
+  const tone = (f0, ms, type = "sine", gain = 0.03, f1 = null) => {
     if (!soundOn) return;
     try {
       ensureAudio();
-      const t0 = audioCtx.currentTime;
+      const t0 = ac.currentTime;
 
-      const osc = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type;
 
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, t0);
-      if (glideTo) {
-        osc.frequency.exponentialRampToValueAtTime(glideTo, t0 + durMs / 1000);
-      }
+      o.frequency.setValueAtTime(f0, t0);
+      if (f1) o.frequency.exponentialRampToValueAtTime(f1, t0 + ms / 1000);
 
       g.gain.setValueAtTime(0.0001, t0);
       g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-      g.gain.exponentialRampToToTime
-      // Safe fade out:
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + durMs / 1000);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
 
-      osc.connect(g);
-      g.connect(audioCtx.destination);
+      o.connect(g);
+      g.connect(ac.destination);
 
-      osc.start(t0);
-      osc.stop(t0 + durMs / 1000 + 0.02);
+      o.start(t0);
+      o.stop(t0 + ms / 1000 + 0.02);
     } catch (_) {}
   };
 
-  // Более приятные короткие сигналы
   const sfx = {
-    start: () => playTone(220, 140, "triangle", 0.035, 320),
-    click: () => playTone(520, 70, "sine", 0.03, 420),
-    safe: () => playTone(440, 120, "triangle", 0.035, 660),
-    lose: () => {
-      playTone(240, 180, "sawtooth", 0.03, 120);
-      setTimeout(() => playTone(120, 140, "sine", 0.025, 90), 90);
-    },
-    cashout: () => {
-      playTone(330, 120, "triangle", 0.03, 520);
-      setTimeout(() => playTone(520, 120, "triangle", 0.03, 760), 90);
-    },
+    click: () => tone(520, 60, "triangle", 0.022, 420),
+    start: () => tone(220, 140, "triangle", 0.028, 320),
+    safe:  () => tone(440, 120, "triangle", 0.026, 660),
+    cash:  () => { tone(330, 120, "triangle", 0.026, 520); setTimeout(() => tone(520, 120, "triangle", 0.026, 760), 85); },
+    lose:  () => { tone(240, 170, "sawtooth", 0.022, 120); setTimeout(() => tone(120, 130, "sine", 0.02, 90), 90); },
   };
 
-  /* ---------- Game config ---------- */
+  /* ---------- game config ---------- */
   const COLS = 4;
   const ROWS = 9;
 
-  // Мультипликаторы (ОБЫЧНЫЙ слегка занижен, чтобы не "дюпали")
+  const MODE = { NORMAL: "normal", HARD: "hard" };
+
+  // ослабленный normal, чтобы не "дюпали"
   const MULT_NORMAL = [1.18, 1.36, 1.58, 1.86, 2.18, 2.56, 3.02, 3.58, 4.25];
-  const MULT_HARD = [1.55, 2.15, 3.00, 4.20, 5.90, 8.20, 11.40, 15.80, 22.00];
+  const MULT_HARD   = [1.55, 2.15, 3.00, 4.20, 5.90, 8.20, 11.40, 15.80, 22.00];
 
-  const MODE = {
-    NORMAL: "normal", // 3 safe / 1 trap
-    HARD: "hard",     // 1 safe / 3 trap
-  };
-
-  /* ---------- State ---------- */
+  /* ---------- state ---------- */
   let mode = MODE.NORMAL;
+
+  let inRound = false;     // раунд идёт
+  let betPlaced = false;   // ставка списана
   let bet = 100;
 
-  let inRound = false;
-  let started = false;   // ставка списана
-  let currentRow = 0;    // 0 = нижний ряд, идём вверх
-  let currentX = 1.0;
-  let trapsByRow = [];   // array of Set(cols)
-  let revealed = new Set(); // "r,c"
+  let currentRow = 0;      // 0..ROWS-1 (играем снизу вверх)
+  let currentX = 1.00;
+
+  // trapsByRow[row] = Set(cols that are traps)
+  let trapsByRow = [];
+
+  // revealed keys "row,col"
+  const revealed = new Set();
 
   /* ---------- UI ---------- */
   const setBalance = (v) => {
     balance = Math.max(0, Math.floor(v));
     localStorage.setItem(LS_BAL, String(balance));
-    if (el.balance) el.balance.textContent = fmtRub(balance);
+    if (el.balanceValue) el.balanceValue.textContent = fmtRub(balance);
   };
 
-  const setSoundUI = () => {
-    if (!el.soundToggle) return;
-    el.soundToggle.setAttribute("aria-pressed", soundOn ? "true" : "false");
-    const label = el.soundToggle.querySelector(".pill__value");
-    if (label) label.textContent = soundOn ? "Звук: on" : "Звук: off";
+  const setStatus = (t) => { if (el.stStatus) el.stStatus.textContent = t; };
+  const setX = (x) => { if (el.stX) el.stX.textContent = fmtX(x); };
+
+  const setPotential = () => {
+    const pot = betPlaced ? Math.floor(bet * currentX) : 0;
+    if (el.stPotential) el.stPotential.textContent = betPlaced ? fmtRub(pot) : "0 ₽";
   };
+
+  const setResult = (last, win) => {
+    if (el.rsLast) el.rsLast.textContent = last ?? "—";
+    if (el.rsWin) el.rsWin.textContent = win ?? "—";
+  };
+
+  const setButtons = () => {
+    if (el.btnBet) el.btnBet.disabled = betPlaced || inRound; // ставку можно только до старта
+    if (el.btnCashout) el.btnCashout.disabled = !betPlaced || !inRound || currentRow === 0;
+  };
+
+  const getMults = () => (mode === MODE.HARD ? MULT_HARD : MULT_NORMAL);
 
   const setModeUI = () => {
     if (el.modeNormal) el.modeNormal.classList.toggle("is-active", mode === MODE.NORMAL);
     if (el.modeHard) el.modeHard.classList.toggle("is-active", mode === MODE.HARD);
-
-    const hint = $("#towerHint");
-    if (hint) {
-      hint.textContent =
+    if (el.towerHint) {
+      el.towerHint.textContent =
         mode === MODE.NORMAL
           ? "Обычный: 3 яйца / 1 ловушка в ряду"
           : "Сложный: 1 яйцо / 3 ловушки в ряду";
     }
   };
 
-  const getMults = () => (mode === MODE.NORMAL ? MULT_NORMAL : MULT_HARD);
-
-  const updateStatus = (text) => {
-    if (el.status) el.status.textContent = text;
+  const setSoundUI = () => {
+    if (!el.soundToggle) return;
+    el.soundToggle.setAttribute("aria-pressed", soundOn ? "true" : "false");
+    const val = el.soundToggle.querySelector(".pill__value");
+    if (val) val.textContent = soundOn ? "Звук: on" : "Звук: off";
   };
 
-  const updateXPotential = () => {
-    const pot = started ? Math.floor(bet * currentX) : 0;
-    if (el.stX) el.stX.textContent = fmtX(currentX);
-    if (el.stPotential) el.stPotential.textContent = started ? fmtRub(pot) : "0 ₽";
-  };
-
-  const updateResult = (last, win) => {
-    if (el.rsLast) el.rsLast.textContent = last ?? "—";
-    if (el.rsWin) el.rsWin.textContent = win ?? "—";
-  };
-
-  const setButtons = () => {
-    if (el.btnBet) el.btnBet.disabled = inRound || started; // ставку можно только до старта
-    if (el.btnCashout) el.btnCashout.disabled = !started || !inRound || currentRow === 0; // после 1 победы
-  };
-
-  /* ---------- Modal (НЕ залипает) ---------- */
+  /* ---------- modal (non-sticky) ---------- */
   const hideModal = () => {
     if (!el.modal) return;
     el.modal.classList.add("is-hidden");
@@ -221,46 +184,82 @@
     if (el.modalText) el.modalText.textContent = text;
     el.modal.classList.remove("is-hidden");
     el.modal.setAttribute("aria-hidden", "false");
-
-    // Гарантируем кликабельность
-    if (el.modalOk) el.modalOk.disabled = false;
   };
 
-  /* ---------- Board build ---------- */
+  /* ---------- build X list ---------- */
+  const renderXList = () => {
+    if (!el.xList) return;
+    const mults = getMults();
+    el.xList.innerHTML = "";
+    // сверху ряд 9, снизу ряд 1
+    for (let i = mults.length - 1; i >= 0; i--) {
+      const rowNum = i + 1;
+      const x = mults[i];
+      const div = document.createElement("div");
+      div.className = "xrow";
+      div.dataset.rownum = String(rowNum);
+      div.innerHTML = `<span class="muted">Ряд ${rowNum}</span><span class="strong">${fmtX(x)}</span>`;
+      el.xList.appendChild(div);
+    }
+    updateXHighlight();
+  };
+
+  const updateXHighlight = () => {
+    if (!el.xList) return;
+    $$(".xrow", el.xList).forEach((n) => n.classList.remove("is-current"));
+    if (!betPlaced || !inRound) return;
+
+    // currentRow = какой ряд сейчас выбираем (0=1й ряд)
+    // если currentRow==0 — пока не подсвечиваем
+    const passed = currentRow; // сколько рядов пройдено
+    if (passed <= 0) return;
+
+    const rowNum = passed; // пройденный ряд = passed
+    // find element
+    const nodes = $$(".xrow", el.xList);
+    // index from top: row9 at 0 => idx = ROWS - rowNum
+    const idx = ROWS - rowNum;
+    if (nodes[idx]) nodes[idx].classList.add("is-current");
+  };
+
+  /* ---------- board build ---------- */
   const buildBoard = () => {
     if (!el.board) return;
     el.board.innerHTML = "";
     el.board.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
 
-    // делаем 9 рядов по 4 плитки; визуально: верхний ряд - ROWS, нижний - 1
+    // верхний ряд (visual) -> r=ROWS-1, нижний -> r=0
     for (let r = ROWS - 1; r >= 0; r--) {
       for (let c = 0; c < COLS; c++) {
-        const tile = document.createElement("button");
-        tile.type = "button";
-        tile.className = "tile";
-        tile.dataset.row = String(r); // 0..8 (0 снизу)
-        tile.dataset.col = String(c);
-        tile.setAttribute("aria-label", `Ряд ${r + 1}, плитка ${c + 1}`);
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tile is-disabled";
+        b.disabled = true;
+        b.dataset.row = String(r);
+        b.dataset.col = String(c);
 
-        // Shine layer
         const shine = document.createElement("div");
         shine.className = "tile__shine";
-        tile.appendChild(shine);
+        b.appendChild(shine);
 
-        // Reveal layer
-        const reveal = document.createElement("div");
-        reveal.className = "reveal";
-        tile.appendChild(reveal);
+        const rv = document.createElement("div");
+        rv.className = "reveal";
+        b.appendChild(rv);
 
-        el.board.appendChild(tile);
+        el.board.appendChild(b);
       }
     }
   };
 
-  const clearBoardState = () => {
+  const keyOf = (r, c) => `${r},${c}`;
+
+  const clearBoard = () => {
     revealed.clear();
+    if (!el.board) return;
     $$(".tile", el.board).forEach((t) => {
-      t.classList.remove("is-revealed", "is-disabled", "is-active");
+      t.classList.remove("is-revealed", "is-active", "is-disabled");
+      t.classList.add("is-disabled");
+      t.disabled = true;
       const rv = $(".reveal", t);
       if (rv) {
         rv.className = "reveal";
@@ -269,73 +268,24 @@
     });
   };
 
-  const setActiveRowUI = () => {
+  const enableRow = (row) => {
     if (!el.board) return;
-    const tiles = $$(".tile", el.board);
-    tiles.forEach((t) => {
+    $$(".tile", el.board).forEach((t) => {
       const r = Number(t.dataset.row);
-      const key = `${r},${t.dataset.col}`;
+      const c = Number(t.dataset.col);
+      const key = keyOf(r, c);
       const already = revealed.has(key);
 
-      // активен только текущий ряд и только если игра идёт
-      const active = inRound && started && r === currentRow && !already;
+      const active = inRound && betPlaced && r === row && !already;
 
       t.classList.toggle("is-active", active);
-      t.classList.toggle("is-disabled", !active && !already && started); // чтобы видно было, что нельзя
+      t.classList.toggle("is-disabled", !active && !already);
       t.disabled = !active && !already;
     });
   };
 
-  /* ---------- X list ---------- */
-  const renderXList = () => {
-    if (!el.xList) return;
-    const mults = getMults();
-
-    // top row shows highest multiplier
-    el.xList.innerHTML = "";
-    for (let i = mults.length - 1; i >= 0; i--) {
-      const rowNum = i + 1;
-      const x = mults[i];
-
-      const row = document.createElement("div");
-      row.className = "xrow";
-      row.innerHTML = `
-        <div class="xrow__k">Ряд ${rowNum}</div>
-        <div class="xrow__v">${fmtX(x)}</div>
-      `;
-      el.xList.appendChild(row);
-    }
-    updateXListCurrent();
-  };
-
-  const updateXListCurrent = () => {
-    if (!el.xList) return;
-    const mults = getMults();
-    const rows = $$(".xrow", el.xList);
-
-    // rows are rendered from top (row 9) to bottom (row 1)
-    rows.forEach((node) => node.classList.remove("is-current"));
-
-    if (!started || !inRound) return;
-
-    // currentRow is 0-based from bottom, so current "target multiplier" would be mults[currentRow] after you pass it
-    // highlight next row if you win this row, but also feels nicer to highlight current step:
-    // currentX corresponds to last passed row multiplier (or 1.0 at start)
-    const passed = clamp(currentRow, 0, ROWS); // currentRow means next to play, so passed = currentRow
-    const highlightRowNum = clamp(passed, 0, ROWS); // 0..9
-
-    // if passed=0 => no highlight
-    if (highlightRowNum === 0) return;
-
-    // Find in list where rowNum == highlightRowNum
-    // list nodes: index 0 = row9
-    const idxFromTop = ROWS - highlightRowNum;
-    const node = rows[idxFromTop];
-    if (node) node.classList.add("is-current");
-  };
-
-  /* ---------- RNG traps ---------- */
-  const randomInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
+  /* ---------- traps RNG ---------- */
+  const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 
   const makeTraps = () => {
     trapsByRow = [];
@@ -343,198 +293,157 @@
     const trapCount = COLS - safeCount;
 
     for (let r = 0; r < ROWS; r++) {
-      const cols = [...Array(COLS).keys()];
-      // shuffle
+      const cols = [0,1,2,3];
       for (let i = cols.length - 1; i > 0; i--) {
-        const j = randomInt(0, i);
+        const j = randInt(0, i);
         [cols[i], cols[j]] = [cols[j], cols[i]];
       }
-      const traps = new Set(cols.slice(0, trapCount));
-      trapsByRow.push(traps);
+      trapsByRow[r] = new Set(cols.slice(0, trapCount));
     }
   };
 
-  /* ---------- Dragon decor image ---------- */
-  const setDragon = () => {
-    // IMPORTANT:
-    // Положи PNG дракона в папку проекта рядом с index.html и назови: dragon.png
-    // Тогда будет грузиться на GitHub Pages.
-    if (!el.dragonImg) return;
+  const isTrap = (row, col) => trapsByRow[row]?.has(col);
 
-    // Если юзер уже поменяет src в index — мы не трогаем.
-    const already = el.dragonImg.getAttribute("src");
-    if (already && already.trim() && !already.includes("broken")) return;
-
-    el.dragonImg.src = "dragon.png";
-    el.dragonImg.alt = "Dragon";
-
-    // Fallback если dragon.png нет
-    el.dragonImg.onerror = () => {
-      // спрячем картинку, чтобы не было "битого" значка
-      el.dragonImg.style.display = "none";
-
-      // рисуем маленький SVG-логотип-дракон (вместо битой картинки)
-      const fallback = $("#dragonFallback");
-      if (fallback) {
-        fallback.style.display = "block";
-      } else if (el.dragonWrap) {
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("viewBox", "0 0 128 128");
-        svg.setAttribute("width", "150");
-        svg.setAttribute("height", "100");
-        svg.style.display = "block";
-        svg.style.margin = "0 auto";
-        svg.style.opacity = "0.92";
-        svg.innerHTML = `
-          <path fill="rgba(233,238,252,.9)" d="M84 10c-12 4-20 14-22 28-1 8 2 14 6 19-7 2-13 8-14 17-1 10 6 19 18 21 7 1 13-1 18-5 2 9-2 18-11 27 20-6 33-21 34-41 0-13-5-23-14-30 2-3 3-6 3-10 0-12-7-21-18-26z"/>
-          <path fill="rgba(64,122,255,.55)" d="M43 60c-8 6-13 13-14 22-2 19 12 34 34 36-7-5-11-10-12-16-4 2-8 3-13 2-9-2-14-9-13-17 1-7 6-12 18-15z"/>
-        `;
-        el.dragonWrap.appendChild(svg);
-      }
-    };
-  };
-
-  /* ---------- Round lifecycle ---------- */
-  const resetRound = (keepBet = true) => {
+  /* ---------- gameplay ---------- */
+  const resetRound = () => {
     inRound = false;
-    started = false;
+    betPlaced = false;
     currentRow = 0;
     currentX = 1.0;
+
     makeTraps();
-    clearBoardState();
-    setActiveRowUI();
+    clearBoard();
 
-    updateStatus("Ожидание");
-    updateXPotential();
-    updateXListCurrent();
-    updateResult("—", "—");
-
-    if (!keepBet && el.betInput) el.betInput.value = "100";
+    setStatus("Ожидание");
+    setX(1.0);
+    setPotential();
+    setResult("—", "—");
     setButtons();
+    updateXHighlight();
   };
 
-  const startGame = () => {
-    if (inRound || started) return;
+  const readBet = () => {
+    let v = String(el.betInput?.value ?? "").trim();
+    v = v.replace(/[^\d]/g, "");
+    let n = Math.floor(Number(v || 0));
+    if (!Number.isFinite(n) || n < 1) n = 1;
+    n = clamp(n, 1, Math.max(1, balance)); // нельзя больше баланса
+    bet = n;
+    if (el.betInput) el.betInput.value = String(n);
+  };
 
-    bet = Number(el.betInput?.value ?? bet);
-    bet = Math.floor(bet);
-    if (!Number.isFinite(bet) || bet <= 0) bet = 100;
-
-    bet = clamp(bet, 1, balance);
+  const startRound = () => {
+    // ставка
+    readBet();
     if (balance < bet) {
       showModal("Недостаточно баланса для ставки.");
       return;
     }
 
-    // списываем 1 раз
     setBalance(balance - bet);
-    started = true;
+    betPlaced = true;
     inRound = true;
+
     currentRow = 0;
     currentX = 1.0;
-    revealed.clear();
-    clearBoardState();
-    setActiveRowUI();
-    updateStatus("Игра");
-    updateXPotential();
-    updateXListCurrent();
-    updateResult("—", "—");
+
+    setStatus("Игра");
+    setX(currentX);
+    setPotential();
+    setResult("—", "—");
+
+    // ре-рандом (чтобы каждый старт новый)
+    makeTraps();
+    clearBoard();
+
+    enableRow(currentRow);
     setButtons();
+    updateXHighlight();
+
     sfx.start();
   };
 
-  const revealTile = (tile, isTrap) => {
-    const rv = $(".reveal", tile);
+  const revealTile = (tile, trap) => {
     tile.classList.add("is-revealed");
-
+    const rv = $(".reveal", tile);
     if (!rv) return;
 
-    if (isTrap) {
-      rv.classList.add("reveal--trap");
-      rv.innerHTML = `<div class="reveal__icon">💀</div>`;
-    } else {
-      rv.classList.add("reveal--egg");
-      rv.innerHTML = `<div class="reveal__icon">🥚</div>`;
-    }
+    rv.innerHTML = `<div class="reveal__icon">${trap ? "💀" : "🥚"}</div>`;
+    rv.classList.add(trap ? "reveal--trap" : "reveal--egg");
   };
 
-  const revealWholeRow = (rowIdx) => {
-    const rowTraps = trapsByRow[rowIdx] || new Set();
+  const revealRow = (row) => {
+    // показать весь ряд (ощущение честности)
     $$(".tile", el.board).forEach((t) => {
       const r = Number(t.dataset.row);
+      if (r !== row) return;
       const c = Number(t.dataset.col);
-      if (r !== rowIdx) return;
+      const k = keyOf(r, c);
+      if (revealed.has(k)) return;
 
-      const key = `${r},${c}`;
-      if (revealed.has(key)) return;
-
-      revealed.add(key);
+      revealed.add(k);
       t.disabled = true;
       t.classList.remove("is-active");
-      const isTrap = rowTraps.has(c);
-      revealTile(t, isTrap);
+      t.classList.add("is-disabled");
+      revealTile(t, isTrap(row, c));
     });
   };
 
-  const endLose = () => {
+  const lose = () => {
     inRound = false;
-    updateStatus("Поражение");
+    setStatus("Поражение");
     setButtons();
-    updateXListCurrent();
-    updateResult("Ловушка 💀", "0 ₽");
+    updateXHighlight();
+    setPotential();
+    setResult("Ловушка 💀", "0 ₽");
     sfx.lose();
-
-    // показать итог + сразу подготовка к новой игре
     showModal("Попался на ловушку. Ставка сгорела.");
   };
 
-  const endCashout = (auto = false) => {
+  const cashout = (auto = false) => {
     inRound = false;
+
     const win = Math.floor(bet * currentX);
     setBalance(balance + win);
 
-    updateStatus("Кэшаут");
-    updateXPotential();
+    setStatus("Кэшаут");
     setButtons();
-    updateXListCurrent();
-    updateResult(auto ? "Финиш ✅" : `Кэшаут ${fmtX(currentX)}`, fmtRub(win));
-    sfx.cashout();
+    updateXHighlight();
+    setPotential();
 
-    // маленькая "анимация" дракона (класс — можно допилить в css при желании)
-    if (el.dragonWrap) {
-      el.dragonWrap.classList.remove("dragon-pop");
-      // restart animation
-      void el.dragonWrap.offsetWidth;
-      el.dragonWrap.classList.add("dragon-pop");
-      setTimeout(() => el.dragonWrap.classList.remove("dragon-pop"), 650);
-    }
+    setResult(auto ? "Финиш ✅" : `Кэшаут ${fmtX(currentX)}`, fmtRub(win));
+    sfx.cash();
 
     showModal(`Ты забрал: ${fmtRub(win)} (${fmtX(currentX)}).`);
   };
 
-  const stepWin = () => {
-    // игрок прошёл текущий ряд => увеличиваем X и двигаемся вверх
+  const winStep = () => {
     const mults = getMults();
-    currentX = mults[currentRow]; // row 0 -> x for row1, etc.
-    currentRow += 1;
 
-    updateXPotential();
-    updateXListCurrent();
-    sfx.safe();
+    // обновляем X на основе текущего пройденного ряда
+    currentX = mults[currentRow]; // currentRow 0 => row1 multiplier
+    setX(currentX);
+    setPotential();
 
+    currentRow += 1; // переходим на следующий ряд
+
+    updateXHighlight();
+
+    // авто финиш
     if (currentRow >= ROWS) {
-      // прошёл всё
-      endCashout(true);
+      cashout(true);
       return;
     }
 
-    // следующий ряд активен
-    setActiveRowUI();
+    // активируем следующий ряд
+    enableRow(currentRow);
+    setButtons();
+    sfx.safe();
   };
 
-  /* ---------- Events ---------- */
-  const bindEvents = () => {
-    // Sound toggle
+  /* ---------- events ---------- */
+  const bind = () => {
+    // sound
     if (el.soundToggle) {
       el.soundToggle.addEventListener("click", () => {
         soundOn = !soundOn;
@@ -544,160 +453,149 @@
       });
     }
 
-    // Mode tabs
+    // mode
     if (el.modeNormal) {
       el.modeNormal.addEventListener("click", () => {
-        if (started) return; // нельзя менять во время игры
+        if (betPlaced) return;
         mode = MODE.NORMAL;
         setModeUI();
         renderXList();
-        resetRound(true);
+        resetRound();
+        sfx.click();
       });
     }
     if (el.modeHard) {
       el.modeHard.addEventListener("click", () => {
-        if (started) return;
+        if (betPlaced) return;
         mode = MODE.HARD;
         setModeUI();
         renderXList();
-        resetRound(true);
+        resetRound();
+        sfx.click();
       });
     }
 
-    // Bet controls
+    // bet controls
     if (el.betMinus) el.betMinus.addEventListener("click", () => {
       sfx.click();
-      let v = Math.floor(Number(el.betInput?.value ?? bet) || bet);
-      v = Math.max(1, v - 10);
-      if (el.betInput) el.betInput.value = String(v);
+      readBet();
+      bet = Math.max(1, bet - 10);
+      if (el.betInput) el.betInput.value = String(bet);
     });
-
     if (el.betPlus) el.betPlus.addEventListener("click", () => {
       sfx.click();
-      let v = Math.floor(Number(el.betInput?.value ?? bet) || bet);
-      v = Math.min(balance, v + 10);
-      if (el.betInput) el.betInput.value = String(v);
+      readBet();
+      bet = Math.min(balance, bet + 10);
+      if (el.betInput) el.betInput.value = String(bet);
     });
 
-    if (el.chips?.length) {
-      el.chips.forEach((b) => {
-        b.addEventListener("click", () => {
-          sfx.click();
-          const add = Number(b.dataset.chip);
-          let v = Math.floor(Number(el.betInput?.value ?? bet) || bet);
-          v = Math.min(balance, v + add);
-          if (el.betInput) el.betInput.value = String(v);
-        });
-      });
-    }
-
-    if (el.chipMax) {
-      el.chipMax.addEventListener("click", () => {
+    $$(".chip").forEach((b) => {
+      b.addEventListener("click", () => {
         sfx.click();
-        if (el.betInput) el.betInput.value = String(Math.max(1, balance));
+        if (b.id === "chipMax") {
+          bet = Math.max(1, balance);
+          if (el.betInput) el.betInput.value = String(bet);
+          return;
+        }
+        const add = Number(b.dataset.chip || 0);
+        readBet();
+        bet = clamp(bet + add, 1, balance);
+        if (el.betInput) el.betInput.value = String(bet);
       });
-    }
+    });
 
     if (el.betInput) {
-      el.betInput.addEventListener("input", () => {
-        let v = Math.floor(Number(el.betInput.value) || 0);
-        if (!Number.isFinite(v)) v = 0;
-        v = clamp(v, 0, balance);
-        el.betInput.value = v ? String(v) : "";
+      el.betInput.addEventListener("input", () => readBet());
+      el.betInput.addEventListener("focus", () => {
+        // на мобилках чтобы было удобнее
+        if (el.betInput.value === "0") el.betInput.value = "";
       });
     }
 
-    // Start bet
-    if (el.btnBet) {
-      el.btnBet.addEventListener("click", () => startGame());
-    }
+    // start / cashout
+    if (el.btnBet) el.btnBet.addEventListener("click", () => {
+      // первая интеракция — разблокируем AudioContext
+      ensureAudio();
+      sfx.click();
+      if (!betPlaced && !inRound) startRound();
+    });
 
-    // Cashout
-    if (el.btnCashout) {
-      el.btnCashout.addEventListener("click", () => {
-        if (!started || !inRound || currentRow === 0) return;
-        endCashout(false);
-      });
-    }
+    if (el.btnCashout) el.btnCashout.addEventListener("click", () => {
+      ensureAudio();
+      sfx.click();
+      if (betPlaced && inRound && currentRow > 0) cashout(false);
+    });
 
-    // Board click (delegation)
+    // board click (delegation)
     if (el.board) {
       el.board.addEventListener("click", (e) => {
         const tile = e.target.closest(".tile");
         if (!tile) return;
 
-        // ensure audio on first user gesture (browser policy)
         ensureAudio();
+
+        if (!betPlaced || !inRound) return;
+        if (tile.disabled) return;
 
         const r = Number(tile.dataset.row);
         const c = Number(tile.dataset.col);
-        const key = `${r},${c}`;
 
-        // only current active
-        if (!inRound || !started) return;
+        // только текущий ряд
         if (r !== currentRow) return;
-        if (revealed.has(key)) return;
-        if (tile.disabled) return;
 
         sfx.click();
 
-        revealed.add(key);
+        const k = keyOf(r, c);
+        if (revealed.has(k)) return;
+
+        revealed.add(k);
         tile.disabled = true;
         tile.classList.remove("is-active");
 
-        const isTrap = (trapsByRow[r] || new Set()).has(c);
-        revealTile(tile, isTrap);
+        const trap = isTrap(r, c);
+        revealTile(tile, trap);
 
-        // показать остальное в ряду для ощущения "честности"
-        setTimeout(() => revealWholeRow(r), 140);
+        // показать весь ряд немного позже
+        setTimeout(() => revealRow(r), 120);
 
-        if (isTrap) {
-          setTimeout(endLose, 280);
+        if (trap) {
+          setTimeout(() => lose(), 260);
         } else {
-          // win row
-          setTimeout(stepWin, 260);
+          setTimeout(() => winStep(), 240);
         }
       });
     }
 
-    // Modal close
+    // modal
     if (el.modalOk) el.modalOk.addEventListener("click", () => hideModal());
     if (el.modalBackdrop) el.modalBackdrop.addEventListener("click", () => hideModal());
-
-    // ESC closes modal
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape") hideModal();
     });
   };
 
-  /* ---------- Init ---------- */
+  /* ---------- init ---------- */
   const init = () => {
     setBalance(balance);
     setSoundUI();
     setModeUI();
 
-    // ВАЖНО: прячем модалку на старте — чтобы не было "Итог" поверх экрана
-    hideModal();
-
-    // Board + traps + list
+    hideModal();          // важно: чтобы "итог" не висел сверху
     buildBoard();
     makeTraps();
     renderXList();
-    setDragon();
 
     // default bet
     if (el.betInput) el.betInput.value = String(bet);
 
-    updateStatus("Ожидание");
-    updateXPotential();
+    setStatus("Ожидание");
+    setX(1.0);
+    setPotential();
+    setResult("—", "—");
     setButtons();
 
-    // фикс: иногда поверх кликов бывает случайный слой — убедимся, что board вверху внутри stage
-    if (el.board) el.board.style.position = "relative";
-
-    bindEvents();
+    bind();
   };
 
   init();
 })();
-
