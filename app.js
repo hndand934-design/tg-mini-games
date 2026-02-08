@@ -1,379 +1,482 @@
+/* Dragon Tower — GitHub Pages ready (no external assets)
+   Modes:
+   - easy: 4 tiles/row, 3 safe, 1 trap
+   - hard: 4 tiles/row, 1 safe, 3 traps
+*/
+
 (() => {
-  "use strict";
+  const $ = (id) => document.getElementById(id);
 
-  const $  = (s, r=document) => r.querySelector(s);
-  const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
-  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  // UI
+  const balanceEl = $("balance");
+  const soundBtn = $("soundBtn");
+  const soundText = $("soundText");
 
-  // Лестница множителей (видимая всегда)
-  const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00];
+  const modeEasyBtn = $("modeEasy");
+  const modeHardBtn = $("modeHard");
 
-  const MOVES = ["rock","paper","scissors"];
-  const RU = { rock:"Камень", paper:"Бумага", scissors:"Ножницы" };
-  const EMOJI = { rock:"✊🏻", paper:"🤚🏻", scissors:"✌🏻" };
+  const betInput = $("betInput");
+  const betMinus = $("betMinus");
+  const betPlus = $("betPlus");
+  const chips = Array.from(document.querySelectorAll(".chip"));
 
-  // DOM
-  const el = {
-    balanceVal: $("#balanceVal"),
-    soundBtn: $("#soundBtn"),
+  const startBtn = $("startBtn");
+  const cashoutBtn = $("cashoutBtn");
 
-    pillStatus: $("#pillStatus"),
-    pillYour: $("#pillYour"),
-    pillBot: $("#pillBot"),
-    pillResult: $("#pillResult"),
+  const statusText = $("statusText");
+  const currentXEl = $("currentX");
+  const potentialEl = $("potential");
+  const lastResultEl = $("lastResult");
+  const lastPayoutEl = $("lastPayout");
 
-    ladder: $("#ladder"),
-    seriesWins: $("#seriesWins"),
-    currentX: $("#currentX"),
-    potential: $("#potential"),
+  const boardEl = $("board");
+  const ladderEl = $("ladder");
+  const arenaSub = $("arenaSub");
 
-    botHand: $("#botHand"),
-    youHand: $("#youHand"),
-    botHandBox: $("#botHandBox"),
-    youHandBox: $("#youHandBox"),
+  const overlay = $("overlay");
+  const modalTitle = $("modalTitle");
+  const modalText = $("modalText");
+  const modalOk = $("modalOk");
 
-    betInput: $("#betInput"),
-    playBtn: $("#playBtn"),
-    cashoutBtn: $("#cashoutBtn"),
-    winLine: $("#winLine"),
+  const dragonWrap = $("dragonWrap");
+  const dragon = $("dragon");
 
-    add1000: $("#add1000")
-  };
+  // Settings / state
+  const STORAGE_BAL = "tg_dragon_balance_v1";
+  const HOUSE_EDGE = 0.97; // friendly (virtual)
+  const ROWS = 8;
+  const COLS = 4;
 
-  // ---------- storage ----------
-  const LS_BAL = "rps_balance_v2";
-  const LS_SND = "rps_sound_v2";
+  let soundOn = false;
 
-  const state = {
-    balance: 1000,
-    bet: 100,
-    selected: null,
+  let mode = "easy"; // easy | hard
+  let balance = loadBalance();
+  let game = resetGameState();
 
-    // серия
-    seriesActive: false,
-    wins: 0,          // побед подряд
-    x: 1.00,
-
-    busy: false,
-    sound: true
-  };
-
-  function load() {
-    const b = Number(localStorage.getItem(LS_BAL));
-    if (Number.isFinite(b) && b >= 0) state.balance = Math.floor(b);
-
-    const s = localStorage.getItem(LS_SND);
-    if (s === "0") state.sound = false;
+  // -------- helpers ----------
+  function loadBalance() {
+    const v = Number(localStorage.getItem(STORAGE_BAL));
+    return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 1000;
   }
-  function save() {
-    localStorage.setItem(LS_BAL, String(state.balance));
-    localStorage.setItem(LS_SND, state.sound ? "1":"0");
+  function saveBalance() {
+    localStorage.setItem(STORAGE_BAL, String(balance));
   }
-
-  // ---------- audio (просто/тихо) ----------
-  let audioCtx = null;
-  function beep(kind="tap"){
-    if (!state.sound) return;
-    try{
-      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-      const t0 = audioCtx.currentTime;
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.connect(g); g.connect(audioCtx.destination);
-
-      let f1=520,f2=520,d=0.05,vol=0.02;
-      if(kind==="start"){f1=380;f2=520;d=0.09;vol=0.025;}
-      if(kind==="win"){f1=560;f2=860;d=0.10;vol=0.03;}
-      if(kind==="lose"){f1=280;f2=180;d=0.12;vol=0.028;}
-      if(kind==="cash"){f1=720;f2=980;d=0.09;vol=0.028;}
-
-      g.gain.setValueAtTime(0.0001,t0);
-      g.gain.exponentialRampToValueAtTime(vol,t0+0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001,t0+d);
-
-      o.type="sine";
-      o.frequency.setValueAtTime(f1,t0);
-      o.frequency.linearRampToValueAtTime(f2,t0+d);
-      o.start(t0);
-      o.stop(t0+d+0.02);
-    }catch(_){}
+  function clamp(n, a, b) {
+    return Math.max(a, Math.min(b, n));
+  }
+  function fmtRub(n) {
+    const x = Math.max(0, Math.floor(n));
+    return `${x} ₽`;
+  }
+  function fmtX(x) {
+    return `x${x.toFixed(2)}`;
+  }
+  function randInt(max) {
+    return Math.floor(Math.random() * max);
+  }
+  function sampleUnique(n, k) {
+    const set = new Set();
+    while (set.size < k) set.add(randInt(n));
+    return Array.from(set);
   }
 
-  // ---------- UI ----------
-  function setPills({status, your, bot, result}){
-    if(status!==undefined) el.pillStatus.textContent = status;
-    if(your!==undefined)   el.pillYour.textContent = your;
-    if(bot!==undefined)    el.pillBot.textContent = bot;
-    if(result!==undefined) el.pillResult.textContent = result;
+  function resetGameState() {
+    return {
+      active: false,
+      ended: false,
+      bet: 0,
+      row: 0, // 0 = bottom row (clickable), goes up
+      cleared: 0, // number of successful rows
+      // per row: Set(traps)
+      traps: [],
+      revealed: Array.from({ length: ROWS }, () => Array(COLS).fill(null)), // null | "safe" | "trap"
+      currentX: 1.0
+    };
   }
 
-  function renderLadder(){
-    el.ladder.innerHTML = "";
-    LADDER.forEach((x, idx) => {
-      const d = document.createElement("div");
-      d.className = "xstep";
-      d.innerHTML = `<div class="t">${idx===0?"Старт":`Шаг ${idx}`}</div><div class="x">x${x.toFixed(2)}</div>`;
-      if(idx < state.wins) d.classList.add("is-done");
-      if(idx === state.wins) d.classList.add("is-current");
-      el.ladder.appendChild(d);
-    });
+  function safeCount() {
+    return mode === "easy" ? 3 : 1;
   }
 
-  function updateMeta(){
-    el.balanceVal.textContent = String(state.balance);
-    el.seriesWins.textContent = String(state.wins);
-    el.currentX.textContent = `x${state.x.toFixed(2)}`;                 // ✅ один "x"
-    el.potential.textContent = String(Math.floor(state.bet * state.x));  // ✅ один "₽" (в HTML)
-    el.betInput.value = String(state.bet);
-    el.soundBtn.textContent = state.sound ? "Звук: on" : "Звук: off";
-
-    // кнопки
-    const canPlay = !!state.selected && !state.busy;
-    el.playBtn.disabled = !canPlay;
-
-    const canCash = state.seriesActive && state.wins > 0 && !state.busy;
-    el.cashoutBtn.disabled = !canCash;
+  function buildTraps() {
+    // ROWS rows, each has (COLS - safeCount) traps
+    const trapsPerRow = COLS - safeCount();
+    const arr = [];
+    for (let r = 0; r < ROWS; r++) {
+      const traps = new Set(sampleUnique(COLS, trapsPerRow));
+      arr.push(traps);
+    }
+    return arr;
   }
 
-  function setHands(bot=null, you=null){
-    el.botHand.textContent = bot ? EMOJI[bot] : "?";
-    el.youHand.textContent = you ? EMOJI[you] : "?";
+  function xForCleared(clearedRows) {
+    // Each row multiplies expected multiplier by (COLS / safe) * HOUSE_EDGE
+    const step = (COLS / safeCount()) * HOUSE_EDGE;
+    return Math.max(1, Math.pow(step, clearedRows));
   }
 
-  function setWinLine(t){
-    el.winLine.textContent = t || "—";
+  // -------- render ----------
+  function renderBalance() {
+    balanceEl.textContent = String(balance);
   }
 
-  function highlightMoveButtons(){
-    $$("[data-move]").forEach(btn=>{
-      btn.classList.toggle("is-active", btn.getAttribute("data-move")===state.selected);
-    });
+  function setMode(next) {
+    if (game.active) return; // don't switch mid-game
+    mode = next;
+    modeEasyBtn.classList.toggle("active", mode === "easy");
+    modeHardBtn.classList.toggle("active", mode === "hard");
+    arenaSub.textContent =
+      mode === "easy"
+        ? "Обычный: 3 яйца / 1 ловушка в ряду"
+        : "Сложный: 1 яйцо / 3 ловушки в ряду";
+    renderLadder();
+    rebuildBoard();
+    setStatus("Ожидание");
+    updateXUI();
   }
 
-  // ---------- logic ----------
-  function outcome(you, bot){
-    if(you===bot) return "draw";
-    if((you==="rock" && bot==="scissors") || (you==="paper" && bot==="rock") || (you==="scissors" && bot==="paper")) return "win";
-    return "lose";
+  function setStatus(t) {
+    statusText.textContent = t;
   }
 
-  function nextX(){
-    const idx = clamp(state.wins, 0, LADDER.length-1);
-    state.x = LADDER[idx];
+  function updateXUI() {
+    currentXEl.textContent = fmtX(game.currentX);
+    const pot = game.active ? Math.floor(game.bet * game.currentX) : 0;
+    potentialEl.textContent = fmtRub(pot);
   }
 
-  function startSeriesIfNeeded(){
-    if(state.seriesActive) return true;
+  function renderLadder() {
+    ladderEl.innerHTML = "";
+    // show from top to bottom
+    for (let i = ROWS; i >= 1; i--) {
+      const x = xForCleared(i);
+      const div = document.createElement("div");
+      div.className = "lstep";
+      if (game.active) {
+        if (i === game.cleared + 1) div.classList.add("active"); // next
+        if (i <= game.cleared) div.classList.add("done");
+      }
+      div.innerHTML = `<div class="n">Ряд ${i}</div><div class="x mono">${fmtX(x)}</div>`;
+      ladderEl.appendChild(div);
+    }
+  }
 
-    if(state.balance < state.bet){
-      setPills({result:"Недостаточно средств"});
-      beep("lose");
-      return false;
+  function rebuildBoard() {
+    boardEl.innerHTML = "";
+    boardEl.style.gridTemplateRows = `repeat(${ROWS}, auto)`;
+
+    for (let r = ROWS - 1; r >= 0; r--) {
+      // render top row first visually (like tower)
+      const row = document.createElement("div");
+      row.className = "row";
+      row.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+      row.dataset.row = String(r);
+
+      for (let c = 0; c < COLS; c++) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.dataset.row = String(r);
+        cell.dataset.col = String(c);
+
+        const icon = document.createElement("div");
+        icon.className = "icon";
+        icon.textContent = ""; // filled on reveal
+
+        cell.appendChild(icon);
+        row.appendChild(cell);
+      }
+      boardEl.appendChild(row);
     }
 
-    state.balance -= state.bet; // ставка списывается 1 раз
-    state.seriesActive = true;
-    state.wins = 0;
-    state.x = 1.00;
-    save();
-    return true;
+    refreshBoardInteractivity();
   }
 
-  async function play(){
-    if(state.busy) return;
-    if(!state.selected) return;
+  function refreshBoardInteractivity() {
+    const cells = Array.from(boardEl.querySelectorAll(".cell"));
+    cells.forEach((cell) => {
+      const r = Number(cell.dataset.row);
+      const c = Number(cell.dataset.col);
+      cell.classList.remove("disabled", "current", "revealed", "safe", "trap", "pop", "shake");
+      const state = game.revealed[r]?.[c];
 
-    if(!startSeriesIfNeeded()){
-      updateMeta();
+      // set revealed visuals
+      if (state === "safe" || state === "trap") {
+        cell.classList.add("revealed");
+        cell.classList.add(state);
+        const icon = cell.querySelector(".icon");
+        if (icon) icon.textContent = state === "safe" ? "🥚" : "💀";
+      } else {
+        const icon = cell.querySelector(".icon");
+        if (icon) icon.textContent = "";
+      }
+
+      // current row clickable (only if game active and not ended)
+      const isCurrent = game.active && !game.ended && r === game.row;
+      if (isCurrent) cell.classList.add("current");
+      if (!isCurrent) cell.classList.add("disabled");
+    });
+
+    renderLadder();
+    updateXUI();
+
+    // buttons
+    startBtn.disabled = game.active && !game.ended;
+    cashoutBtn.disabled = !(game.active && !game.ended && game.cleared >= 1);
+  }
+
+  // -------- animations ----------
+  function dragonIdle() {
+    dragon.classList.remove("active", "lose", "win");
+    dragonWrap.classList.remove("breath", "spark");
+  }
+  function dragonOnPlay() {
+    dragon.classList.add("active");
+    dragon.classList.remove("lose", "win");
+  }
+  function dragonOnLose() {
+    dragon.classList.add("lose");
+    dragon.classList.remove("win");
+    dragonWrap.classList.add("breath");
+    setTimeout(() => dragonWrap.classList.remove("breath"), 1200);
+  }
+  function dragonOnWin() {
+    dragon.classList.add("win");
+    dragon.classList.remove("lose");
+    dragonWrap.classList.add("spark");
+    setTimeout(() => dragonWrap.classList.remove("spark"), 1100);
+  }
+
+  function popCell(r, c, cls) {
+    const cell = boardEl.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+    if (!cell) return;
+    cell.classList.remove("pop", "shake");
+    void cell.offsetWidth; // reflow
+    cell.classList.add(cls);
+  }
+
+  // -------- game flow ----------
+  function readBet() {
+    const n = Math.floor(Number(betInput.value));
+    if (!Number.isFinite(n)) return 0;
+    return clamp(n, 1, 1_000_000_000);
+  }
+
+  function startGame() {
+    if (game.active && !game.ended) return;
+
+    const bet = readBet();
+    if (bet <= 0) return;
+
+    if (bet > balance) {
+      showModal("Недостаточно средств", `Баланс: ${fmtRub(balance)}. Уменьши ставку.`);
       return;
     }
 
-    state.busy = true;
-    updateMeta();
+    // reset
+    game = resetGameState();
+    game.bet = bet;
+    game.active = true;
+    game.ended = false;
+    game.row = 0;
+    game.cleared = 0;
+    game.traps = buildTraps();
+    game.currentX = 1.0;
 
-    setPills({status:"Раунд...", your: RU[state.selected], bot:"…", result:"Идёт бой"});
-    setWinLine("—");
-    beep("start");
+    // deduct bet once
+    balance -= bet;
+    saveBalance();
+    renderBalance();
 
-    // shuffle animation (коротко, без лагов)
-    for(let i=0;i<9;i++){
-      const bm = MOVES[(Math.random()*3)|0];
-      const ym = MOVES[(Math.random()*3)|0];
-      setHands(bm, ym);
-      await new Promise(r=>setTimeout(r, 55));
+    setStatus("Игра началась — выбирай плитку");
+    arenaSub.textContent = "Текущий ряд подсвечен. Лови яйца, избегай ловушек.";
+    lastResultEl.textContent = "—";
+    lastPayoutEl.textContent = "—";
+
+    dragonOnPlay();
+    refreshBoardInteractivity();
+  }
+
+  function revealRow(r) {
+    for (let c = 0; c < COLS; c++) {
+      if (game.revealed[r][c] != null) continue;
+      const isTrap = game.traps[r].has(c);
+      game.revealed[r][c] = isTrap ? "trap" : "safe";
+    }
+  }
+
+  function endGame(win, payout = 0) {
+    game.ended = true;
+
+    if (win) {
+      setStatus("Победа / Кэшаут");
+      lastResultEl.textContent = "✅ Кэшаут";
+      lastPayoutEl.textContent = fmtRub(payout);
+      showModal("Кэшаут!", `Ты забрал: ${fmtRub(payout)} (ставка ${fmtRub(game.bet)} × ${fmtX(game.currentX)}).`);
+      dragonOnWin();
+    } else {
+      setStatus("Поражение");
+      lastResultEl.textContent = "❌ Поражение";
+      lastPayoutEl.textContent = "0 ₽";
+      showModal("Поражение", "Попался на ловушку. Ставка сгорела.");
+      dragonOnLose();
     }
 
-    const botMove = MOVES[(Math.random()*3)|0];
-    const youMove = state.selected;
+    // reveal all remaining (for spectacle)
+    for (let r = 0; r < ROWS; r++) revealRow(r);
 
-    // ударная анимация
-    el.botHandBox.classList.remove("shake-left");
-    el.youHandBox.classList.remove("shake-right");
-    void el.botHandBox.offsetWidth;
-    el.botHandBox.classList.add("shake-left");
-    el.youHandBox.classList.add("shake-right");
+    refreshBoardInteractivity();
 
-    setHands(botMove, youMove);
-    setPills({bot: RU[botMove]});
+    // allow restart
+    setTimeout(() => {
+      startBtn.disabled = false;
+    }, 400);
+  }
 
-    const res = outcome(youMove, botMove);
+  function cashout() {
+    if (!game.active || game.ended) return;
+    if (game.cleared < 1) return;
 
-    if(res==="draw"){
-      setPills({status:"Ничья", result:"Серия продолжается"});
-      setWinLine("0 ₽ (ничья)");
-      beep("tap");
+    const payout = Math.floor(game.bet * game.currentX);
+    balance += payout;
+    saveBalance();
+    renderBalance();
+
+    endGame(true, payout);
+  }
+
+  function onCellClick(e) {
+    const cell = e.target.closest(".cell");
+    if (!cell) return;
+
+    const r = Number(cell.dataset.row);
+    const c = Number(cell.dataset.col);
+
+    if (!game.active || game.ended) return;
+    if (r !== game.row) return;
+    if (game.revealed[r][c] != null) return;
+
+    const isTrap = game.traps[r].has(c);
+
+    if (isTrap) {
+      // reveal selected + shake
+      game.revealed[r][c] = "trap";
+      popCell(r, c, "shake");
+      setStatus("Ловушка! Игра окончена");
+      endGame(false, 0);
+      return;
     }
 
-    if(res==="win"){
-      state.wins = clamp(state.wins + 1, 0, LADDER.length-1);
-      nextX();
-      const pot = Math.floor(state.bet * state.x);
-      setPills({status:"Победа", result:`Шаг +1 (${state.wins}/${LADDER.length-1})`});
-      setWinLine(`Потенциал: ${pot} ₽`);
-      beep("win");
+    // safe
+    game.revealed[r][c] = "safe";
+    popCell(r, c, "pop");
 
-      // если дошёл до конца — авто cashout
-      if(state.wins >= LADDER.length-1){
-        await new Promise(r=>setTimeout(r, 450));
-        cashout(true);
+    game.cleared += 1;
+    game.currentX = xForCleared(game.cleared);
+
+    // move to next row
+    game.row += 1;
+
+    if (game.row >= ROWS) {
+      // reached top -> auto cashout
+      const payout = Math.floor(game.bet * game.currentX);
+      balance += payout;
+      saveBalance();
+      renderBalance();
+      endGame(true, payout);
+      return;
+    }
+
+    setStatus(`Успех! Ряд ${game.cleared}/${ROWS}. Можно кэшаутить или идти дальше.`);
+    refreshBoardInteractivity();
+  }
+
+  // -------- modal ----------
+  function showModal(title, text) {
+    modalTitle.textContent = title;
+    modalText.textContent = text;
+    overlay.hidden = false;
+  }
+  function hideModal() {
+    overlay.hidden = true;
+  }
+
+  // -------- controls ----------
+  function setBet(v) {
+    betInput.value = String(clamp(Math.floor(v), 1, 1_000_000_000));
+  }
+
+  function applyChip(value) {
+    const bet = readBet();
+    if (value === "max") return setBet(Math.max(1, balance));
+    const n = Number(value);
+    if (!Number.isFinite(n)) return;
+    setBet(n);
+  }
+
+  function toggleSound() {
+    soundOn = !soundOn;
+    soundBtn.classList.toggle("on", soundOn);
+    soundText.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+    // (Звук можно подключить позже, если нужно — сейчас делаем визуальную кнопку)
+  }
+
+  // -------- init ----------
+  function init() {
+    renderBalance();
+    toggleSound(); // turn ON then OFF? no. We'll set to OFF explicitly:
+    soundOn = false;
+    soundBtn.classList.remove("on");
+    soundText.textContent = "Звук: off";
+
+    setMode("easy");
+    setBet(100);
+    updateXUI();
+    dragonIdle();
+
+    // listeners
+    modeEasyBtn.addEventListener("click", () => setMode("easy"));
+    modeHardBtn.addEventListener("click", () => setMode("hard"));
+
+    betMinus.addEventListener("click", () => setBet(readBet() - 10));
+    betPlus.addEventListener("click", () => setBet(readBet() + 10));
+
+    chips.forEach((b) => b.addEventListener("click", () => applyChip(b.dataset.chip)));
+
+    startBtn.addEventListener("click", startGame);
+    cashoutBtn.addEventListener("click", cashout);
+    soundBtn.addEventListener("click", toggleSound);
+
+    boardEl.addEventListener("click", onCellClick);
+
+    modalOk.addEventListener("click", () => {
+      hideModal();
+      // after end, reset state to idle but keep revealed board as "replay look"
+      if (game.ended) {
+        // soft reset to allow next start clean
+        game.active = false;
+        game.ended = false;
+        game.bet = 0;
+        game.row = 0;
+        game.cleared = 0;
+        game.traps = [];
+        game.revealed = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+        game.currentX = 1.0;
+
+        setStatus("Ожидание");
+        arenaSub.textContent =
+          mode === "easy"
+            ? "Обычный: 3 яйца / 1 ловушка в ряду"
+            : "Сложный: 1 яйцо / 3 ловушки в ряду";
+        dragonIdle();
+        rebuildBoard();
+        refreshBoardInteractivity();
       }
-    }
+    });
 
-    if(res==="lose"){
-      setPills({status:"Поражение", result:"Серия в ноль"});
-      setWinLine(`-${state.bet} ₽`);
-      beep("lose");
-
-      // ✅ сброс серии
-      state.seriesActive = false;
-      state.wins = 0;
-      state.x = 1.00;
-    }
-
-    renderLadder();
-    updateMeta();
-
-    state.busy = false;
-    updateMeta();
+    // first paint
+    rebuildBoard();
+    refreshBoardInteractivity();
   }
 
-  function cashout(auto=false){
-    if(!state.seriesActive || state.wins<=0) return;
-
-    const win = Math.floor(state.bet * state.x);
-    state.balance += win;
-    save();
-
-    setPills({status: auto ? "Финиш" : "Забрал", result: `+${win} ₽`});
-    setWinLine(`Выигрыш: +${win} ₽`);
-    beep("cash");
-
-    // сброс серии
-    state.seriesActive = false;
-    state.wins = 0;
-    state.x = 1.00;
-
-    renderLadder();
-    updateMeta();
-  }
-
-  // ---------- events (фикс кликов) ----------
-  function forceClickableAll(){
-    // убираем возможность, что слой ловит клики
-    $$("[class*='bg'], .bg, .decor, .overlay").forEach(n => n.style.pointerEvents="none");
-    // кнопки — точно кликабельны
-    $$("button, [data-move], [data-bet], [data-bet-delta]").forEach(n=>{
-      n.style.pointerEvents="auto";
-      n.style.position = n.style.position || "relative";
-      n.style.zIndex = n.style.zIndex || "20";
-    });
-  }
-
-  function bind(){
-    // выбор фигуры
-    $$("[data-move]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        if(state.busy) return;
-        state.selected = btn.getAttribute("data-move");
-        highlightMoveButtons();
-        setPills({your: RU[state.selected]});
-        beep("tap");
-        updateMeta();
-      });
-    });
-
-    // play/cashout
-    el.playBtn.addEventListener("click", play);
-    el.cashoutBtn.addEventListener("click", ()=>cashout(false));
-
-    // sound
-    el.soundBtn.addEventListener("click", ()=>{
-      state.sound = !state.sound;
-      save();
-      updateMeta();
-      beep("tap");
-    });
-
-    // bet chips
-    $$("[data-bet]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const v = btn.getAttribute("data-bet");
-        if(v==="max"){
-          state.bet = clamp(state.balance, 1, 1000000);
-        } else {
-          state.bet = clamp(Number(v)||state.bet, 1, 1000000);
-        }
-        nextX();
-        updateMeta();
-        beep("tap");
-      });
-    });
-
-    // bet +/-
-    $$("[data-bet-delta]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const d = Number(btn.getAttribute("data-bet-delta"))||0;
-        state.bet = clamp(state.bet + d, 1, 1000000);
-        nextX();
-        updateMeta();
-        beep("tap");
-      });
-    });
-
-    // bet input
-    el.betInput.addEventListener("input", ()=>{
-      const v = Number(String(el.betInput.value).replace(/[^\d]/g,""));
-      if(Number.isFinite(v) && v>0){
-        state.bet = clamp(Math.floor(v), 1, 1000000);
-        nextX();
-        updateMeta();
-      }
-    });
-
-    // +1000
-    el.add1000.addEventListener("click", ()=>{
-      state.balance += 1000;
-      save();
-      updateMeta();
-      beep("tap");
-    });
-  }
-
-  function init(){
-    load();
-    forceClickableAll();
-
-    state.bet = clamp(state.bet, 1, 1000000);
-    nextX();
-
-    setHands(null,null);
-    setPills({status:"Ожидание", your:"—", bot:"—", result:"—"});
-    setWinLine("—");
-    renderLadder();
-    updateMeta();
-    bind();
-  }
-
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init);
-  else init();
+  init();
 })();
