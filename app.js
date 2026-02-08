@@ -1,22 +1,63 @@
 (() => {
-  // ===== Helpers
   const $ = (id) => document.getElementById(id);
-  const fmtRub = (n) => `${Math.max(0, Math.round(n))} ₽`;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const round2 = (n) => Math.round(n * 100) / 100;
 
-  // ===== Storage
-  const LS_BAL = "tgmini_balance_dragontower_v1";
+  const fmtRub = (n) => `${Math.max(0, Math.round(n))} ₽`;
+
+  // ====== DOM
+  const balanceEl = $("balance");
+  const statusTxt = $("statusTxt");
+  const xTxt = $("xTxt");
+  const potTxt = $("potTxt");
+  const lastTxt = $("lastTxt");
+  const winTxt = $("winTxt");
+
+  const modeHint = $("modeHint");
+  const boardEl = $("board");
+  const ladderEl = $("ladder");
+
+  const startBtn = $("startBtn");
+  const cashoutBtn = $("cashoutBtn");
+
+  const betInput = $("betInput");
+  const betMinus = $("betMinus");
+  const betPlus = $("betPlus");
+
+  const modeNormalBtn = $("modeNormal");
+  const modeHardBtn = $("modeHard");
+
+  const soundBtn = $("soundBtn");
+  const soundTxt = $("soundTxt");
+
+  const fx = $("fx");
+  const dragonSvg = $("dragonSvg");
+
+  const toast = $("toast");
+  const toastText = $("toastText");
+
+  // ====== Storage
+  const LS_BAL = "tgmini_dt_balance_v2";
   let balance = Number(localStorage.getItem(LS_BAL) || 1000);
 
-  // ===== Audio (simple + safe)
+  function saveBalance() {
+    localStorage.setItem(LS_BAL, String(balance));
+  }
+
+  function renderBalance() {
+    balanceEl.textContent = fmtRub(balance);
+    saveBalance();
+  }
+
+  // ====== Sound (simple + safe)
   let soundOn = false;
   let ac = null;
-  const ensureAC = () => {
+
+  function ensureAC() {
     if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === "suspended") ac.resume().catch(()=>{});
-  };
-  const beep = (freq = 440, ms = 80, type = "sine", gain = 0.05) => {
+    if (ac.state === "suspended") ac.resume().catch(() => {});
+  }
+
+  function beep(freq = 440, ms = 80, type = "sine", gain = 0.05) {
     if (!soundOn) return;
     ensureAC();
     const o = ac.createOscillator();
@@ -28,109 +69,67 @@
     g.connect(ac.destination);
     o.start();
     setTimeout(() => { try { o.stop(); } catch(e){} }, ms);
-  };
-  const sWin = () => { beep(660, 70, "sine", 0.05); setTimeout(()=>beep(880, 90, "sine", 0.05), 75); };
-  const sLose = () => { beep(190, 120, "square", 0.045); setTimeout(()=>beep(140, 140, "square", 0.04), 90); };
-  const sClick = () => beep(520, 40, "triangle", 0.03);
+  }
 
-  // ===== DOM
-  const balanceEl = $("balance");
-  const statusTxt = $("statusTxt");
-  const xTxt = $("xTxt");
-  const potTxt = $("potTxt");
-  const lastTxt = $("lastTxt");
-  const winTxt = $("winTxt");
-  const modeHint = $("modeHint");
-  const boardEl = $("board");
-  const ladderEl = $("ladder");
-  const startBtn = $("startBtn");
-  const cashoutBtn = $("cashoutBtn");
-  const betInput = $("betInput");
-  const betMinus = $("betMinus");
-  const betPlus = $("betPlus");
-  const soundBtn = $("soundBtn");
-  const soundTxt = $("soundTxt");
-  const fxDragon = $("fxDragon");
-  const modal = $("modal");
-  const modalText = $("modalText");
-  const modalOk = $("modalOk");
-  const modeNormalBtn = $("modeNormal");
-  const modeHardBtn = $("modeHard");
+  const sClick = () => beep(520, 35, "triangle", 0.03);
+  const sWin = () => { beep(660, 70, "sine", 0.05); setTimeout(() => beep(880, 90, "sine", 0.05), 75); };
+  const sLose = () => { beep(180, 120, "square", 0.045); setTimeout(() => beep(140, 140, "square", 0.04), 90); };
 
-  // ===== Game state
+  soundBtn.addEventListener("click", () => {
+    soundOn = !soundOn;
+    soundBtn.setAttribute("aria-pressed", soundOn ? "true" : "false");
+    soundTxt.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+    if (soundOn) beep(620, 60, "sine", 0.05);
+  });
+
+  // ====== Toast (НЕ блокирует ничего)
+  let toastTimer = null;
+  function showToast(text) {
+    toastText.textContent = text;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 1800);
+  }
+
+  // ====== Game constants
   const ROWS = 9;
   const COLS = 4;
 
-  let mode = "normal"; // normal | hard
-  let inGame = false;
-  let currentRow = 0;     // 0..ROWS-1
-  let bet = 100;
-  let paidBet = 0;
-  let currentX = 1.0;
-  let lastWin = 0;
-
-  // For each row store arrangement
-  // rowsData[row] = { trapIndex:number, safeIndices:number[] }
-  let rowsData = [];
-
-  // Multipliers (примерно как "желание играть", растёт заметно)
-  const X_NORMAL = [1.00, 1.29, 1.67, 2.16, 2.80, 3.62, 4.68, 6.05, 7.83, 10.20]; // start + 9 rows (after each success)
+  // Multipliers (Start + after each row)
+  const X_NORMAL = [1.00, 1.29, 1.67, 2.16, 2.80, 3.62, 4.68, 6.05, 7.83, 10.20];
   const X_HARD   = [1.00, 1.65, 2.35, 3.45, 5.10, 7.60, 11.30, 16.80, 25.00, 37.50];
 
-  const getLadder = () => (mode === "hard" ? X_HARD : X_NORMAL);
+  // ====== State
+  let mode = "normal"; // normal | hard
+  let inGame = false;
 
-  // ===== UI init
-  function renderBalance() {
-    balanceEl.textContent = fmtRub(balance);
-    localStorage.setItem(LS_BAL, String(balance));
+  let bet = 100;
+  let paidBet = 0;
+
+  let currentRow = 0;    // 0..ROWS-1
+  let currentX = 1.00;
+
+  // rowsData[row] = { safe:[...], traps:[...] }
+  let rowsData = [];
+
+  function getLadder() {
+    return mode === "hard" ? X_HARD : X_NORMAL;
   }
 
-  function setStatus(txt) { statusTxt.textContent = txt; }
-
-  function setX(val) { xTxt.textContent = `x${val.toFixed(2)}`; }
-
+  // ====== UI small helpers
+  function setStatus(t) { statusTxt.textContent = t; }
+  function setX(x) { xTxt.textContent = `x${x.toFixed(2)}`; }
   function setPotential() {
     const pot = inGame ? Math.floor(paidBet * currentX) : 0;
     potTxt.textContent = fmtRub(pot);
   }
 
-  function openModal(text) {
-    modalText.textContent = text;
-    modal.hidden = false;
-  }
-  function closeModal() {
-    modal.hidden = true;
-  }
-
-  modalOk.addEventListener("click", () => {
-    sClick();
-    closeModal();
-  });
-
-  function setMode(newMode) {
-    if (inGame) return;
-    mode = newMode;
-    modeNormalBtn.classList.toggle("active", mode === "normal");
-    modeHardBtn.classList.toggle("active", mode === "hard");
-
-    modeHint.textContent = mode === "hard"
-      ? "Сложный: 1 яйцо / 3 ловушки в ряду"
-      : "Обычный: 3 яйца / 1 ловушка в ряду";
-
-    renderLadder();
-    resetBoardVisual();
-  }
-
-  modeNormalBtn.addEventListener("click", () => { sClick(); setMode("normal"); });
-  modeHardBtn.addEventListener("click", () => { sClick(); setMode("hard"); });
-
-  // ===== Ladder render
+  // ====== Ladder
   function renderLadder(activeStep = 0) {
-    const xs = getLadder();
     ladderEl.innerHTML = "";
-    // rows shown like: Row 9..1 (top highest)
+    const xs = getLadder();
     for (let r = ROWS; r >= 1; r--) {
-      const stepIndex = r; // after passing row r, X = xs[r]
+      const stepIndex = r;
       const div = document.createElement("div");
       div.className = "step" + (stepIndex === activeStep ? " active" : "");
       div.innerHTML = `<div class="k">Ряд ${r}</div><div class="v">x${xs[stepIndex].toFixed(2)}</div>`;
@@ -138,23 +137,21 @@
     }
   }
 
-  // ===== Board build
+  // ====== Board
   function buildBoard() {
     boardEl.innerHTML = "";
-    // top row visually is row 0? We'll render top->bottom or bottom->top:
-    // Сделаем как на скрине: кликают снизу вверх (приятнее).
-    // Значит визуально снизу — row 0, сверху — row ROWS-1.
-    // Создаём DOM в обратном порядке.
+
+    // Визуально снизу вверх: row 0 снизу, row 8 сверху.
     for (let vr = ROWS - 1; vr >= 0; vr--) {
       for (let c = 0; c < COLS; c++) {
-        const tile = document.createElement("button");
-        tile.type = "button";
-        tile.className = "tile locked";
-        tile.dataset.row = String(vr);
-        tile.dataset.col = String(c);
-        tile.setAttribute("aria-label", `row ${vr} col ${c}`);
-        tile.addEventListener("click", onTileClick);
-        boardEl.appendChild(tile);
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tile locked";
+        b.disabled = true;
+        b.dataset.row = String(vr);
+        b.dataset.col = String(c);
+        b.addEventListener("click", onTileClick);
+        boardEl.appendChild(b);
       }
     }
   }
@@ -179,23 +176,14 @@
     });
   }
 
-  function resetBoardVisual() {
-    buildBoard();
-    lockAllTiles();
-    // подсветим нижний ряд как "ожидание"
-    unlockRow(0);
-    lockAllTiles();
-  }
-
-  // ===== RNG prepare
+  // ====== RNG prepare rows
   function prepareRows() {
     rowsData = [];
-    const safeCount = (mode === "hard") ? 1 : 3;   // eggs
-    const trapCount = COLS - safeCount;           // traps
+    const safeCount = (mode === "hard") ? 1 : 3; // eggs
     for (let r = 0; r < ROWS; r++) {
       const indices = [0,1,2,3].sort(() => Math.random() - 0.5);
       const safe = indices.slice(0, safeCount);
-      const traps = indices.slice(safeCount, safeCount + trapCount);
+      const traps = indices.slice(safeCount);
       rowsData.push({ safe, traps });
     }
   }
@@ -204,7 +192,7 @@
     return rowsData[row].safe.includes(col);
   }
 
-  // ===== Controls
+  // ====== Bet controls
   function readBet() {
     let v = Number(betInput.value || 0);
     v = Math.floor(v);
@@ -213,42 +201,62 @@
     bet = v;
   }
 
-  betInput.addEventListener("input", () => { readBet(); });
-  betMinus.addEventListener("click", () => { sClick(); readBet(); betInput.value = String(clamp(bet - 10, 1, 9999999)); readBet(); });
-  betPlus.addEventListener("click", () => { sClick(); readBet(); betInput.value = String(clamp(bet + 10, 1, 9999999)); readBet(); });
+  betInput.addEventListener("input", readBet);
+
+  betMinus.addEventListener("click", () => {
+    sClick();
+    readBet();
+    betInput.value = String(clamp(bet - 10, 1, 9999999));
+    readBet();
+  });
+
+  betPlus.addEventListener("click", () => {
+    sClick();
+    readBet();
+    betInput.value = String(clamp(bet + 10, 1, 9999999));
+    readBet();
+  });
 
   document.querySelectorAll(".chipbtn").forEach(btn => {
     btn.addEventListener("click", () => {
       sClick();
       readBet();
       const v = btn.dataset.chip;
-      if (v === "max") {
-        betInput.value = String(Math.max(1, balance));
-      } else {
-        betInput.value = String(clamp(Number(v), 1, 9999999));
-      }
+      if (v === "max") betInput.value = String(Math.max(1, balance));
+      else betInput.value = String(clamp(Number(v), 1, 9999999));
       readBet();
     });
   });
 
-  soundBtn.addEventListener("click", () => {
-    soundOn = !soundOn;
-    soundBtn.setAttribute("aria-pressed", soundOn ? "true" : "false");
-    soundTxt.textContent = `Звук: ${soundOn ? "on" : "off"}`;
-    if (soundOn) beep(620, 60, "sine", 0.05);
-  });
+  // ====== Mode
+  function setMode(newMode) {
+    if (inGame) {
+      showToast("Нельзя менять режим во время игры.");
+      return;
+    }
+    mode = newMode;
+    modeNormalBtn.classList.toggle("active", mode === "normal");
+    modeHardBtn.classList.toggle("active", mode === "hard");
+    modeHint.textContent = mode === "hard"
+      ? "Сложный: 1 яйцо / 3 ловушки в ряду"
+      : "Обычный: 3 яйца / 1 ловушка в ряду";
+    renderLadder(0);
+  }
 
-  // ===== Game flow
-  function resetSessionUI() {
+  modeNormalBtn.addEventListener("click", () => { sClick(); setMode("normal"); });
+  modeHardBtn.addEventListener("click", () => { sClick(); setMode("hard"); });
+
+  // ====== Game flow
+  function resetUI() {
     inGame = false;
-    currentRow = 0;
     paidBet = 0;
-    currentX = 1.0;
-    lastWin = 0;
+    currentRow = 0;
+    currentX = 1.00;
 
     setStatus("Ожидание");
-    setX(1.0);
+    setX(1.00);
     potTxt.textContent = fmtRub(0);
+
     lastTxt.textContent = "—";
     winTxt.textContent = "—";
 
@@ -264,7 +272,7 @@
     if (inGame) return;
 
     if (bet > balance) {
-      openModal("Недостаточно баланса для ставки.");
+      showToast("Недостаточно баланса для ставки.");
       return;
     }
 
@@ -276,7 +284,7 @@
     prepareRows();
     inGame = true;
     currentRow = 0;
-    currentX = 1.0;
+    currentX = 1.00;
 
     setStatus("Игра");
     setX(currentX);
@@ -290,56 +298,145 @@
     unlockRow(currentRow);
 
     renderLadder(0);
+    showToast("Игра началась. Выбирай плитку снизу.");
   }
 
-  function endGameLose() {
+  function revealRow(row) {
+    tilesOfRow(row).forEach(t => {
+      t.disabled = true;
+      t.classList.remove("current");
+      t.classList.add("locked");
+      const c = Number(t.dataset.col);
+      const safe = isSafe(row, c);
+      t.classList.add(safe ? "egg" : "trap");
+      t.innerHTML = `<div class="reveal">${safe ? "🥚" : "💀"}</div>`;
+    });
+  }
+
+  function fxPulse(type) {
+    fx.className = "fx " + type;
+    setTimeout(() => fx.className = "fx", type === "lose" ? 1050 : 850);
+  }
+
+  function dragonAnim(type) {
+    dragonSvg.classList.remove("win","lose");
+    dragonSvg.classList.add(type);
+    setTimeout(() => dragonSvg.classList.remove(type), type === "lose" ? 700 : 550);
+  }
+
+  function endLose() {
     inGame = false;
     lockAllTiles();
-    setStatus("Поражение");
-    cashoutBtn.disabled = true;
-    startBtn.disabled = false;
 
-    fxDragon.className = "fx-dragon show-lose";
-    setTimeout(() => fxDragon.className = "fx-dragon", 1100);
+    setStatus("Поражение");
+    setPotential();
+
+    startBtn.disabled = false;
+    cashoutBtn.disabled = true;
 
     lastTxt.textContent = "Ловушка 💥";
     winTxt.textContent = fmtRub(0);
-    setPotential();
 
+    fxPulse("lose");
+    dragonAnim("lose");
     sLose();
-    openModal("Ловушка! Ставка сгорела.");
+    showToast("Ловушка! Ставка сгорела.");
+
+    // Подготовим поле к новой игре (без модалок!)
+    setTimeout(() => {
+      if (!inGame) {
+        buildBoard();
+        lockAllTiles();
+      }
+    }, 250);
   }
 
-  function endGameCashout() {
+  function endCashout() {
+    if (!inGame) return;
+
     inGame = false;
     lockAllTiles();
 
     const payout = Math.floor(paidBet * currentX);
     balance += payout;
-    lastWin = payout;
     renderBalance();
 
     setStatus("Кэшаут");
+    setPotential();
+
     lastTxt.textContent = `Кэшаут x${currentX.toFixed(2)}`;
     winTxt.textContent = fmtRub(payout);
 
-    fxDragon.className = "fx-dragon show-win";
-    setTimeout(() => fxDragon.className = "fx-dragon", 900);
-
+    fxPulse("win");
+    dragonAnim("win");
     sWin();
-    openModal(`Ты забрал: ${fmtRub(payout)} (x${currentX.toFixed(2)})`);
+    showToast(`Забрал: ${fmtRub(payout)} (x${currentX.toFixed(2)})`);
 
     startBtn.disabled = false;
     cashoutBtn.disabled = true;
 
-    // подготовим поле к следующей игре
+    // сброс визуала без блокировок
     setTimeout(() => {
-      if (!modal.hidden) return;
-      resetSessionUI();
-      renderLadder(0);
-    }, 50);
+      buildBoard();
+      lockAllTiles();
+    }, 250);
   }
 
+  function onTileClick(e) {
+    if (!inGame) return;
+
+    const tile = e.currentTarget;
+    const row = Number(tile.dataset.row);
+    const col = Number(tile.dataset.col);
+
+    // только текущий ряд
+    if (row !== currentRow) return;
+
+    sClick();
+
+    // блокируем ряд сразу
+    tilesOfRow(currentRow).forEach(t => (t.disabled = true));
+
+    const safe = isSafe(row, col);
+
+    setTimeout(() => {
+      revealRow(row);
+
+      if (!safe) {
+        renderLadder(currentRow);
+        endLose();
+        return;
+      }
+
+      // прошёл ряд
+      currentRow += 1;
+
+      const xs = getLadder();
+      currentX = xs[currentRow];
+
+      setStatus("Победа • выше");
+      setX(currentX);
+      setPotential();
+      renderLadder(currentRow);
+
+      // кэшаут доступен после 1 победы
+      cashoutBtn.disabled = (currentRow <= 0);
+
+      // если прошли все ряды — автокэшаут
+      if (currentRow >= ROWS) {
+        setTimeout(() => endCashout(), 350);
+        return;
+      }
+
+      setTimeout(() => {
+        lockAllTiles();
+        unlockRow(currentRow);
+      }, 220);
+
+    }, 120);
+  }
+
+  // Buttons
   startBtn.addEventListener("click", () => {
     sClick();
     startGame();
@@ -348,89 +445,21 @@
   cashoutBtn.addEventListener("click", () => {
     sClick();
     if (!inGame) return;
-    // кэшаут доступен только после хотя бы 1 победы (currentRow > 0)
-    if (currentRow <= 0) return;
-    endGameCashout();
+    if (currentRow <= 0) {
+      showToast("Кэшаут доступен после первой победы.");
+      return;
+    }
+    endCashout();
   });
 
-  // ===== Tile click
-  function revealRow(row) {
-    const rowTiles = tilesOfRow(row);
-    rowTiles.forEach(t => {
-      t.disabled = true;
-      t.classList.remove("current");
-      t.classList.add("locked");
-      const c = Number(t.dataset.col);
-      const safe = isSafe(row, c);
-      t.classList.add(safe ? "egg" : "trap");
-      const icon = safe ? "🥚" : "💀";
-      t.innerHTML = `<div class="reveal">${icon}</div>`;
-    });
-  }
-
-  function onTileClick(e) {
-    const tile = e.currentTarget;
-    if (!inGame) return;
-
-    const row = Number(tile.dataset.row);
-    const col = Number(tile.dataset.col);
-
-    // только текущий ряд
-    if (row !== currentRow) return;
-
-    // блокируем ряд сразу
-    tilesOfRow(currentRow).forEach(t => (t.disabled = true));
-    sClick();
-
-    const safe = isSafe(row, col);
-
-    // раскрываем ряд с небольшой задержкой (приятнее)
-    setTimeout(() => {
-      revealRow(row);
-
-      if (!safe) {
-        renderLadder(currentRow); // оставим подсветку на достигнутом
-        endGameLose();
-        return;
-      }
-
-      // победа на ряду -> увеличиваем row, X и даём кэшаут
-      currentRow += 1;
-
-      const xs = getLadder();
-      currentX = xs[currentRow]; // после прохождения currentRow ряда
-      currentX = round2(currentX);
-
-      setStatus("Победа • идёшь выше");
-      setX(currentX);
-      setPotential();
-      renderLadder(currentRow);
-
-      cashoutBtn.disabled = currentRow <= 0;
-
-      // если прошёл все ряды -> авто кэшаут
-      if (currentRow >= ROWS) {
-        setTimeout(() => endGameCashout(), 450);
-        return;
-      }
-
-      // следующий ряд активен
-      setTimeout(() => {
-        lockAllTiles();
-        unlockRow(currentRow);
-      }, 220);
-    }, 140);
-  }
-
-  // ===== Boot
+  // ====== Boot
   function boot() {
     renderBalance();
     readBet();
-    resetSessionUI();
+    resetUI();
     setMode("normal");
     renderLadder(0);
   }
 
-  // фикс “не нажимаются кнопки” — убираем любые случайные блоки
   window.addEventListener("load", boot);
 })();
