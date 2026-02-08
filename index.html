@@ -1,160 +1,143 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dragon Tower</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
+  <div class="bg"></div>
+
   <div class="app">
-    <!-- Header -->
-    <header class="topbar card">
-      <div class="topbar__left">
-        <div class="brand">
-          <div class="brand__title">Dragon Tower</div>
-          <div class="brand__sub">Открой это в Telegram</div>
-        </div>
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brandTitle">Dragon Tower</div>
+        <div class="brandSub">Открой это в Telegram</div>
       </div>
 
-      <div class="topbar__right">
-        <button id="soundToggle" class="pill" type="button" aria-label="Звук">
-          <span class="pill__dot"></span>
-          <span id="soundLabel">Звук: on</span>
+      <div class="topbarRight">
+        <button id="soundBtn" class="pill" type="button">
+          <span id="soundDot" class="dot"></span>
+          <span id="soundText">Звук: on</span>
         </button>
 
-        <div class="balance pill">
-          <div class="balance__label">Баланс</div>
-          <div class="balance__value"><span id="balance">1000</span> ₽</div>
+        <div class="pill balancePill">
+          <div class="balanceLabel">Баланс</div>
+          <div id="balanceValue" class="balanceValue">1000 ₽</div>
         </div>
       </div>
     </header>
 
+    <!-- MAIN -->
     <main class="layout">
-      <!-- Left panel -->
-      <section class="panel card">
-        <div class="tabs">
-          <button class="tab is-active" id="modeNormal" type="button">Обычный</button>
-          <button class="tab" id="modeHard" type="button">Сложный</button>
+      <!-- LEFT PANEL -->
+      <section class="panel left">
+        <div class="card tabs">
+          <button id="tabNormal" class="tab is-active" type="button">Обычный</button>
+          <button id="tabHard" class="tab" type="button">Сложный</button>
         </div>
 
-        <div class="panel__section">
-          <div class="panel__title">Ставка</div>
+        <div class="card">
+          <div class="cardTitle">Ставка</div>
 
           <div class="betRow">
-            <button class="stepBtn" id="betMinus" type="button">−</button>
+            <button id="betMinus" class="iconBtn" type="button" aria-label="Минус">−</button>
             <input id="betInput" class="betInput" inputmode="numeric" value="100" />
-            <button class="stepBtn" id="betPlus" type="button">+</button>
+            <button id="betPlus" class="iconBtn" type="button" aria-label="Плюс">+</button>
           </div>
 
           <div class="chips">
-            <button class="chip" data-chip="10" type="button">10</button>
-            <button class="chip" data-chip="50" type="button">50</button>
-            <button class="chip" data-chip="100" type="button">100</button>
-            <button class="chip" data-chip="250" type="button">250</button>
-            <button class="chip" data-chip="500" type="button">500</button>
-            <button class="chip" data-chip="max" type="button">MAX</button>
+            <button class="chip" data-v="10" type="button">10</button>
+            <button class="chip" data-v="50" type="button">50</button>
+            <button class="chip" data-v="100" type="button">100</button>
+            <button class="chip" data-v="250" type="button">250</button>
+            <button class="chip" data-v="500" type="button">500</button>
+            <button class="chip" data-v="MAX" type="button">MAX</button>
           </div>
 
-          <div class="actions">
-            <button id="btnStart" class="btn btn--primary" type="button">Ставка</button>
-            <button id="btnCashout" class="btn btn--danger" type="button" disabled>Кэшаут</button>
+          <div class="actionRow">
+            <button id="btnBet" class="btn primary" type="button">Ставка</button>
+            <button id="btnCashout" class="btn danger" type="button" disabled>Кэшаут</button>
           </div>
 
           <div class="rules">
-            <div class="rules__title">Правила</div>
+            <div class="rulesTitle">Правила</div>
             <ul>
               <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
               <li>Выбирай плитку в текущем ряду. Безопасно — идёшь выше.</li>
               <li>Ловушка — поражение, ставка сгорает.</li>
-              <li>Кэшаут — забираешь <b>Ставка × X</b> после любой победы.</li>
+              <li>Кэшаут — забираешь <b>Ставка × X</b> после победы.</li>
             </ul>
           </div>
         </div>
 
-        <div class="panel__section">
-          <div class="panel__title">Статус</div>
-          <div class="statusGrid">
-            <div class="statusItem">
-              <div class="statusItem__k">Статус</div>
-              <div class="statusItem__v" id="statusText">Ожидание</div>
+        <div class="card statusCard">
+          <div class="miniTitle">Статус</div>
+          <div class="kv"><span>Статус</span><b id="statusValue">Ожидание</b></div>
+          <div class="kv"><span>Текущий X</span><b id="curXValue">x1.00</b></div>
+          <div class="kv"><span>Потенциал</span><b id="potentialValue">0 ₽</b></div>
+        </div>
+      </section>
+
+      <!-- CENTER -->
+      <section class="panel center">
+        <div class="card board">
+          <div class="boardHead">
+            <div class="boardTitle">Башня</div>
+            <div id="towerMeta" class="boardMeta">Обычный: 3 яйца / 1 ловушка в ряду</div>
+          </div>
+
+          <!-- DECOR (по центру, не кликается, не мешает) -->
+          <div class="decorRow" aria-hidden="true">
+            <div class="tower t1"></div>
+            <div class="tower t2"></div>
+            <div class="tower t3"></div>
+          </div>
+
+          <div id="towerGrid" class="grid" aria-label="Игровое поле"></div>
+
+          <div class="boardFoot">
+            <div class="legend">
+              <span class="leg egg"></span><span>Яйцо</span>
+              <span class="leg trap"></span><span>Ловушка</span>
             </div>
-            <div class="statusItem">
-              <div class="statusItem__k">Текущий X</div>
-              <div class="statusItem__v"><span id="currentX">x1.00</span></div>
-            </div>
-            <div class="statusItem">
-              <div class="statusItem__k">Потенциал</div>
-              <div class="statusItem__v"><span id="potential">0</span> ₽</div>
-            </div>
+            <div class="footNote">Локально • RNG</div>
           </div>
         </div>
       </section>
 
-      <!-- Center panel -->
-      <section class="center card">
-        <div class="center__head">
-          <div class="center__titleWrap">
-            <div class="center__title">Башня</div>
-
-            <!-- FIX #1: декоративные башни (не мешают кликам, не налазят на текст) -->
-            <div class="tower-decor" aria-hidden="true">
-              <div class="tower-decor__item"></div>
-              <div class="tower-decor__item"></div>
-              <div class="tower-decor__item"></div>
-            </div>
-          </div>
-
-          <div class="center__meta" id="modeHint">Обычный: 3 яйца / 1 ловушка в ряду</div>
-        </div>
-
-        <div class="towerWrap">
-          <div id="towerGrid" class="towerGrid" aria-label="Игровое поле"></div>
-        </div>
-
-        <div class="center__foot">
-          <div class="legend">
-            <span class="dot dot--egg"></span> Яйцо
-            <span class="dot dot--trap" style="margin-left:12px;"></span> Ловушка
-          </div>
-          <div class="rng">Локально • RNG</div>
-        </div>
-      </section>
-
-      <!-- Right panel -->
-      <section class="panel card">
-        <div class="panel__section">
-          <div class="panel__title">Шкала X</div>
+      <!-- RIGHT PANEL -->
+      <section class="panel right">
+        <div class="card">
+          <div class="cardTitle">Шкала X</div>
           <div id="xScale" class="xScale"></div>
-          <div class="hintText">Прошёл ряд — X растёт. Проиграл — ставка сгорает.</div>
+          <div class="xHint">Прошёл ряд — X растёт. Проиграл — ставка сгорает.</div>
         </div>
 
-        <div class="panel__section">
-          <div class="panel__title">Результат</div>
-          <div class="resultBox">
-            <div class="resultRow">
-              <div class="resultK">Последнее</div>
-              <div class="resultV" id="lastResult">—</div>
-            </div>
-            <div class="resultRow">
-              <div class="resultK">Выигрыш</div>
-              <div class="resultV"><span id="lastWin">—</span></div>
-            </div>
-          </div>
+        <div class="card">
+          <div class="cardTitle">Результат</div>
+          <div class="kv"><span>Последнее</span><b id="lastResultValue">—</b></div>
+          <div class="kv"><span>Выигрыш</span><b id="lastWinValue">—</b></div>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- Итог (модалка) -->
-  <div id="modal" class="modal hidden" aria-hidden="true">
-    <div class="modal__backdrop" data-close="1"></div>
-    <div class="modal__card">
-      <div class="modal__title">Итог</div>
-      <div class="modal__text" id="modalText">—</div>
-      <div class="modal__actions">
-        <button id="modalOk" class="btn btn--primary" type="button">Ок</button>
+  <!-- MODAL -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div id="modalBackdrop" class="modalBackdrop"></div>
+
+    <div class="modalBox" role="document">
+      <div class="modalTop">
+        <div id="modalTitle" class="modalTitle">Итог</div>
+      </div>
+      <div id="modalText" class="modalText">—</div>
+
+      <div class="modalActions">
+        <button id="modalOk" class="btn primary" type="button">Ок</button>
       </div>
     </div>
   </div>
