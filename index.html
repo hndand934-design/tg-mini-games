@@ -3,42 +3,55 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Chicken Road</title>
-  <link rel="stylesheet" href="./style.css" />
+  <title>Penalty</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="bg"></div>
+  <div class="noise"></div>
 
   <div class="wrap">
     <header class="topbar glass">
       <div class="brand">
-        <div class="brandTitle">Chicken Road</div>
-        <div class="brandSub">Открой это в Telegram</div>
+        <div class="logoDot"></div>
+        <div>
+          <div class="title">Penalty</div>
+          <div class="sub">Открой это в Telegram</div>
+        </div>
       </div>
 
-      <div class="topRight">
-        <button id="soundBtn" class="pill" type="button" aria-pressed="true">
+      <div class="topActions">
+        <button id="soundBtn" class="pillBtn" type="button" aria-label="Звук">
           <span class="dot on" id="soundDot"></span>
-          <span id="soundText">Звук: on</span>
+          <span id="soundTxt">Звук: on</span>
         </button>
-        <div class="balance glass">
-          <div class="balanceLabel">Баланс</div>
-          <div class="balanceValue"><span id="bal">1000</span> ₽</div>
+
+        <button id="addFundsBtn" class="pillBtn ghost" type="button" aria-label="Пополнить">
+          +1000 ₽
+        </button>
+
+        <div class="balancePill">
+          <div class="balanceLbl">Баланс</div>
+          <div class="balanceVal"><span id="balance">0</span> ₽</div>
         </div>
       </div>
     </header>
 
     <main class="grid">
-      <!-- LEFT -->
-      <section class="panel glass">
+      <!-- LEFT: controls -->
+      <aside class="panel glass">
         <div class="panelTitle">Ручной режим</div>
 
-        <div class="group">
-          <div class="label">Сумма ставки</div>
-          <div class="betRow">
-            <button class="sq" id="betMinus" type="button">−</button>
-            <input id="betInput" class="betInput" inputmode="numeric" value="100" />
-            <button class="sq" id="betPlus" type="button">+</button>
+        <div class="block glass2">
+          <div class="lblRow">
+            <span class="lbl">Сумма ставки</span>
+            <span class="mini" id="betHint">—</span>
+          </div>
+
+          <div class="betInput">
+            <button id="betMinus" class="sq" type="button">−</button>
+            <input id="bet" inputmode="numeric" value="100" />
+            <button id="betPlus" class="sq" type="button">+</button>
           </div>
 
           <div class="chips">
@@ -49,115 +62,188 @@
             <button class="chip" data-chip="500" type="button">500</button>
             <button class="chip" data-chip="max" type="button">MAX</button>
           </div>
+
+          <div class="ops">
+            <button id="halfBtn" class="op" type="button">/2</button>
+            <button id="doubleBtn" class="op" type="button">x2</button>
+          </div>
         </div>
 
-        <div class="group">
-          <div class="label">Уровень сложности</div>
-          <select id="difficulty" class="select">
-            <option value="low">Низкий (машины)</option>
-            <option value="expert">Эксперт (машины + огонь + провал)</option>
-          </select>
+        <div class="block glass2">
+          <div class="lblRow">
+            <span class="lbl">Множитель</span>
+            <span class="mini" id="pLabel">шанс: —</span>
+          </div>
+
+          <div class="muls" id="muls">
+            <button class="mul active" data-m="1.76" data-p="0.70" type="button">1.76x</button>
+            <button class="mul" data-m="3.30" data-p="0.52" type="button">3.30x</button>
+            <button class="mul" data-m="7.08" data-p="0.36" type="button">7.08x</button>
+            <button class="mul" data-m="15.17" data-p="0.24" type="button">15.17x</button>
+            <button class="mul" data-m="45.52" data-p="0.12" type="button">45.52x</button>
+          </div>
+
+          <label class="series">
+            <span>Серия</span>
+            <input id="seriesToggle" type="checkbox" />
+            <span class="switch"></span>
+          </label>
+
+          <div class="seriesInfo">
+            <div class="kv">
+              <div class="k">Побед подряд</div>
+              <div class="v" id="streak">0</div>
+            </div>
+            <div class="kv">
+              <div class="k">Текущий X</div>
+              <div class="v" id="mulNow">x1.76</div>
+            </div>
+          </div>
         </div>
 
-        <div class="btnStack">
-          <button id="startBtn" class="btn primary" type="button">Ставка</button>
-          <button id="cashoutBtn" class="btn danger" type="button" disabled>Кэшаут</button>
-          <button id="forwardBtn" class="btn ghost" type="button" disabled>Вперёд</button>
+        <div class="block glass2">
+          <div class="lbl">Флаг</div>
+          <div class="flagsRow" id="flagsRow">
+            <button class="flag active" data-code="1W" type="button">1W</button>
+            <button class="flag" data-code="AR" type="button">🇦🇷</button>
+            <button class="flag" data-code="AU" type="button">🇦🇺</button>
+            <button class="flag" data-code="AT" type="button">🇦🇹</button>
+            <button class="flag" data-code="BE" type="button">🇧🇪</button>
+            <button class="flag" data-code="BR" type="button">🇧🇷</button>
+            <button class="flag" data-code="BG" type="button">🇧🇬</button>
+            <button class="flag" data-code="CA" type="button">🇨🇦</button>
+          </div>
         </div>
 
-        <div class="profitBox glass">
-          <div class="profitLabel">Общая прибыль</div>
-          <div class="profitValue"><span id="profit">0</span> ₽ <span class="muted" id="profitMul">(x1.00)</span></div>
-        </div>
+        <div class="block glass2">
+          <div class="btnRow">
+            <button id="placeBtn" class="big primary" type="button">Ставка ⚽</button>
+            <button id="cashoutBtn" class="big danger" type="button" disabled>Кэшаут</button>
+          </div>
 
-        <div class="rules glass">
-          <div class="rulesTitle">Правила</div>
-          <ul>
-            <li><b>Ставка</b> списывается <b>1 раз</b> при старте попытки.</li>
-            <li><b>Вперёд</b> — прыжок на следующий люк (сначала выбери дорожку кликом).</li>
-            <li>Каждый удачный шаг повышает <b>X</b>.</li>
-            <li><b>Низкий</b>: опасность — машины.</li>
-            <li><b>Эксперт</b>: машины + огонь + провал.</li>
-            <li><b>Кэшаут</b> доступен после <b>1</b> удачного шага.</li>
-          </ul>
-        </div>
-      </section>
+          <div class="profit">
+            <div class="kv">
+              <div class="k">Потенциал</div>
+              <div class="v"><span id="potential">0</span> ₽</div>
+            </div>
+            <div class="kv">
+              <div class="k">Статус</div>
+              <div class="v" id="statusNow">Ожидание</div>
+            </div>
+          </div>
 
-      <!-- CENTER -->
-      <section class="stage glass">
-        <div class="stageHead">
+          <div class="rules">
+            <div class="rTitle">Правила</div>
+            <ul>
+              <li>Ставка списывается при “Ставка”.</li>
+              <li>Выбери точку удара в воротах.</li>
+              <li>Если гол — выигрыш = ставка × X.</li>
+              <li>Серия: после результата автоповтор (пока хватает баланса).</li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER: scene -->
+      <section class="scene glass">
+        <div class="sceneHeader">
           <div>
-            <div class="stageTitle">Дорога</div>
-            <div class="stageSub" id="stageSub">Нажми “Ставка” чтобы начать.</div>
+            <div class="sceneTitle">Пенальти</div>
+            <div class="sceneHint" id="sceneHint">Нажми <b>Ставка</b>, затем выбери точку удара.</div>
           </div>
-          <div class="stats">
-            <div class="stat glass">
-              <div class="statLabel">Текущий X</div>
-              <div class="statValue" id="xNow">1.00x</div>
+          <div class="sceneMini glass2">
+            <div class="miniCol">
+              <div class="miniLbl">Шаг</div>
+              <div class="miniVal" id="stepNow">0</div>
             </div>
-            <div class="stat glass">
-              <div class="statLabel">Шаг</div>
-              <div class="statValue" id="stepNow">0</div>
+            <div class="miniCol">
+              <div class="miniLbl">Последнее</div>
+              <div class="miniVal" id="lastNow">—</div>
             </div>
           </div>
         </div>
 
-        <div class="roadFrame">
-          <!-- traffic light -->
-          <div class="trafficLight">
-            <div class="tLamp red" id="lampRed"></div>
-            <div class="tLamp yellow" id="lampYellow"></div>
-            <div class="tLamp green" id="lampGreen"></div>
-          </div>
+        <div class="pitch" id="pitch">
+          <div class="goal" id="goal">
+            <div class="net"></div>
+            <div class="crossbar"></div>
+            <div class="post left"></div>
+            <div class="post right"></div>
 
-          <!-- road -->
-          <div class="road" id="road">
-            <div class="laneMarkings"></div>
+            <!-- targets -->
+            <button class="target t1" data-t="0" type="button" aria-label="Цель 1"></button>
+            <button class="target t2" data-t="1" type="button" aria-label="Цель 2"></button>
+            <button class="target t3" data-t="2" type="button" aria-label="Цель 3"></button>
+            <button class="target t4" data-t="3" type="button" aria-label="Цель 4"></button>
+            <button class="target t5" data-t="4" type="button" aria-label="Цель 5"></button>
 
-            <!-- cars (visual + hit animation) -->
-            <div class="carsLayer" id="carsLayer"></div>
-
-            <!-- manholes row -->
-            <div class="holesRow" id="holesRow"></div>
-
-            <!-- barrier behind chicken -->
-            <div class="barrier" id="barrier"></div>
-
-            <!-- chicken -->
-            <div class="chicken" id="chicken" aria-hidden="true">
-              <div class="chickenBody"></div>
-              <div class="chickenShadow"></div>
+            <!-- keeper -->
+            <div class="keeper" id="keeper">
+              <div class="keeperBody"></div>
+              <div class="hands" id="hands">🧤🧤</div>
+              <div class="trail" id="handTrail"></div>
             </div>
 
-            <!-- fx overlays -->
-            <div class="fxLayer" id="fxLayer"></div>
+            <!-- impact marker -->
+            <div class="impact" id="impact"></div>
           </div>
+
+          <!-- ball -->
+          <div class="ball" id="ball" aria-hidden="true">
+            <div class="ballInner">⚽</div>
+            <div class="badge" id="flagBadge">1W</div>
+            <div class="ballTrail" id="ballTrail"></div>
+          </div>
+
+          <!-- FX -->
+          <div class="fx fxGoal" id="fxGoal">GOAL!</div>
+          <div class="fx fxSave" id="fxSave">SAVE!</div>
+
+          <!-- confetti layer -->
+          <div class="confetti" id="confetti"></div>
         </div>
 
-        <div class="ladder glass">
-          <div class="ladderTitle">Лестница X</div>
-          <div class="ladderRow" id="ladderRow"></div>
+        <div class="bottomBar glass2">
+          <div class="legend">
+            <span class="dotL ok"></span> гол
+            <span class="dotL bad"></span> сейв
+          </div>
+
+          <div class="log" id="log"></div>
+
+          <div class="tag">Локально • RNG</div>
         </div>
       </section>
 
-      <!-- RIGHT -->
-      <section class="panel glass right">
+      <!-- RIGHT: tip -->
+      <aside class="panel glass">
         <div class="panelTitle">Подсказка</div>
-        <div class="hint glass" id="hint">
-          Нажми <b>Ставка</b> чтобы начать. Затем выбери люк кликом и жми <b>Вперёд</b>.
-        </div>
+        <div class="block glass2">
+          <div class="hint" id="sideHint">
+            Нажми <b>Ставка</b> чтобы начать. Затем кликни по точке в воротах.
+          </div>
 
-        <div class="state glass">
-          <div class="stateTitle">Состояние</div>
-          <div class="kv"><span>Режим</span><b id="modeText">Низкий</b></div>
-          <div class="kv"><span>Ставка</span><b><span id="betView">100</span> ₽</b></div>
-          <div class="kv"><span>Кэшаут</span><b id="cashView">—</b></div>
-          <div class="foot">v1 — Chicken Road (локально • RNG)</div>
+          <div class="stateBox">
+            <div class="kv">
+              <div class="k">Режим</div>
+              <div class="v">Penalty</div>
+            </div>
+            <div class="kv">
+              <div class="k">Ставка</div>
+              <div class="v"><span id="sideBet">100</span> ₽</div>
+            </div>
+            <div class="kv">
+              <div class="k">Кэшаут</div>
+              <div class="v"><span id="sideCash">—</span></div>
+            </div>
+          </div>
+
+          <div class="smallNote">v1 — Penalty (локально • RNG)</div>
         </div>
-      </section>
+      </aside>
     </main>
   </div>
 
-  <script src="./app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
