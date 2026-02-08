@@ -4,46 +4,43 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dragon Tower</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="bg"></div>
+  <div class="app">
 
-  <div class="wrap">
-    <header class="topbar">
+    <header class="topbar card">
       <div class="brand">
-        <div class="title">Dragon Tower</div>
-        <div class="subtitle">Открой это в Telegram</div>
+        <div class="brand__title">Dragon Tower</div>
+        <div class="brand__sub">Открой это в Telegram</div>
       </div>
 
-      <div class="hud">
-        <button id="soundBtn" class="pill" type="button">
-          <span class="dot"></span>
-          <span id="soundText">Звук: off</span>
+      <div class="topbar__right">
+        <button id="soundBtn" class="pill" type="button" aria-pressed="true">
+          Звук: <span id="soundState">on</span>
         </button>
 
-        <div class="balance pill">
-          <div class="label">Баланс</div>
-          <div class="value"><span id="balance">1000</span> ₽</div>
+        <div class="pill pill--balance">
+          Баланс&nbsp;<b><span id="balanceText">1000</span> ₽</b>
         </div>
       </div>
     </header>
 
-    <main class="grid">
+    <main class="layout">
       <!-- LEFT -->
-      <section class="panel panel-left">
-        <div class="seg">
-          <button class="segbtn active" id="modeEasy" type="button">Обычный</button>
-          <button class="segbtn" id="modeHard" type="button">Сложный</button>
+      <section class="left card">
+        <div class="tabs">
+          <button id="modeNormal" class="tab is-active" type="button">Обычный</button>
+          <button id="modeHard" class="tab" type="button">Сложный</button>
         </div>
 
-        <div class="box">
-          <div class="box-title">Ставка</div>
+        <div class="block">
+          <div class="block__title">Ставка</div>
 
-          <div class="bet-row">
-            <button class="step" id="betMinus" type="button">−</button>
-            <input id="betInput" type="number" min="1" step="1" value="100" />
-            <button class="step" id="betPlus" type="button">+</button>
+          <div class="betRow">
+            <button id="betMinus" class="iconBtn" type="button" aria-label="Уменьшить">−</button>
+            <input id="betInput" class="betInput" inputmode="numeric" value="100" />
+            <button id="betPlus" class="iconBtn" type="button" aria-label="Увеличить">+</button>
           </div>
 
           <div class="chips">
@@ -52,157 +49,93 @@
             <button class="chip" data-chip="100" type="button">100</button>
             <button class="chip" data-chip="250" type="button">250</button>
             <button class="chip" data-chip="500" type="button">500</button>
-            <button class="chip" data-chip="max" type="button">MAX</button>
+            <button id="betMax" class="chip chip--max" type="button">MAX</button>
           </div>
 
           <div class="actions">
-            <button id="startBtn" class="btn btn-primary" type="button">Ставка</button>
-            <button id="cashoutBtn" class="btn btn-ghost" type="button" disabled>Кэшаут</button>
+            <button id="startBtn" class="btn btn--primary" type="button">Ставка</button>
+            <button id="cashoutBtn" class="btn" type="button" disabled>Кэшаут</button>
           </div>
 
-          <div class="hint">
-            <div><b>Правила</b></div>
+          <div class="rules">
+            <div class="rules__title">Правила</div>
             <ul>
-              <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
+              <li>Ставка списывается 1 раз при старте игры.</li>
               <li>Выбирай плитку в текущем ряду. Безопасно — идёшь выше.</li>
               <li>Ловушка — поражение, ставка сгорает.</li>
-              <li>Кэшаут — забираешь <span class="mono">Ставка × X</span> после 1 победы.</li>
+              <li>Кэшаут — забираешь ставка × текущий X.</li>
             </ul>
           </div>
         </div>
 
-        <div class="box">
-          <div class="box-title">Статус</div>
-          <div class="stats">
-            <div class="stat">
-              <div class="k">Статус</div>
-              <div class="v" id="statusText">Ожидание</div>
+        <div class="block">
+          <div class="block__title">Статус</div>
+          <div class="statusGrid">
+            <div class="statusItem">
+              <div class="statusItem__k">Статус</div>
+              <div id="statusText" class="statusItem__v">Ожидание</div>
             </div>
-            <div class="stat">
-              <div class="k">Текущий X</div>
-              <div class="v mono" id="currentX">x1.00</div>
+            <div class="statusItem">
+              <div class="statusItem__k">Текущий X</div>
+              <div id="xText" class="statusItem__v">x1.00</div>
             </div>
-            <div class="stat">
-              <div class="k">Потенциал</div>
-              <div class="v mono" id="potential">0 ₽</div>
+            <div class="statusItem">
+              <div class="statusItem__k">Потенциал</div>
+              <div id="potentialText" class="statusItem__v">0 ₽</div>
             </div>
           </div>
         </div>
       </section>
 
       <!-- CENTER -->
-      <section class="panel panel-center">
-        <div class="arena">
-          <div class="arena-head">
-            <div class="arena-title">Башня</div>
-            <div class="arena-sub" id="arenaSub">Выбери режим и нажми “Ставка”</div>
+      <section class="center card">
+        <div class="towerHeader">
+          <div class="towerHeader__title">Башня</div>
+          <div id="modeHint" class="towerHeader__hint">Обычный: 3 яйца / 1 ловушка в ряду</div>
+        </div>
+
+        <!-- ВАЖНО: дракон как декоративный слой с pointer-events:none, не мешает кликам -->
+        <div class="towerArt" aria-hidden="true">
+          <img class="towerArt__img" src="./assets/dragon.png" alt="" />
+        </div>
+
+        <div id="towerGrid" class="towerGrid" aria-label="Башня"></div>
+
+        <div class="towerFooter">
+          <div class="legend">
+            <span class="dot dot--egg"></span> Яйцо
+            <span class="dot dot--trap"></span> Ловушка
           </div>
-
-          <!-- NEW: dragon emblem (не детский) -->
-          <div class="dragonEmblem" aria-hidden="true">
-            <svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="dA" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#b9c9e6"/>
-                  <stop offset="1" stop-color="#6c7f9d"/>
-                </linearGradient>
-                <linearGradient id="dB" x1="0" y1="1" x2="1" y2="0">
-                  <stop offset="0" stop-color="#1b2a45" stop-opacity="0.9"/>
-                  <stop offset="1" stop-color="#0b1222" stop-opacity="0.6"/>
-                </linearGradient>
-                <radialGradient id="eyeGlow" cx="50%" cy="50%" r="60%">
-                  <stop offset="0" stop-color="#7dd3fc"/>
-                  <stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
-                </radialGradient>
-              </defs>
-
-              <!-- wings silhouette -->
-              <path d="M52 138c-18-20-26-52-12-78 18 22 34 26 52 26-12 10-18 28-18 52 0 12-6 22-22 0Z"
-                    fill="url(#dB)" opacity=".9"/>
-              <path d="M308 138c18-20 26-52 12-78-18 22-34 26-52 26 12 10 18 28 18 52 0 12 6 22 22 0Z"
-                    fill="url(#dB)" opacity=".9"/>
-
-              <!-- head -->
-              <path d="M110 150c0-52 30-98 70-98s70 46 70 98c0 22-10 40-26 52-14 10-30 14-44 14s-30-4-44-14c-16-12-26-30-26-52Z"
-                    fill="url(#dA)"/>
-              <!-- horns -->
-              <path d="M140 78c-18-16-26-32-26-48 16 6 30 18 40 34-6 4-10 8-14 14Z"
-                    fill="#7b8aa8" opacity=".9"/>
-              <path d="M220 78c18-16 26-32 26-48-16 6-30 18-40 34 6 4 10 8 14 14Z"
-                    fill="#7b8aa8" opacity=".9"/>
-
-              <!-- snout -->
-              <path d="M144 142c10 10 22 16 36 16s26-6 36-16c-2 20-16 42-36 42s-34-22-36-42Z"
-                    fill="#0b1222" opacity=".45"/>
-
-              <!-- eyes + glow -->
-              <circle cx="148" cy="126" r="14" fill="url(#eyeGlow)" opacity=".55"/>
-              <circle cx="212" cy="126" r="14" fill="url(#eyeGlow)" opacity=".55"/>
-              <circle cx="148" cy="126" r="6" fill="#081022"/>
-              <circle cx="212" cy="126" r="6" fill="#081022"/>
-              <circle cx="150" cy="124" r="2" fill="#cfe8ff"/>
-              <circle cx="214" cy="124" r="2" fill="#cfe8ff"/>
-
-              <!-- teeth -->
-              <path d="M164 158l6 10 6-10M184 158l6 10 6-10" stroke="#dbeafe" stroke-opacity=".6" stroke-width="3" stroke-linecap="round"/>
-
-              <!-- frame circle -->
-              <circle cx="180" cy="140" r="96" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="6"/>
-            </svg>
-          </div>
-
-          <!-- Board -->
-          <div class="boardWrap">
-            <div class="board" id="board"></div>
-          </div>
-
-          <div class="boardFooter">
-            <div class="legend">
-              <span class="tag safe">Яйцо</span>
-              <span class="tag trap">Ловушка</span>
-            </div>
-            <div class="fair">Режим локальный • RNG</div>
-          </div>
+          <div class="footnote">Режим локальный • RNG</div>
         </div>
       </section>
 
       <!-- RIGHT -->
-      <section class="panel panel-right">
-        <div class="box">
-          <div class="box-title">Шкала X</div>
-          <div class="ladder" id="ladder"></div>
-          <div class="ladderHint">Прошёл ряд → X растёт. Проиграл → серия обнуляется.</div>
+      <section class="right card">
+        <div class="block">
+          <div class="block__title">Шкала X</div>
+          <div id="xScale" class="xScale"></div>
+          <div class="muted small">Прошёл ряд — X растёт. Проиграл — серия обнуляется.</div>
         </div>
 
-        <div class="box">
-          <div class="box-title">Результат</div>
-          <div class="resultLine">
-            <div class="rkey">Последнее:</div>
-            <div class="rval" id="lastResult">—</div>
-          </div>
-          <div class="resultLine">
-            <div class="rkey">Выигрыш:</div>
-            <div class="rval mono" id="lastPayout">—</div>
+        <div class="block">
+          <div class="block__title">Результат</div>
+          <div class="resultGrid">
+            <div class="resultItem">
+              <div class="resultItem__k">Последнее</div>
+              <div id="lastText" class="resultItem__v">—</div>
+            </div>
+            <div class="resultItem">
+              <div class="resultItem__k">Выигрыш</div>
+              <div id="winText" class="resultItem__v">—</div>
+            </div>
           </div>
         </div>
       </section>
     </main>
+
   </div>
 
-  <!-- IMPORTANT: overlay вынесен в конец body + будет z-index в CSS -->
-  <div class="overlay" id="overlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Итог">
-      <div class="modalTop">
-        <div class="modalTitle" id="modalTitle">Итог</div>
-        <button class="modalClose" id="modalClose" type="button" aria-label="close">✕</button>
-      </div>
-      <div class="modalText" id="modalText">—</div>
-      <div class="modalActions">
-        <button class="btn btn-primary" id="modalOk" type="button">Ок</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
