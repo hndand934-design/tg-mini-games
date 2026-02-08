@@ -1,163 +1,150 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Penalty</title>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css"/>
 </head>
 <body>
-  <div class="bg"></div>
+  <div class="app">
 
-  <div class="wrap">
-    <!-- TOP BAR -->
-    <header class="top">
-      <div class="brand">
-        <div class="dot"></div>
-        <div>
-          <div class="title">Penalty</div>
-          <div class="sub">Открой это в Telegram</div>
-        </div>
+    <!-- TOP -->
+    <header class="topbar">
+      <div class="topLeft">
+        <div class="wallet">💳</div>
+        <div class="money" id="topMoney">0 $</div>
       </div>
 
       <div class="topRight">
-        <button id="soundBtn" class="pill">Звук: <span id="soundState">on</span></button>
-        <button id="bonusBtn" class="pill">+1000 ₽</button>
-        <div class="pill balance">Баланс: <b id="balanceText">1000 ₽</b></div>
+        <button class="iconBtn" id="soundBtn" type="button">
+          <span class="icon">🔊</span>
+          <span class="chip" id="soundChip">on</span>
+        </button>
       </div>
     </header>
 
-    <main class="grid">
-      <!-- LEFT PANEL -->
-      <section class="panel left">
-        <div class="panelTitle">Ручной режим</div>
-
-        <div class="block">
-          <div class="label">Сумма ставки</div>
-          <div class="betRow">
-            <button class="miniBtn" id="betMinus">−</button>
-            <input id="betInput" type="number" min="1" step="1" value="100" />
-            <button class="miniBtn" id="betPlus">+</button>
-          </div>
-
-          <div class="chips">
-            <button class="chip" data-chip="10">10</button>
-            <button class="chip" data-chip="50">50</button>
-            <button class="chip" data-chip="100">100</button>
-            <button class="chip" data-chip="250">250</button>
-            <button class="chip" data-chip="500">500</button>
-            <button class="chip" data-chip="max">MAX</button>
+    <!-- MAIN -->
+    <main class="layout">
+      <!-- SCENE -->
+      <section class="goalWrap">
+        <div class="goalTitleRow">
+          <div class="goalTitle">Пенальти</div>
+          <div class="goalMeta">
+            <div class="pill">Шаг: <b id="stepText">0</b></div>
+            <div class="pill">X: <b id="xTextTop">x1.76</b></div>
           </div>
         </div>
 
-        <div class="block">
-          <div class="label">Множитель</div>
-          <div class="multis" id="multiRow">
-            <button class="mBtn active" data-m="1.76">1.76x</button>
-            <button class="mBtn" data-m="3.30">3.30x</button>
-            <button class="mBtn" data-m="7.08">7.08x</button>
-            <button class="mBtn" data-m="15.17">15.17x</button>
-            <button class="mBtn" data-m="45.52">45.52x</button>
+        <div class="goalFrame" id="goalFrame">
+          <div class="goalNet" aria-hidden="true"></div>
+          <div class="goalPosts" aria-hidden="true"></div>
+
+          <!-- TARGETS -->
+          <div class="targets" id="targets" aria-label="Зоны удара"></div>
+
+          <!-- KEEPER (one element) -->
+          <div class="keeper" id="keeper" aria-hidden="true">
+            <span class="gloves">🧤🧤</span>
           </div>
-          <div class="tinyRow">
-            <div class="tiny">Текущий X: <b id="xNow">x1.76</b></div>
-            <div class="tiny">Серия: <b id="streakNow">0</b></div>
+
+          <!-- BALL -->
+          <div class="ball" id="ball" aria-hidden="true">⚽</div>
+
+          <!-- FX -->
+          <div class="fx" id="fx" aria-hidden="true"></div>
+
+          <!-- OVERLAY (only appears after result) -->
+          <div class="overlay" id="overlay" hidden>
+            <div class="overlayCard" role="dialog" aria-modal="true">
+              <div class="overlayTitle" id="overlayTitle">ГОЛ!</div>
+              <div class="overlaySub" id="overlaySub">+0 ₽</div>
+              <button class="overlayBtn" id="overlayOk" type="button">Ок</button>
+            </div>
           </div>
         </div>
 
-        <div class="block actions">
-          <button id="startBtn" class="btn primary">Ставка</button>
-          <button id="cashoutBtn" class="btn ghost" disabled>Кэшаут</button>
-          <button id="shootBtn" class="btn dark" disabled>Удар</button>
-          <button id="resetBtn" class="btn soft">Сброс</button>
-        </div>
-
-        <div class="block twoCols">
-          <div class="kpi">
-            <div class="kpiLabel">Потенциал</div>
-            <div class="kpiValue" id="payoutText">—</div>
-          </div>
-          <div class="kpi">
-            <div class="kpiLabel">Статус</div>
-            <div class="kpiValue" id="statusText">Ожидание</div>
-          </div>
-        </div>
-
-        <div class="block rules">
-          <div class="label">Правила</div>
-          <ul>
-            <li>Ставка списывается при “Ставка”.</li>
-            <li>Выбери точку удара (15 зон) → “Удар”.</li>
-            <li>Если вратарь угадал зону — сейв.</li>
-            <li>Гол = ставка × X. Можно нажать “Кэшаут”.</li>
-          </ul>
+        <div class="legend">
+          <span class="dot good"></span> гол
+          <span class="sep"></span>
+          <span class="dot bad"></span> сейв
         </div>
       </section>
 
-      <!-- CENTER GAME -->
-      <section class="panel center">
-        <div class="panelHead">
-          <div>
-            <div class="panelTitle">Пенальти</div>
-            <div class="panelSub">Нажми “Ставка”, затем выбери точку удара.</div>
+      <!-- CONTROLS -->
+      <section class="panel">
+        <div class="panelTitle">Управление</div>
+
+        <div class="balanceRow">
+          <div class="balBox">
+            Баланс:
+            <b id="balText">1000 ₽</b>
           </div>
-          <div class="miniStats">
-            <div class="miniCard">
-              <div class="miniLabel">Шаг</div>
-              <div class="miniValue" id="stepText">0</div>
-            </div>
-            <div class="miniCard">
-              <div class="miniLabel">Последнее</div>
-              <div class="miniValue" id="lastText">—</div>
-            </div>
+          <button class="ghostBtn" id="addMoneyBtn" type="button">+1000 ₽</button>
+        </div>
+
+        <!-- Multipliers -->
+        <div class="multiRow" id="multiRow">
+          <button class="multiBtn active" type="button" data-m="1.76">1.76x</button>
+          <button class="multiBtn" type="button" data-m="3.30">3.30x</button>
+          <button class="multiBtn" type="button" data-m="7.08">7.08x</button>
+          <button class="multiBtn" type="button" data-m="15.17">15.17x</button>
+          <button class="multiBtn" type="button" data-m="45.52">45.52x</button>
+        </div>
+
+        <!-- Series -->
+        <div class="seriesRow">
+          <div class="seriesLabel">Серия</div>
+          <label class="switch">
+            <input type="checkbox" id="seriesToggle"/>
+            <span class="slider"></span>
+          </label>
+          <div class="seriesInfo">
+            Побед подряд: <b id="streakText">0</b>
+          </div>
+        </div>
+
+        <!-- Bet -->
+        <div class="betCard">
+          <div class="betTop">
+            <div class="betLabel">Ставка</div>
+            <div class="betValue" id="betText">100 ₽</div>
+          </div>
+
+          <div class="betGrid">
+            <button class="pmBtn" id="minusBtn" type="button">−</button>
+            <button class="pmBtn" id="plusBtn" type="button">+</button>
+            <button class="smallBtn" id="halfBtn" type="button">/2</button>
+            <button class="smallBtn" id="doubleBtn" type="button">x2</button>
+          </div>
+
+          <button class="stakeBtn" id="stakeBtn" type="button">
+            <span>Ставка</span>
+            <span class="ballIco">⚽</span>
+          </button>
+
+          <div class="hint">
+            1) Выбери множитель<br/>
+            2) Жми <b>Ставка</b><br/>
+            3) Кликни по кругу (5×3)
           </div>
         </div>
 
-        <div class="goalScene" id="goalScene">
-          <div class="goalFrame">
-            <div class="net"></div>
-
-            <!-- 15 targets (5x3) -->
-            <div class="targetsGrid" id="targetsGrid">
-              <!-- JS заполнит кнопками -->
-            </div>
-
-            <!-- keeper (ONE) -->
-            <div class="keeper" id="keeper" aria-hidden="true">🧤🧤</div>
-
-            <!-- ball -->
-            <div class="ball" id="ball">⚽</div>
-
-            <!-- small helpers -->
-            <div class="legend">
-              <span class="dot ok"></span> гол
-              <span class="dot bad"></span> сейв
-            </div>
+        <div class="statusRow">
+          <div class="statusBox">
+            Статус: <b id="statusText">Ожидание</b>
+          </div>
+          <div class="statusBox">
+            Последнее: <b id="lastText">—</b>
           </div>
         </div>
-      </section>
 
-      <!-- RIGHT PANEL -->
-      <section class="panel right">
-        <div class="panelTitle">Подсказка</div>
-        <div class="hint" id="hintText">Нажми “Ставка”, выбери точку удара и жми “Удар”.</div>
-
-        <div class="block">
-          <div class="label">Состояние</div>
-          <div class="stateRow"><span>Режим</span><b>Penalty</b></div>
-          <div class="stateRow"><span>Ставка</span><b id="betText">100 ₽</b></div>
-          <div class="stateRow"><span>Кэшаут</span><b id="cashText">—</b></div>
-          <div class="subNote">v1 — Penalty (локально • RNG)</div>
-        </div>
-
-        <div class="block">
-          <div class="label">Выбор</div>
-          <div class="stateRow"><span>Точка</span><b id="pickText">—</b></div>
-          <div class="stateRow"><span>Вратарь</span><b id="keeperText">—</b></div>
-          <div class="stateRow"><span>Результат</span><b id="resultText">—</b></div>
+        <div class="bottomBtns">
+          <button class="resetBtn" id="resetBtn" type="button">Сброс</button>
         </div>
       </section>
     </main>
+
   </div>
 
   <script src="./app.js"></script>
