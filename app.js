@@ -1,681 +1,369 @@
-/* Chicken Road — app.js (FULL, clean, standalone)
-   Вставляй целиком, заменив старый app.js.
-   Требует элементы с id:
-   bal, betInput, betMinus, betPlus, startBtn, cashoutBtn, forwardBtn,
-   profit, profitMul, difficulty, stageSub, xNow, stepNow,
-   holesRow, chicken, barrier, fxLayer, ladderRow, hint,
-   betView, modeText, cashView,
-   soundBtn, soundDot, soundText,
-   lampRed, lampYellow, lampGreen,
-   carsLayer,
-   а также контейнеры: #road, .chips (с кнопками .chip[data-chip="..."])
-*/
-
 (() => {
-  "use strict";
-
-  // ---------- helpers ----------
+  // --------- helpers ----------
   const $ = (s) => document.querySelector(s);
-  const $$ = (s) => document.querySelectorAll(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-  const fmt2 = (n) => (Math.round(n * 100) / 100).toFixed(2);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // ---------- storage ----------
-  const LS_BAL = "chickenroad_balance_v1";
-  const loadBalance = () => {
-    const v = Number(localStorage.getItem(LS_BAL));
-    return Number.isFinite(v) ? v : 1000;
-  };
-  const saveBalance = (v) => localStorage.setItem(LS_BAL, String(v));
+  const LS_BAL = "mini_balance_penalty_full_v1";
+  const LS_SOUND = "mini_sound_penalty_full_v1";
 
-  // ---------- UI refs ----------
-  const balEl = $("#bal");
-  const betInput = $("#betInput");
-  const betMinus = $("#betMinus");
-  const betPlus = $("#betPlus");
-  const startBtn = $("#startBtn");
-  const cashoutBtn = $("#cashoutBtn");
-  const forwardBtn = $("#forwardBtn");
-  const profitEl = $("#profit");
-  const profitMulEl = $("#profitMul");
-  const difficultyEl = $("#difficulty");
-  const stageSub = $("#stageSub");
-  const xNowEl = $("#xNow");
-  const stepNowEl = $("#stepNow");
-  const holesRow = $("#holesRow");
-  const chickenEl = $("#chicken");
-  const barrierEl = $("#barrier");
-  const fxLayer = $("#fxLayer");
-  const ladderRow = $("#ladderRow");
-  const hintEl = $("#hint");
-  const betView = $("#betView");
-  const modeText = $("#modeText");
-  const cashView = $("#cashView");
-
-  const lampRed = $("#lampRed");
-  const lampYellow = $("#lampYellow");
-  const lampGreen = $("#lampGreen");
-
-  const carsLayer = $("#carsLayer");
-  const roadEl = $("#road");
-  const chipsWrap = $(".chips");
-
-  // ---------- safety: must exist ----------
-  const must = [
-    balEl, betInput, betMinus, betPlus, startBtn, cashoutBtn, forwardBtn,
-    profitEl, profitMulEl, difficultyEl, stageSub, xNowEl, stepNowEl,
-    holesRow, chickenEl, barrierEl, fxLayer, ladderRow, hintEl,
-    betView, modeText, cashView,
-    lampRed, lampYellow, lampGreen,
-    carsLayer, roadEl, chipsWrap,
-    $("#soundBtn"), $("#soundDot"), $("#soundText")
-  ];
-  if (must.some((x) => !x)) {
-    console.warn("[ChickenRoad] Missing required DOM nodes. Check index.html IDs.");
-    return;
-  }
-
-  // ---------- sound (quiet) ----------
+  // --------- audio (WebAudio) ----------
   let soundOn = true;
-  const soundBtn = $("#soundBtn");
-  const soundDot = $("#soundDot");
-  const soundText = $("#soundText");
+  let ac = null;
 
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  const audio = AudioCtx ? new AudioCtx() : null;
-
-  async function ensureAudio() {
-    if (!audio) return;
-    if (audio.state === "suspended") {
-      try { await audio.resume(); } catch {}
-    }
+  function ensureAC(){
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume().catch(()=>{});
   }
 
-  function beep(freq = 420, dur = 0.06, type = "sine", gain = 0.03) {
-    if (!soundOn || !audio) return;
-    try {
-      const t0 = audio.currentTime;
-      const o = audio.createOscillator();
-      const g = audio.createGain();
+  function beep(freq=520, dur=0.06, type="sine", gain=0.04){
+    if (!soundOn) return;
+    ensureAC();
+    const t0 = ac.currentTime;
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = type;
+    o.frequency.value = freq;
 
-      o.type = type;
-      o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-      o.connect(g);
-      g.connect(audio.destination);
-      o.start(t0);
-      o.stop(t0 + dur + 0.02);
-    } catch {}
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
   }
 
-  function soundUI() {
-    soundDot.className = "dot " + (soundOn ? "on" : "off");
-    soundText.textContent = "Звук: " + (soundOn ? "on" : "off");
-    soundBtn.setAttribute("aria-pressed", soundOn ? "true" : "false");
-  }
+  const sClick = () => beep(640, 0.04, "sine", 0.02);
+  const sKick  = () => beep(420, 0.07, "triangle", 0.035);
+  const sGoal  = () => { beep(740,0.08,"sine",0.04); setTimeout(()=>beep(980,0.09,"sine",0.035),70); };
+  const sSave  = () => { beep(180,0.10,"square",0.02); setTimeout(()=>beep(140,0.10,"square",0.02),90); };
 
-  soundBtn.addEventListener("click", async () => {
-    soundOn = !soundOn;
-    soundUI();
-    await ensureAudio();
-    beep(soundOn ? 660 : 220, 0.06, "sine", 0.02);
-  });
+  // --------- state ----------
+  let balance = 1000;
 
-  // ---------- game config ----------
-  const HOLES = 7;               // ряд люков (горизонтально)
-  const MAX_STEPS = 12;
-
-  // Лестница X (настраиваемая)
-  const LADDERS = {
-    low:   [1.08, 1.14, 1.22, 1.31, 1.42, 1.56, 1.74, 1.96, 2.25, 2.62, 3.12, 3.85],
-    expert:[1.18, 1.32, 1.52, 1.78, 2.12, 2.58, 3.20, 4.14, 5.50, 7.20, 9.40, 12.80],
+  const state = {
+    bet: 100,
+    mul: 1.76,
+    pWin: 0.70,        // шанс забить
+    series: false,
+    streak: 0,
+    armed: false,      // ставка списана, ждём выбор точки
+    busy: false,       // идёт анимация
+    flag: "1W",
+    step: 0,
+    last: "—",
   };
 
-  // Вероятность опасности по шагам (сдерживает “дюп”)
-  const HAZARD_P = {
-    low:   [0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.20,0.21,0.22,0.23],
-    expert:[0.24,0.26,0.28,0.30,0.32,0.34,0.36,0.38,0.40,0.42,0.44,0.46],
-  };
+  // --------- elements ----------
+  const elBalance = $("#balance");
+  const elSoundBtn = $("#soundBtn");
+  const elSoundDot = $("#soundDot");
+  const elSoundTxt = $("#soundTxt");
+  const elAddFunds = $("#addFundsBtn");
 
-  // ---------- state ----------
-  let balance = loadBalance();
-  let bet = 100;
+  const elBet = $("#bet");
+  const elBetMinus = $("#betMinus");
+  const elBetPlus = $("#betPlus");
+  const elChips = $$(".chip");
+  const elHalf = $("#halfBtn");
+  const elDouble = $("#doubleBtn");
 
-  let running = false;
-  let stakeLocked = false;  // ставка списана
-  let busted = false;
+  const elPlace = $("#placeBtn");
+  const elCash = $("#cashoutBtn");
 
-  let step = 0;             // 0..MAX_STEPS
-  let xNow = 1.0;
+  const elMulNow = $("#mulNow");
+  const elStreak = $("#streak");
+  const elPotential = $("#potential");
+  const elStatus = $("#statusNow");
 
-  let selected = 0;         // индекс люка
-  let hazards = new Set();  // опасные люки на текущий шаг
-  let hazardKind = new Map();
+  const elHint = $("#sceneHint");
+  const elSideHint = $("#sideHint");
+  const elSideBet = $("#sideBet");
+  const elSideCash = $("#sideCash");
 
-  // ---------- UI ----------
-  function setBalance(v) {
-    balance = Math.max(0, Math.floor(v));
-    saveBalance(balance);
-    balEl.textContent = String(balance);
+  const elPLabel = $("#pLabel");
+  const mulBtns = $$(".mul");
+
+  const elSeries = $("#seriesToggle");
+  const flagBtns = $$(".flag");
+  const elFlagBadge = $("#flagBadge");
+
+  const targets = $$(".target");
+
+  const elGoal = $("#goal");
+  const elHands = $("#hands");
+  const elTrail = $("#handTrail");
+  const elBall = $("#ball");
+  const elImpact = $("#impact");
+  const elFxGoal = $("#fxGoal");
+  const elFxSave = $("#fxSave");
+  const elConfetti = $("#confetti");
+
+  const elStep = $("#stepNow");
+  const elLast = $("#lastNow");
+  const elLog = $("#log");
+
+  // --------- coords ----------
+  const TARGETS = [
+    { x: 18, y: 42 },   // t1
+    { x: 40, y: 42 },   // t2
+    { x: 62, y: 42 },   // t3
+    { x: 28, y: 132 },  // t4
+    { x: 52, y: 132 },  // t5
+  ];
+
+  // --------- storage ----------
+  function load(){
+    const b = Number(localStorage.getItem(LS_BAL));
+    balance = (Number.isFinite(b) && b >= 0) ? Math.floor(b) : 1000;
+
+    const so = localStorage.getItem(LS_SOUND);
+    soundOn = (so === "0") ? false : true;
+
+    renderAll();
+    resetScene();
+  }
+  function saveBalance(){ localStorage.setItem(LS_BAL, String(Math.floor(balance))); }
+
+  // --------- UI setters ----------
+  function setSound(on){
+    soundOn = !!on;
+    localStorage.setItem(LS_SOUND, soundOn ? "1" : "0");
+    elSoundDot.classList.toggle("on", soundOn);
+    elSoundDot.classList.toggle("off", !soundOn);
+    elSoundTxt.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+    if (soundOn) beep(520,0.05,"sine",0.02);
   }
 
-  function parseBet() {
-    const raw = String(betInput.value).replace(/[^\d]/g, "");
-    let v = Number(raw || "0");
-    if (!Number.isFinite(v)) v = 0;
-    v = clamp(v, 10, 1000000);
-    return Math.floor(v);
+  function setStatus(t){
+    elStatus.textContent = t;
+  }
+  function setHint(html){
+    elHint.innerHTML = html;
+    elSideHint.innerHTML = html;
   }
 
-  function setBet(v) {
-    bet = clamp(Math.floor(v), 10, 1000000);
-    betInput.value = String(bet);
-    betView.textContent = String(bet);
+  function pushLog(kind, text){
+    const pill = document.createElement("div");
+    pill.className = `pill ${kind}`;
+    pill.textContent = text;
+    elLog.prepend(pill);
+    // лимит 6
+    const pills = Array.from(elLog.querySelectorAll(".pill"));
+    pills.slice(6).forEach(p=>p.remove());
   }
 
-  function modeKey() {
-    return difficultyEl.value === "expert" ? "expert" : "low";
+  function updatePotential(){
+    const pot = Math.floor(state.bet * state.mul);
+    elPotential.textContent = String(pot);
+    elSideCash.textContent = state.armed ? `${pot} ₽` : "—";
   }
 
-  function setModeLabel() {
-    modeText.textContent = modeKey() === "expert" ? "Эксперт" : "Низкий";
+  function renderAll(){
+    elBalance.textContent = String(balance);
+    elBet.value = String(state.bet);
+    elSideBet.textContent = String(state.bet);
+
+    elMulNow.textContent = `x${state.mul.toFixed(2)}`;
+    elStreak.textContent = String(state.streak);
+
+    elStep.textContent = String(state.step);
+    elLast.textContent = state.last;
+
+    elFlagBadge.textContent = state.flag;
+
+    elSeries.checked = state.series;
+    setSound(soundOn);
+
+    elPlace.disabled = state.busy;
+    elCash.disabled = true; // кэшаут на пенальти как отдельная фича не нужен, держим disabled (если надо — включим)
+    updatePotential();
+
+    // шанс
+    elPLabel.textContent = `шанс: ${(state.pWin*100).toFixed(0)}%`;
   }
 
-  function setHint(html) {
-    hintEl.innerHTML = html;
-  }
-
-  function fx(text, type = "good") {
-    const el = document.createElement("div");
-    el.className = `fx ${type}`;
-    el.textContent = text;
-    fxLayer.appendChild(el);
-    setTimeout(() => el.remove(), 650);
-  }
-
-  function updateStats() {
-    xNowEl.textContent = `${fmt2(xNow)}x`;
-    stepNowEl.textContent = String(step);
-
-    const profit = stakeLocked ? Math.floor(bet * xNow) : 0;
-    profitEl.textContent = String(profit);
-    profitMulEl.textContent = `(x${fmt2(xNow)})`;
-
-    cashView.textContent = (running && stakeLocked && !busted && step > 0) ? `${profit} ₽` : "—";
-  }
-
-  function updateButtons() {
-    // Ставка доступна только когда раунд не идёт и ставка не списана
-    startBtn.disabled = running || stakeLocked || busted;
-
-    // Вперёд доступен только во время раунда
-    forwardBtn.disabled = !(running && stakeLocked && !busted);
-
-    // Кэшаут после успешного шага
-    cashoutBtn.disabled = !(running && stakeLocked && !busted && step > 0);
-
-    // блокируем редактирование ставки во время раунда
-    betInput.disabled = running || stakeLocked;
-    betMinus.disabled = betInput.disabled;
-    betPlus.disabled = betInput.disabled;
-    difficultyEl.disabled = running || stakeLocked;
-    chipsWrap.classList.toggle("disabled", betInput.disabled);
-  }
-
-  // ---------- traffic light ----------
-  function setTraffic(state /* red|yellow|green */) {
-    lampRed.classList.toggle("on", state === "red");
-    lampYellow.classList.toggle("on", state === "yellow");
-    lampGreen.classList.toggle("on", state === "green");
-  }
-
-  function trafficLoop() {
-    const seq = ["red", "yellow", "green", "yellow"];
-    let i = 0;
-    setInterval(() => {
-      if (!running) { setTraffic("green"); return; }
-      setTraffic(seq[i % seq.length]);
-      i++;
-    }, 700);
-  }
-
-  // ---------- ladder ----------
-  function buildLadder() {
-    ladderRow.innerHTML = "";
-    const arr = LADDERS[modeKey()];
-    for (let i = 0; i < arr.length; i++) {
-      const el = document.createElement("div");
-      el.className = "lStep";
-      el.textContent = `x${fmt2(arr[i])}`;
-      ladderRow.appendChild(el);
-    }
-    markLadder();
-  }
-
-  function markLadder() {
-    const els = [...ladderRow.querySelectorAll(".lStep")];
-    els.forEach((el, idx) => el.classList.toggle("active", idx === step - 1));
-  }
-
-  // ---------- holes row ----------
-  const holeEls = [];
-  function nextMultiplier() {
-    const arr = LADDERS[modeKey()];
-    // шаг=0 => следующий будет arr[0]
-    const idx = clamp(step, 0, arr.length - 1);
-    return arr[idx];
-  }
-
-  function setHolesLabels() {
-    const m = nextMultiplier();
-    holeEls.forEach((h) => {
-      const mul = h.querySelector(".mul");
-      if (mul) mul.textContent = `x${fmt2(m)}`;
+  // --------- scene reset ----------
+  function resetTargets(){
+    targets.forEach(t=>{
+      t.classList.remove("hit","miss");
+      t.classList.toggle("enabled", state.armed && !state.busy);
     });
   }
 
-  function highlightSelected() {
-    holeEls.forEach((h, idx) => h.classList.toggle("select", idx === selected));
+  function clearFX(){
+    elFxGoal.classList.remove("show");
+    elFxSave.classList.remove("show");
   }
 
-  function buildHolesRow() {
-    holesRow.innerHTML = "";
-    holeEls.length = 0;
-
-    for (let i = 0; i < HOLES; i++) {
-      const h = document.createElement("button");
-      h.type = "button";
-      h.className = "hole";
-      h.dataset.idx = String(i);
-
-      const mul = document.createElement("div");
-      mul.className = "mul";
-      h.appendChild(mul);
-
-      h.addEventListener("click", async () => {
-        await ensureAudio();
-        if (!running && !stakeLocked) {
-          selected = i;
-          highlightSelected();
-          placeChicken(true);
-          beep(520, 0.04, "sine", 0.018);
-          return;
-        }
-        if (running && stakeLocked && !busted) {
-          selected = i;
-          highlightSelected();
-          beep(520, 0.04, "sine", 0.018);
-        }
-      });
-
-      holesRow.appendChild(h);
-      holeEls.push(h);
-    }
-
-    setHolesLabels();
-    highlightSelected();
+  function resetBallHands(){
+    elBall.classList.remove("kick");
+    elBall.style.transform = "translateX(-50%)";
+    elBall.style.bottom = "74px";
+    elHands.style.transform = "translate(-50%, -50%)";
+    elHands.style.opacity = "0.95";
+    elTrail.style.opacity = "0";
   }
 
-  // ---------- chicken movement ----------
-  function placeChicken(immediate = false) {
-    const target = holeEls[selected];
-    if (!target) return;
+  function resetScene(){
+    state.busy = false;
+    state.armed = false;
 
-    const rRect = roadEl.getBoundingClientRect();
-    const tRect = target.getBoundingClientRect();
+    resetTargets();
+    clearFX();
+    resetBallHands();
 
-    const cx = (tRect.left + tRect.right) / 2 - rRect.left;
-    const cy = (tRect.top + tRect.bottom) / 2 - rRect.top - 6;
+    setStatus("Ожидание");
+    setHint(`Нажми <b>Ставка</b>, затем выбери точку удара.`);
+    updatePotential();
+    renderAll();
+  }
 
-    if (immediate) {
-      chickenEl.style.left = `${cx}px`;
-      chickenEl.style.top = `${cy}px`;
+  // --------- math / bet ----------
+  function parseBet(){
+    let v = Number(String(elBet.value).replace(/[^\d.]/g,""));
+    if (!Number.isFinite(v)) v = state.bet;
+    v = Math.floor(clamp(v, 1, 1_000_000));
+    state.bet = v;
+    elBet.value = String(v);
+    elSideBet.textContent = String(v);
+    updatePotential();
+  }
+
+  function placeBet(){
+    if (state.busy) return;
+    parseBet();
+
+    if (balance < state.bet){
+      setStatus("Недостаточно");
+      setHint(`Недостаточно баланса для ставки.`);
+      state.last = "Нет баланса";
+      renderAll();
+      sSave();
       return;
     }
 
-    chickenEl.classList.remove("jump");
-    void chickenEl.offsetWidth;
-    chickenEl.classList.add("jump");
-    chickenEl.style.left = `${cx}px`;
-    chickenEl.style.top = `${cy}px`;
+    balance -= state.bet;
+    saveBalance();
+
+    state.armed = true;
+    state.step += 1;
+
+    setStatus("Выбор удара");
+    setHint(`Выбери точку <b>в воротах</b>.`);
+    state.last = "Ставка принята";
+    renderAll();
+    resetTargets();
+    sClick();
   }
 
-  function revealRow() {
-    // подсветить опасные/безопасные
-    holeEls.forEach((h, idx) => {
-      h.classList.remove("safe", "bad");
-      if (hazards.has(idx)) h.classList.add("bad");
-      else h.classList.add("safe");
-    });
-
-    // короткий “шлагбаум”
-    barrierEl.classList.add("show");
-    setTimeout(() => barrierEl.classList.remove("show"), 520);
-
-    // затем очистить подсветки
-    setTimeout(() => {
-      holeEls.forEach((h) => h.classList.remove("safe", "bad"));
-      highlightSelected();
-      setHolesLabels();
-    }, 760);
+  // --------- animation helpers ----------
+  function goalRect(){
+    return elGoal.getBoundingClientRect();
   }
 
-  // ---------- hazard generation ----------
-  function genHazardsForStep(stepIndex0) {
-    hazards = new Set();
-    hazardKind = new Map();
+  function moveHands(idx){
+    const r = goalRect();
+    const x = (TARGETS[idx].x/100)*r.width;
+    const y = TARGETS[idx].y;
 
-    const mk = modeKey();
-    const p = HAZARD_P[mk][clamp(stepIndex0, 0, HAZARD_P[mk].length - 1)] ?? 0.2;
-
-    // сколько опасных люков (минимум 1)
-    const base = mk === "expert" ? 2 : 1;
-    const extra = mk === "expert" ? (Math.random() < 0.35 ? 1 : 0) : (Math.random() < 0.22 ? 1 : 0);
-    let dangerCount = clamp(base + extra, 1, HOLES - 2);
-
-    // если “повезло” — иногда уменьшаем количество опасных
-    if (Math.random() > p) dangerCount = clamp(dangerCount - 1, 1, HOLES - 2);
-
-    // перемешать индексы
-    const pool = [...Array(HOLES).keys()];
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    for (let i = 0; i < dangerCount; i++) hazards.add(pool[i]);
-
-    // тип опасности
-    for (const idx of hazards) {
-      if (mk === "low") hazardKind.set(idx, "car");
-      else {
-        const r = Math.random();
-        if (r < 0.45) hazardKind.set(idx, "car");
-        else if (r < 0.75) hazardKind.set(idx, "fire");
-        else hazardKind.set(idx, "fall");
-      }
-    }
+    elTrail.style.opacity = "1";
+    elHands.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
   }
 
-  // ---------- cars (vertical) ----------
-  function clearCars() {
-    carsLayer.innerHTML = "";
+  function showImpact(idx){
+    const r = goalRect();
+    const x = (TARGETS[idx].x/100)*r.width;
+    const y = TARGETS[idx].y;
+
+    elImpact.style.left = `${x + r.left - elGoal.getBoundingClientRect().left}px`;
+    elImpact.style.top  = `${y}px`;
+
+    elImpact.classList.remove("show");
+    void elImpact.offsetWidth;
+    elImpact.classList.add("show");
   }
 
-  function spawnCars() {
-    clearCars();
-    const mk = modeKey();
-    const carCount = mk === "expert" ? 8 : 6;
-    const lanesX = [20, 50, 80]; // %
+  function kickBall(idx){
+    const r = goalRect();
+    const goalLeft = r.left;
+    const goalCenterX = goalLeft + r.width/2;
 
-    for (let i = 0; i < carCount; i++) {
-      const car = document.createElement("div");
-      const taxi = Math.random() < 0.35;
-      car.className = "car " + (taxi ? "taxi" : "");
-      const x = lanesX[(Math.random() * lanesX.length) | 0];
-      car.style.left = `${x}%`;
+    const tx = goalLeft + (TARGETS[idx].x/100)*r.width;
+    const dx = tx - goalCenterX;
 
-      const dirUp = Math.random() < 0.5;
-      car.classList.add(dirUp ? "moveUp" : "moveDown");
-
-      const dur = mk === "expert" ? (2.2 + Math.random() * 2.2) : (3.0 + Math.random() * 2.6);
-      const delay = Math.random() * 2.0;
-      car.style.animationDuration = `${dur}s`;
-      car.style.animationDelay = `${delay}s`;
-
-      carsLayer.appendChild(car);
-    }
+    elBall.classList.add("kick");
+    elBall.style.transform = `translateX(calc(-50% + ${dx}px)) scale(0.82)`;
+    elBall.style.bottom = "300px";
   }
 
-  // ---------- end states ----------
-  function playLose(kind) {
-    chickenEl.classList.remove("hit");
-    void chickenEl.offsetWidth;
-    chickenEl.classList.add("hit");
-
-    if (kind === "car") {
-      fx("СБИТА МАШИНОЙ", "bad");
-      beep(180, 0.12, "square", 0.03);
-      beep(120, 0.16, "sine", 0.025);
-    } else if (kind === "fire") {
-      fx("ОГОНЬ 🔥", "bad");
-      beep(240, 0.10, "sawtooth", 0.02);
-      beep(140, 0.14, "sawtooth", 0.018);
+  function showFX(type){
+    if (type === "goal"){
+      elFxGoal.classList.remove("show");
+      void elFxGoal.offsetWidth;
+      elFxGoal.classList.add("show");
     } else {
-      fx("ПРОВАЛ", "bad");
-      beep(200, 0.10, "triangle", 0.02);
-      beep(90, 0.18, "triangle", 0.018);
+      elFxSave.classList.remove("show");
+      void elFxSave.offsetWidth;
+      elFxSave.classList.add("show");
     }
   }
 
-  function endLose(kind) {
-    busted = true;
-    running = false;
-    stakeLocked = false;
-
-    stageSub.textContent = "Поражение — ставка сгорела.";
-    setHint(`<b>Поражение.</b> Нажми <b>Ставка</b>, чтобы начать заново.`);
-    playLose(kind);
-
-    // сброс лестницы
-    step = 0;
-    xNow = 1.0;
-    buildLadder();
-    setHolesLabels();
-
-    updateStats();
-    updateButtons();
-
-    setTraffic("red");
-    setTimeout(() => setTraffic("green"), 650);
-  }
-
-  function endCashout() {
-    const win = Math.floor(bet * xNow);
-    setBalance(balance + win);
-
-    stageSub.textContent = `Кэшаут: +${win} ₽`;
-    setHint(`<b>Кэшаут успешен.</b> Хочешь ещё — нажми <b>Ставка</b>.`);
-    fx(`+${win} ₽`, "good");
-    beep(740, 0.07, "sine", 0.02);
-    beep(980, 0.08, "sine", 0.02);
-
-    running = false;
-    stakeLocked = false;
-    busted = false;
-
-    step = 0;
-    xNow = 1.0;
-    buildLadder();
-    setHolesLabels();
-
-    updateStats();
-    updateButtons();
-    setTraffic("green");
-  }
-
-  // ---------- actions ----------
-  function canAfford(amount) {
-    return balance >= amount;
-  }
-
-  async function startRound() {
-    await ensureAudio();
-
-    const b = parseBet();
-    setBet(b);
-
-    if (!canAfford(bet)) {
-      stageSub.textContent = "Недостаточно баланса для ставки.";
-      setHint(`<b>Недостаточно баланса</b> для ставки.`);
-      beep(180, 0.08, "sine", 0.02);
-      return;
+  function confettiBurst(){
+    // 18 частиц
+    elConfetti.innerHTML = "";
+    const colors = ["rgba(59,130,246,.95)","rgba(34,197,94,.95)","rgba(236,72,153,.95)","rgba(255,255,255,.75)"];
+    for (let i=0;i<18;i++){
+      const p = document.createElement("i");
+      p.style.left = `${20 + Math.random()*60}%`;
+      p.style.top  = `${10 + Math.random()*20}%`;
+      p.style.background = colors[(Math.random()*colors.length)|0];
+      p.style.animationDelay = `${Math.random()*0.12}s`;
+      p.style.transform = `translateY(-20px) rotate(${(Math.random()*120)|0}deg)`;
+      elConfetti.appendChild(p);
     }
-
-    setBalance(balance - bet);
-
-    stakeLocked = true;
-    running = true;
-    busted = false;
-
-    step = 0;
-    xNow = 1.0;
-
-    setModeLabel();
-    buildLadder();
-    setHolesLabels();
-    highlightSelected();
-    placeChicken(true);
-
-    stageSub.textContent = "Серия началась — живи.";
-    setHint(`Выбери люк и жми <b>Вперёд</b>. Кэшаут доступен после 1 удачного шага.`);
-
-    spawnCars();
-    setTraffic("red");
-    setTimeout(() => setTraffic("green"), 650);
-
-    updateStats();
-    updateButtons();
-
-    beep(520, 0.06, "sine", 0.02);
-    beep(760, 0.05, "sine", 0.016);
   }
 
-  async function forward() {
-    await ensureAudio();
-    if (!running || !stakeLocked || busted) return;
+  // --------- keeper RNG ----------
+  function roll(playerIdx){
+    // если win -> keeper не туда; если lose -> keeper туда же
+    const win = Math.random() < state.pWin;
+    if (!win) return { win:false, keeperIdx: playerIdx };
 
-    // опасности для текущего шага (0-based)
-    genHazardsForStep(step);
-
-    // прыжок
-    placeChicken(false);
-    beep(520, 0.05, "sine", 0.016);
-
-    setTimeout(() => {
-      const bad = hazards.has(selected);
-      revealRow();
-
-      if (bad) {
-        const kind = hazardKind.get(selected) || "car";
-        endLose(kind);
-        return;
-      }
-
-      // успех
-      step += 1;
-      const arr = LADDERS[modeKey()];
-      xNow = arr[clamp(step - 1, 0, arr.length - 1)];
-
-      stageSub.textContent = "Успех! X вырос.";
-      fx("ЯЙЦО ✅", "good");
-      beep(740, 0.05, "triangle", 0.018);
-
-      markLadder();
-      setHolesLabels();
-
-      updateStats();
-      updateButtons();
-
-      setTraffic("yellow");
-      setTimeout(() => setTraffic("green"), 360);
-
-      if (step >= MAX_STEPS) {
-        setTimeout(() => {
-          stageSub.textContent = "Макс. шаг — авто-кэшаут.";
-          endCashout();
-        }, 420);
-      }
-    }, 170);
+    const others = [0,1,2,3,4].filter(i=>i!==playerIdx);
+    const keeperIdx = others[(Math.random()*others.length)|0];
+    return { win:true, keeperIdx };
   }
 
-  async function cashout() {
-    await ensureAudio();
-    if (cashoutBtn.disabled) return;
-    endCashout();
-  }
+  // --------- main shot ----------
+  async function shoot(playerIdx){
+    if (!state.armed || state.busy) return;
+    state.busy = true;
+    resetTargets();
+    clearFX();
 
-  // ---------- bet controls ----------
-  betMinus.addEventListener("click", async () => {
-    await ensureAudio();
-    setBet(parseBet() - 10);
-    beep(320, 0.03, "sine", 0.012);
-  });
+    setStatus("Удар...");
+    setHint(`Удар по воротам...`);
+    renderAll();
 
-  betPlus.addEventListener("click", async () => {
-    await ensureAudio();
-    setBet(parseBet() + 10);
-    beep(360, 0.03, "sine", 0.012);
-  });
+    // визуальный выбор
+    targets.forEach(t=>t.classList.remove("hit","miss"));
 
-  betInput.addEventListener("input", () => {
-    betInput.value = betInput.value.replace(/[^\d]/g, "");
-    setBet(parseBet());
-  });
+    // RNG
+    const { win, keeperIdx } = roll(playerIdx);
 
-  chipsWrap.addEventListener("click", async (e) => {
-    const btn = e.target.closest(".chip");
-    if (!btn || betInput.disabled) return;
-    await ensureAudio();
+    // анимации
+    sKick();
+    moveHands(keeperIdx);
+    kickBall(playerIdx);
+    showImpact(playerIdx);
 
-    const v = btn.dataset.chip;
-    if (v === "max") setBet(balance > 0 ? balance : 10);
-    else setBet(Number(v));
+    await sleep(580);
 
-    beep(420, 0.04, "sine", 0.014);
-  });
-
-  difficultyEl.addEventListener("change", async () => {
-    await ensureAudio();
-    setModeLabel();
-    buildLadder();
-    setHolesLabels();
-    spawnCars();
-    beep(520, 0.05, "sine", 0.014);
-  });
-
-  // ---------- main buttons ----------
-  startBtn.addEventListener("click", startRound);
-  forwardBtn.addEventListener("click", forward);
-  cashoutBtn.addEventListener("click", cashout);
-
-  // ---------- init ----------
-  function resetUI() {
-    stageSub.textContent = "Нажми “Ставка” чтобы начать.";
-    setHint(`Нажми <b>Ставка</b> чтобы начать. Затем выбери люк и жми <b>Вперёд</b>.`);
-
-    running = false;
-    stakeLocked = false;
-    busted = false;
-
-    step = 0;
-    xNow = 1.0;
-
-    hazards = new Set();
-    hazardKind = new Map();
-
-    setModeLabel();
-    buildLadder();
-    buildHolesRow();
-    placeChicken(true);
-
-    spawnCars();
-    setTraffic("green");
-
-    updateStats();
-    updateButtons();
-  }
-
-  function init() {
-    setBalance(loadBalance());
-    setBet(parseBet() || 100);
-    soundUI();
-    trafficLoop();
-    resetUI();
-  }
-
-  init();
-})();
+    if (win){
+      targets[playerIdx].classList.add("hit");
+      setStatus("ГОЛ!");
+      showFX("goal");
+      confettiBurst();
+      elGoal.classList.add
