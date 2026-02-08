@@ -1,12 +1,3 @@
-// Penalty FULL v3
-// - 15 зон (5x3)
-// - Ставка -> активируется раунд -> клик по зоне = удар
-// - Вратарь "прыгает" в случайную зону
-// - Анимации: мяч летит по дуге, удар/отскок, тряска при сейве, вспышки FX
-// - Звуки: кнопка, удар, гол, сейв
-// - Серия: если включена — считает победы подряд (не меняет odds, но сохраняет streak)
-// - Баланс localStorage
-
 (() => {
   // ---------- RNG ----------
   function rand() {
@@ -18,66 +9,76 @@
 
   // ---------- DOM ----------
   const targetsEl = document.getElementById("targets");
-  const goalFrame = document.getElementById("goalFrame");
+  const sceneEl   = document.getElementById("scene");
   const keeperEl  = document.getElementById("keeper");
-  const glovesEl  = keeperEl.querySelector(".gloves");
+  const glovesEl  = document.getElementById("gloves");
   const ballEl    = document.getElementById("ball");
   const fxEl      = document.getElementById("fx");
+  const bannerEl  = document.getElementById("banner");
+  const netEl     = document.getElementById("net");
 
-  const overlay   = document.getElementById("overlay");
+  const overlay = document.getElementById("overlay");
   const overlayTitle = document.getElementById("overlayTitle");
-  const overlaySub   = document.getElementById("overlaySub");
-  const overlayOk    = document.getElementById("overlayOk");
+  const overlaySub = document.getElementById("overlaySub");
+  const overlayOk = document.getElementById("overlayOk");
 
-  const multiRow  = document.getElementById("multiRow");
-  const multiBtns = [...multiRow.querySelectorAll(".multiBtn")];
+  const soundBtn = document.getElementById("soundBtn");
+  const soundDot = document.getElementById("soundDot");
+  const soundText = document.getElementById("soundText");
+
+  const betMinus = document.getElementById("betMinus");
+  const betPlus  = document.getElementById("betPlus");
+  const betHalf  = document.getElementById("betHalf");
+  const betDouble= document.getElementById("betDouble");
+  const betMax   = document.getElementById("betMax");
+  const quickBtns= [...document.querySelectorAll(".pillBtn[data-add]")];
+
+  const multiRow = document.getElementById("multiRow");
+  const multiBtns= [...multiRow.querySelectorAll(".multiBtn")];
 
   const seriesToggle = document.getElementById("seriesToggle");
   const streakText = document.getElementById("streakText");
 
-  const betText = document.getElementById("betText");
-  const minusBtn = document.getElementById("minusBtn");
-  const plusBtn = document.getElementById("plusBtn");
-  const halfBtn = document.getElementById("halfBtn");
-  const doubleBtn = document.getElementById("doubleBtn");
-
-  const stakeBtn = document.getElementById("stakeBtn");
+  const startBtn = document.getElementById("startBtn");
   const resetBtn = document.getElementById("resetBtn");
   const addMoneyBtn = document.getElementById("addMoneyBtn");
 
-  const balText = document.getElementById("balText");
-  const topMoney = document.getElementById("topMoney");
-
-  const soundBtn = document.getElementById("soundBtn");
-  const soundChip = document.getElementById("soundChip");
-
+  const betText = document.getElementById("betText");
   const statusText = document.getElementById("statusText");
   const lastText = document.getElementById("lastText");
-  const stepText = document.getElementById("stepText");
+  const xText = document.getElementById("xText");
   const xTextTop = document.getElementById("xTextTop");
+  const stepText = document.getElementById("stepText");
+
+  const balTop = document.getElementById("balTop");
+  const balSide = document.getElementById("balSide");
+
+  const stateBet = document.getElementById("stateBet");
+  const stateStreak = document.getElementById("stateStreak");
+  const hintBox = document.getElementById("hintBox");
 
   // ---------- Storage ----------
-  const LS_BAL = "mini_balance_penalty_full_v3";
+  const LS_BAL = "mini_balance_penalty_v6";
 
   // ---------- State ----------
   const S = {
     odds: 1.76,
     bet: 100,
     balance: 1000,
-    inRound: false,     // после нажатия Ставка
-    animLock: false,    // во время анимаций
-    picked: null,       // 0..14
-    keeperPick: null,   // 0..14
-    streak: 0,
-    step: 0,
     sound: true,
+
+    inRound: false,     // ставка сделана, ждём удар
+    animLock: false,    // идёт анимация
+    picked: null,
+    keeperPick: null,
+
+    step: 0,
+    streak: 0,
   };
 
-  // ---------- Audio (WebAudio, “богаче”) ----------
+  // ---------- Audio ----------
   let ac = null;
-  function ensureAC(){
-    ac ||= new (window.AudioContext || window.webkitAudioContext)();
-  }
+  function ensureAC(){ ac ||= new (window.AudioContext || window.webkitAudioContext)(); }
   function tone({freq=440, dur=0.08, type="sine", gain=0.03, slide=0}){
     if (!S.sound) return;
     try{
@@ -91,103 +92,103 @@
       g.gain.setValueAtTime(gain, t0);
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
       o.connect(g); g.connect(ac.destination);
-      o.start(t0);
-      o.stop(t0 + dur);
+      o.start(t0); o.stop(t0 + dur);
     }catch(e){}
   }
-  function clickSfx(){ tone({freq:520, dur:0.05, type:"triangle", gain:0.02}); }
-  function kickSfx(){
-    tone({freq:180, dur:0.04, type:"square", gain:0.02});
-    tone({freq:420, dur:0.07, type:"sine", gain:0.02, slide:-120});
-  }
-  function goalSfx(){
-    tone({freq:740, dur:0.10, type:"sine", gain:0.03});
-    setTimeout(()=>tone({freq:980, dur:0.12, type:"sine", gain:0.02}), 60);
-    setTimeout(()=>tone({freq:1240, dur:0.08, type:"triangle", gain:0.015}), 120);
-  }
-  function saveSfx(){
-    tone({freq:140, dur:0.10, type:"square", gain:0.03});
-    setTimeout(()=>tone({freq:220, dur:0.08, type:"square", gain:0.02}), 70);
-  }
+  const clickSfx = () => tone({freq:520, dur:0.05, type:"triangle", gain:0.02});
+  const kickSfx  = () => { tone({freq:180, dur:0.05, type:"square", gain:0.02}); tone({freq:430, dur:0.08, type:"sine", gain:0.02, slide:-140}); };
+  const goalSfx  = () => { tone({freq:740, dur:0.11, type:"sine", gain:0.03}); setTimeout(()=>tone({freq:980, dur:0.12, type:"sine", gain:0.02}), 70); };
+  const saveSfx  = () => { tone({freq:150, dur:0.11, type:"square", gain:0.03}); setTimeout(()=>tone({freq:240, dur:0.09, type:"square", gain:0.02}), 80); };
 
   // ---------- Helpers ----------
   const fmtRub = (n) => `${Math.floor(n)} ₽`;
+
+  function render() {
+    betText.textContent = fmtRub(S.bet);
+    xText.textContent = `x${S.odds.toFixed(2)}`;
+    xTextTop.textContent = `x${S.odds.toFixed(2)}`;
+    stepText.textContent = String(S.step);
+
+    balTop.textContent = fmtRub(S.balance);
+    balSide.textContent = fmtRub(S.balance);
+
+    streakText.textContent = String(S.streak);
+    stateBet.textContent = fmtRub(S.bet);
+    stateStreak.textContent = String(S.streak);
+
+    startBtn.disabled = S.animLock; // важно: кнопку “Ставка” не лочим навсегда
+  }
+
   function setBalance(n){
     S.balance = Math.max(0, Math.floor(n));
     localStorage.setItem(LS_BAL, String(S.balance));
-    balText.textContent = fmtRub(S.balance);
-    topMoney.textContent = `${Math.max(0, Math.floor(S.balance/100))} $`;
+    render();
   }
-  function setBet(n){
-    S.bet = Math.max(1, Math.floor(n));
-    betText.textContent = fmtRub(S.bet);
-  }
-  function setOdds(v){
-    S.odds = v;
-    xTextTop.textContent = `x${S.odds.toFixed(2)}`;
-  }
-  function setStreak(n){
-    S.streak = Math.max(0, n|0);
-    streakText.textContent = String(S.streak);
-  }
-  function setStatus(txt){ statusText.textContent = txt; }
-  function setLast(txt){ lastText.textContent = txt; }
-  function setStep(n){ S.step = n|0; stepText.textContent = String(S.step); }
 
-  function lockForAnim(lock){
+  function setStatus(t){ statusText.textContent = t; }
+  function setLast(t){ lastText.textContent = t; }
+
+  function lockInputs(lock){
     S.animLock = lock;
-    // targets lock handled by class
-    stakeBtn.disabled = lock;
-    minusBtn.disabled = lock || S.inRound;
-    plusBtn.disabled = lock || S.inRound;
-    halfBtn.disabled = lock || S.inRound;
-    doubleBtn.disabled = lock || S.inRound;
-    multiBtns.forEach(b => b.disabled = lock || S.inRound);
+
+    // ставки/настройки нельзя менять во время активного раунда или анимации
+    const blocked = lock || S.inRound;
+
+    betMinus.disabled = blocked;
+    betPlus.disabled = blocked;
+    betHalf.disabled = blocked;
+    betDouble.disabled = blocked;
+    betMax.disabled = blocked;
+    quickBtns.forEach(b => b.disabled = blocked);
+    multiBtns.forEach(b => b.disabled = blocked);
   }
 
   function clearTargets(){
-    [...targetsEl.querySelectorAll(".t")].forEach(t => {
-      t.classList.remove("selected","pulseGood","pulseBad","locked");
+    [...targetsEl.querySelectorAll(".t")].forEach(t=>{
+      t.classList.remove("sel","kp","good","bad","lock");
     });
   }
 
   function resetVisual(){
-    overlay.hidden = true;
     clearTargets();
-    // вернуть мяч и руки
-    ballEl.style.transition = "none";
-    keeperEl.style.transition = "none";
-    glovesEl.style.transition = "none";
+    fxEl.innerHTML = "";
+    hideBanner();
+    netEl.classList.remove("shake");
+
+    S.picked = null;
+    S.keeperPick = null;
 
     ballEl.style.opacity = "1";
     ballEl.style.transform = "translateX(-50%) translate(0px,0px) scale(1)";
     keeperEl.style.transform = "translateX(-50%) translate(0px,0px)";
     glovesEl.style.transform = "scale(1)";
-
-    // force reflow
-    void ballEl.offsetHeight;
-
-    // restore transitions
-    ballEl.style.transition = "transform 620ms cubic-bezier(.2,.9,.2,1), opacity 200ms ease";
-    keeperEl.style.transition = "transform 320ms cubic-bezier(.2,.9,.2,1)";
-    glovesEl.style.transition = "transform 220ms ease";
-
-    fxEl.innerHTML = "";
-    S.picked = null;
-    S.keeperPick = null;
   }
 
-  function buildTargets(){
-    targetsEl.innerHTML = "";
-    for(let i=0;i<15;i++){
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "t";
-      b.dataset.i = String(i);
-      b.addEventListener("click", () => onPick(i));
-      targetsEl.appendChild(b);
-    }
+  // banner (не блокирует клики)
+  function showBanner(text, good){
+    bannerEl.textContent = text;
+    bannerEl.classList.remove("good","bad","show");
+    bannerEl.classList.add(good ? "good" : "bad");
+    requestAnimationFrame(()=> bannerEl.classList.add("show"));
+    setTimeout(()=> hideBanner(), 900);
   }
+  function hideBanner(){
+    bannerEl.classList.remove("show","good","bad");
+    bannerEl.textContent = "";
+  }
+
+  // overlay
+  function openOverlay(title, sub){
+    overlayTitle.textContent = title;
+    overlaySub.textContent = sub;
+    overlay.hidden = false;
+  }
+  function closeOverlay(){
+    overlay.hidden = true;
+  }
+  overlayOk.addEventListener("click", ()=>{ clickSfx(); closeOverlay(); });
+  overlay.addEventListener("click", (e)=>{ if(e.target === overlay){ clickSfx(); closeOverlay(); } });
+  window.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && !overlay.hidden){ clickSfx(); closeOverlay(); } });
 
   function centerOf(el){
     const r = el.getBoundingClientRect();
@@ -195,13 +196,12 @@
   }
 
   function spawnSparks(x, y, good=true){
-    // x,y in frame coordinates (px)
     const count = good ? 10 : 7;
     for(let i=0;i<count;i++){
       const s = document.createElement("div");
       s.className = "spark";
       const ang = rand()*Math.PI*2;
-      const dist = (good ? 50 : 35) + rand()*25;
+      const dist = (good ? 60 : 42) + rand()*24;
       const dx = Math.cos(ang)*dist;
       const dy = Math.sin(ang)*dist;
 
@@ -211,7 +211,6 @@
       s.style.boxShadow = good ? "0 0 18px rgba(31,226,141,.55)" : "0 0 18px rgba(255,59,59,.45)";
       s.style.animation = "pop 520ms ease forwards";
 
-      // using transform via CSS keyframes is global; move with translate via inline
       s.animate([
         { transform: "translate(0px,0px) scale(.6)", opacity: 0.2 },
         { transform: `translate(${dx*0.6}px, ${dy*0.6}px) scale(1.05)`, opacity: 1 },
@@ -223,226 +222,251 @@
     }
   }
 
+  // ---------- Build 15 targets ----------
+  function buildTargets(){
+    targetsEl.innerHTML = "";
+    for(let i=0;i<15;i++){
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "t";
+      b.dataset.i = String(i);
+      b.addEventListener("click", () => onTarget(i));
+      targetsEl.appendChild(b);
+    }
+  }
+
   // ---------- Game flow ----------
   function startRound(){
     if (S.animLock) return;
+
+    // не даём зависнуть “итогу”
+    if (!overlay.hidden) closeOverlay();
+
     clickSfx();
 
     if (S.balance < S.bet){
-      overlayTitle.textContent = "Недостаточно средств";
-      overlaySub.textContent = `Нужно ${fmtRub(S.bet)}`;
-      overlay.hidden = false;
       setStatus("Недостаточно баланса");
-      setLast("—");
+      hintBox.textContent = "Недостаточно баланса для ставки.";
       saveSfx();
+      openOverlay("Недостаточно средств", `Нужно ${fmtRub(S.bet)}`);
       return;
     }
 
+    // списали 1 раз
     setBalance(S.balance - S.bet);
+
     S.inRound = true;
-    setStatus("Выбери точку удара");
-    setLast("—");
-    setStep(S.step + 1);
+    S.step += 1;
 
     resetVisual();
-    lockForAnim(false);
+    lockInputs(false);
 
-    // подсказка: пока раунд активен — кружки живые
+    setStatus("Выбери точку удара");
+    setLast("—");
+    hintBox.textContent = "Кликни по зоне (5×3) — мяч сразу полетит туда.";
+
+    render();
   }
 
-  function onPick(i){
+  // выбор вратаря: немного “умнее”, но без читов
+  function pickKeeper(){
+    // часть времени — рандом
+    if (rand() < 0.70) return rint(15);
+
+    // иногда “рядом”, чтобы выглядело живее
+    const p = S.picked;
+    const row = Math.floor(p / 5);
+    const col = p % 5;
+    const nr = Math.max(0, Math.min(2, row + (rint(3)-1)));
+    const nc = Math.max(0, Math.min(4, col + (rint(3)-1)));
+    return nr*5 + nc;
+  }
+
+  function onTarget(i){
     if (!S.inRound || S.animLock) return;
 
-    clearTargets();
-    const btn = targetsEl.querySelector(`.t[data-i="${i}"]`);
-    if (!btn) return;
-
-    btn.classList.add("selected");
+    // 1:1 — клик = сразу удар
     S.picked = i;
-
     shoot();
   }
 
   function shoot(){
     if (!S.inRound || S.animLock || S.picked === null) return;
 
-    S.keeperPick = rint(15);
+    S.keeperPick = pickKeeper();
+
+    // lock UI
+    S.animLock = true;
     const targets = [...targetsEl.querySelectorAll(".t")];
-    targets.forEach(t => t.classList.add("locked"));
-    lockForAnim(true);
+    targets.forEach(t => t.classList.add("lock"));
 
-    kickSfx();
-    setStatus("Удар...");
-
+    // mark picked + keeper
+    clearTargets();
     const pickedBtn = targetsEl.querySelector(`.t[data-i="${S.picked}"]`);
     const keeperBtn = targetsEl.querySelector(`.t[data-i="${S.keeperPick}"]`);
+    pickedBtn?.classList.add("sel");
+    keeperBtn?.classList.add("kp");
 
-    const frame = goalFrame.getBoundingClientRect();
+    setStatus("Удар...");
+    hintBox.textContent = "Удар!";
+
+    kickSfx();
+
+    // coords
+    const frame = sceneEl.getBoundingClientRect();
     const from = centerOf(ballEl);
     const to = centerOf(pickedBtn);
+
     const keeperFrom = centerOf(keeperEl);
     const keeperTo = centerOf(keeperBtn);
 
     const dx = to.x - from.x;
     const dy = to.y - from.y;
 
-    // "дуга" — добавим дополнительный подъем вверх
-    const arcUp = -Math.min(120, Math.abs(dy) + 80);
+    // траектория дугой: выше если верхний ряд
+    const row = Math.floor(S.picked / 5);
+    const arcUp = row === 0 ? -200 : row === 1 ? -160 : -120;
 
-    // используем Web Animations для более плавной дуги
-    ballEl.animate([
-      { transform: "translateX(-50%) translate(0px,0px) scale(1)" },
-      { transform: `translateX(-50%) translate(${dx*0.52}px, ${dy*0.52 + arcUp}px) scale(0.92)` },
-      { transform: `translateX(-50%) translate(${dx}px, ${dy}px) scale(0.86)` }
-    ], { duration: 620, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" });
-
-    // прыжок вратаря
+    // keeper jumps
     const kdx = keeperTo.x - keeperFrom.x;
     const kdy = keeperTo.y - keeperFrom.y;
     keeperEl.style.transform = `translateX(-50%) translate(${kdx}px, ${kdy}px)`;
-    glovesEl.style.transform = "scale(1.05)";
+    glovesEl.style.transform = "scale(1.10)";
 
-    // Результат
-    setTimeout(() => {
+    // ball flight
+    const ballAnim = ballEl.animate([
+      { transform: "translateX(-50%) translate(0px,0px) scale(1)" },
+      { transform: `translateX(-50%) translate(${dx*0.55}px, ${dy*0.55 + arcUp}px) scale(0.92)` },
+      { transform: `translateX(-50%) translate(${dx}px, ${dy}px) scale(0.86)` }
+    ], { duration: 640, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" });
+
+    ballAnim.onfinish = () => {
       const isSave = (S.keeperPick === S.picked);
 
-      // координаты вспышки (внутри fx контейнера)
-      const localX = (to.x - frame.left) - (frame.width/2) + (fxEl.clientWidth/2);
-      const localY = (to.y - frame.top) - 40;
-
-      spawnSparks(localX, localY, !isSave);
+      const localX = (to.x - frame.left);
+      const localY = (to.y - frame.top);
 
       if (isSave){
-        pickedBtn.classList.add("pulseBad");
+        // SAVE
+        pickedBtn?.classList.add("bad");
         saveSfx();
         setStatus("Сейв");
         setLast("Сейв");
-        // тряска рук
-        glovesEl.animate([
-          { transform:"scale(1.05)" },
-          { transform:"scale(1.12) rotate(-4deg)" },
-          { transform:"scale(1.06) rotate(3deg)" },
-          { transform:"scale(1.05)" }
-        ], { duration: 260, easing:"ease-out" });
+        hintBox.textContent = "Сейв! Ставка проиграна.";
+        showBanner("СЕЙВ", false);
 
-        // мяч "отскакивает" вниз
+        spawnSparks(localX, localY, false);
+
         ballEl.animate([
-          { opacity: 1 },
-          { opacity: 1, transform: `translateX(-50%) translate(${dx*0.92}px, ${dy*0.92}px) scale(0.86)` },
-          { opacity: 0.0, transform: `translateX(-50%) translate(${dx*0.70}px, ${dy*0.70 + 160}px) scale(0.75)` }
-        ], { duration: 360, easing:"cubic-bezier(.2,.9,.2,1)", fill:"forwards" });
+          { opacity: 1, transform: `translateX(-50%) translate(${dx}px, ${dy}px) scale(0.86)` },
+          { opacity: 1, transform: `translateX(-50%) translate(${dx*0.55}px, ${dy + 150}px) scale(0.80)` },
+          { opacity: 0.0, transform: `translateX(-50%) translate(${dx*0.35}px, ${dy + 230}px) scale(0.72)` }
+        ], { duration: 420, easing:"cubic-bezier(.2,.9,.2,1)", fill:"forwards" });
 
-        overlayTitle.textContent = "СЕЙВ!";
-        overlaySub.textContent = "Ставка проиграна";
+        if (seriesToggle.checked) S.streak = 0;
 
-        if (seriesToggle.checked) setStreak(0);
+        setTimeout(()=> openOverlay("СЕЙВ!", "Ставка проиграна"), 160);
 
       } else {
-        pickedBtn.classList.add("pulseGood");
+        // GOAL
+        pickedBtn?.classList.add("good");
         goalSfx();
         setStatus("Гол");
         setLast("Гол");
+        hintBox.textContent = "ГОООЛ!";
+        showBanner("ГОЛ", true);
+
+        spawnSparks(localX, localY, true);
+
+        netEl.classList.add("shake");
+        setTimeout(()=> netEl.classList.remove("shake"), 420);
 
         const win = Math.floor(S.bet * S.odds);
         setBalance(S.balance + win);
 
-        overlayTitle.textContent = "ГОЛ!";
-        overlaySub.textContent = `+${fmtRub(win)}`;
-
-        if (seriesToggle.checked) setStreak(S.streak + 1);
-        else setStreak(0);
-
-        // мяч "проваливается" в сетку и исчезает
         ballEl.animate([
-          { opacity: 1 },
           { opacity: 1, transform: `translateX(-50%) translate(${dx}px, ${dy}px) scale(0.86)` },
-          { opacity: 0.0, transform: `translateX(-50%) translate(${dx}px, ${dy + 90}px) scale(0.70)` }
-        ], { duration: 380, easing:"ease-out", fill:"forwards" });
+          { opacity: 1, transform: `translateX(-50%) translate(${dx}px, ${dy + 75}px) scale(0.76)` },
+          { opacity: 0.0, transform: `translateX(-50%) translate(${dx}px, ${dy + 135}px) scale(0.68)` }
+        ], { duration: 420, easing:"ease-out", fill:"forwards" });
+
+        if (seriesToggle.checked) S.streak += 1;
+        else S.streak = 0;
+
+        setTimeout(()=> openOverlay("ГОЛ!", `+${fmtRub(win)}`), 160);
       }
 
-      // завершение
-      S.inRound = false;
-      lockForAnim(false);
-      targets.forEach(t => t.classList.remove("locked"));
+      // end
+      setTimeout(() => {
+        S.inRound = false;
+        S.animLock = false;
+        glovesEl.style.transform = "scale(1)";
+        targets.forEach(t => t.classList.remove("lock"));
+        setStatus("Ожидание");
+        hintBox.textContent = "Нажми “Ставка”, чтобы начать ещё раз.";
+        render();
+      }, 520);
+    };
 
-      // показать итог
-      overlay.hidden = false;
-
-    }, 640);
-  }
-
-  function closeOverlay(){
-    overlay.hidden = true;
-    resetVisual();
-    setStatus("Ожидание");
+    render();
   }
 
   function resetAll(){
     clickSfx();
+    closeOverlay();
     S.inRound = false;
-    lockForAnim(false);
-    setStreak(0);
-    setStep(0);
+    S.animLock = false;
+    S.step = 0;
+    S.streak = 0;
     setStatus("Ожидание");
     setLast("—");
+    hintBox.textContent = "Нажми “Ставка”, чтобы начать.";
     resetVisual();
+    lockInputs(false);
+    render();
   }
 
   // ---------- Events ----------
-  stakeBtn.addEventListener("click", startRound);
-
-  overlayOk.addEventListener("click", closeOverlay);
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeOverlay(); });
-
+  startBtn.addEventListener("click", startRound);
   resetBtn.addEventListener("click", resetAll);
+  addMoneyBtn.addEventListener("click", ()=>{ clickSfx(); setBalance(S.balance + 1000); });
 
-  addMoneyBtn.addEventListener("click", () => {
-    clickSfx();
-    setBalance(S.balance + 1000);
-  });
+  betMinus.addEventListener("click", ()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.max(1, S.bet-10); render(); });
+  betPlus.addEventListener("click",  ()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.min(1_000_000, S.bet+10); render(); });
+  betHalf.addEventListener("click",  ()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.max(1, Math.floor(S.bet/2)); render(); });
+  betDouble.addEventListener("click",()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.min(1_000_000, S.bet*2); render(); });
 
-  minusBtn.addEventListener("click", () => {
-    if (S.inRound || S.animLock) return;
-    clickSfx();
-    setBet(S.bet - 10);
-  });
-  plusBtn.addEventListener("click", () => {
-    if (S.inRound || S.animLock) return;
-    clickSfx();
-    setBet(S.bet + 10);
-  });
-  halfBtn.addEventListener("click", () => {
-    if (S.inRound || S.animLock) return;
-    clickSfx();
-    setBet(Math.max(1, Math.floor(S.bet/2)));
-  });
-  doubleBtn.addEventListener("click", () => {
-    if (S.inRound || S.animLock) return;
-    clickSfx();
-    setBet(Math.min(1_000_000, S.bet * 2));
-  });
-
-  multiBtns.forEach(btn => {
-    btn.addEventListener("click", () => {
-      if (S.inRound || S.animLock) return;
+  quickBtns.forEach(b=>{
+    b.addEventListener("click", ()=>{
+      if(S.inRound||S.animLock) return;
       clickSfx();
-      multiBtns.forEach(b => b.classList.remove("active"));
+      S.bet = Math.min(1_000_000, S.bet + Number(b.dataset.add));
+      render();
+    });
+  });
+  betMax.addEventListener("click", ()=>{
+    if(S.inRound||S.animLock) return;
+    clickSfx();
+    S.bet = Math.max(1, S.balance); // MAX = весь баланс
+    render();
+  });
+
+  multiBtns.forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      if(S.inRound||S.animLock) return;
+      clickSfx();
+      multiBtns.forEach(b=>b.classList.remove("active"));
       btn.classList.add("active");
-      setOdds(Number(btn.dataset.m));
+      S.odds = Number(btn.dataset.m);
+      render();
     });
   });
 
-  soundBtn.addEventListener("click", () => {
+  soundBtn.addEventListener("click", ()=>{
     S.sound = !S.sound;
-    soundChip.textContent = S.sound ? "on" : "off";
+    soundText.textContent = `Звук: ${S.sound ? "on" : "off"}`;
+    soundDot.style.background = S.sound ? "var(--good)" : "var(--bad)";
     clickSfx();
-  });
-
-  // keyboard shortcuts (фарш)
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !overlay.hidden) closeOverlay();
-    if (e.key === "Enter" && !S.inRound && overlay.hidden) startRound();
-    if (e.key.toLowerCase() === "r") resetAll();
   });
 
   // ---------- Init ----------
@@ -450,13 +474,11 @@
   S.balance = Number.isFinite(saved) && saved >= 0 ? Math.floor(saved) : 1000;
 
   buildTargets();
-  setBalance(S.balance);
-  setBet(S.bet);
-  setOdds(S.odds);
-  setStreak(0);
-  setStep(0);
   setStatus("Ожидание");
   setLast("—");
-  soundChip.textContent = "on";
+  hintBox.textContent = "Нажми “Ставка”, чтобы начать.";
+  overlay.hidden = true;
+  lockInputs(false);
+  render();
   resetVisual();
 })();
