@@ -1,552 +1,859 @@
+/* app.js — Chicken (Stake-style) | GitHub Pages | без зависимостей
+   ✅ Ставка 1 раз на старт
+   ✅ Forward (прыжок) + Cashout
+   ✅ Easy: только машины (мягкая математика)
+   ✅ Hard: машины + огонь + провал (жёсткая математика)
+   ✅ Плавные анимации на canvas
+   ✅ X-лестница (видна заранее) + подсветка шага
+   ✅ Звук (тихий) + тумблер
+   ✅ localStorage баланс
+*/
+
 (() => {
-  const $ = (id) => document.getElementById(id);
+  // ---------- helpers ----------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const fmtRub = (n) => `${Math.max(0, Math.floor(n))} ₽`;
+  const fmtX = (x) => `x${x.toFixed(2)}`;
 
-  // Tabs
-  const tabNormal = $("tabNormal");
-  const tabHard = $("tabHard");
+  // ---------- DOM (без "магии": если id нет — подхватим по data-role) ----------
+  const canvas = $("#gameCanvas") || $("[data-role='canvas']");
+  const wrapArena = canvas?.parentElement;
 
-  // Bet controls
-  const betMinus = $("betMinus");
-  const betPlus = $("betPlus");
-  const betInput = $("betInput");
-  const btnBet = $("btnBet");
-  const btnCashout = $("btnCashout");
+  const soundBtn = $("#soundToggle") || $("[data-role='sound']");
+  const soundText = $("#soundText") || $("[data-role='soundText']");
+  const soundDot = $(".soundDot") || $("[data-role='soundDot']");
 
-  // Top
-  const balanceValue = $("balanceValue");
-  const soundBtn = $("soundBtn");
-  const soundDot = $("soundDot");
-  const soundText = $("soundText");
+  const balanceEl = $("#balanceValue") || $("[data-role='balance']");
+  const betInput = $("#betInput") || $("[data-role='bet']");
+  const btnBet = $("#btnBet") || $("[data-role='betBtn']");
+  const btnForward = $("#btnForward") || $("[data-role='forwardBtn']");
+  const btnCashout = $("#btnCashout") || $("[data-role='cashoutBtn']");
+  const difficultySel = $("#difficulty") || $("[data-role='difficulty']");
 
-  // Center
-  const towerMeta = $("towerMeta");
-  const towerGrid = $("towerGrid");
-  const fxLayer = $("fxLayer");
+  const profitValueEl = $("#profitValue") || $("[data-role='profitValue']");
+  const statusTextEl = $("#statusText") || $("[data-role='statusText']");
+  const hudXEl = $("#hudX") || $("[data-role='hudX']");
+  const hudStepEl = $("#hudStep") || $("[data-role='hudStep']");
 
-  // Right
-  const xScale = $("xScale");
-  const lastResultValue = $("lastResultValue");
-  const lastWinValue = $("lastWinValue");
+  const multStrip = $("#multStrip") || $("[data-role='multStrip']");
 
-  // Status
-  const statusValue = $("statusValue");
-  const curXValue = $("curXValue");
-  const potentialValue = $("potentialValue");
+  const chipBtns = $$("[data-amt], .chip");
 
-  // Modal
-  const modal = $("modal");
-  const modalBackdrop = $("modalBackdrop");
-  const modalTitle = $("modalTitle");
-  const modalText = $("modalText");
-  const modalOk = $("modalOk");
+  // ---------- safety: must have canvas ----------
+  if (!canvas) {
+    console.error("Canvas #gameCanvas not found. Проверь index.html");
+    return;
+  }
 
-  // ===== SETTINGS =====
-  const ROWS = 7;
-  const COLS = 4;
+  const ctx = canvas.getContext("2d", { alpha: true });
 
-  // Чуть “прибито” чтобы 3 яйца не дюпились
-  const MULT_NORMAL = [1.12, 1.28, 1.46, 1.66, 1.89, 2.15, 2.45];
-  // Сложный — высокий риск, высокий X
-  const MULT_HARD   = [2.45, 3.20, 4.20, 5.50, 7.20, 9.40, 12.30];
+  // ---------- persistent state ----------
+  const LS_BAL = "oai_balance_chicken";
+  const LS_SND = "oai_sound_chicken";
 
-  const MODE = { NORMAL: "normal", HARD: "hard" };
+  let balance = Number(localStorage.getItem(LS_BAL) || "1000");
+  if (!Number.isFinite(balance) || balance < 0) balance = 1000;
 
-  const LS_BAL = "dt_balance_v3";
-  const LS_SOUND = "dt_sound_v3";
+  let soundOn = (localStorage.getItem(LS_SND) ?? "1") === "1";
 
-  // ===== STATE =====
-  let mode = MODE.NORMAL;
-  let balance = loadBalance();
-  let soundOn = loadSound();
-
-  let inGame = false;
-  let lock = false;
-
-  let bet = 100;
-
-  // row index: 0 bottom -> ROWS-1 top
-  let currentRow = 0;
-  let passedRows = 0;
-  let currentX = 1.0;
-
-  // board[r] = { safe:Set(cols), revealed:Set(cols) }
-  let board = [];
-
-  // ===== SVG ICONS =====
-  const EggSVG = `
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <defs>
-        <linearGradient id="eg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#33f0c5"/>
-          <stop offset="1" stop-color="#1bbd95"/>
-        </linearGradient>
-      </defs>
-      <path d="M32 6c-11 0-19 12-19 27s8 25 19 25 19-10 19-25S43 6 32 6z"
-            fill="url(#eg)" opacity="0.98"/>
-      <path d="M23 22c2-6 6-10 10-10" stroke="rgba(255,255,255,.46)" stroke-width="4" stroke-linecap="round" fill="none"/>
-    </svg>
-  `;
-  const SkullSVG = `
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <defs>
-        <linearGradient id="sk" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#ff6b86"/>
-          <stop offset="1" stop-color="#cf2a49"/>
-        </linearGradient>
-      </defs>
-      <path d="M32 8c-12 0-20 9-20 20 0 8 4 14 10 17v7c0 2 2 4 4 4h2v-5h8v5h2c2 0 4-2 4-4v-7c6-3 10-9 10-17 0-11-8-20-20-20z"
-            fill="url(#sk)"/>
-      <circle cx="24" cy="30" r="6" fill="rgba(0,0,0,.35)"/>
-      <circle cx="40" cy="30" r="6" fill="rgba(0,0,0,.35)"/>
-      <path d="M32 35c-3 2-4 4-4 7h8c0-3-1-5-4-7z" fill="rgba(0,0,0,.35)"/>
-      <path d="M24 52h16" stroke="rgba(0,0,0,.35)" stroke-width="4" stroke-linecap="round"/>
-    </svg>
-  `;
-
-  // ===== SOUND (Stake-like: clicks + reveal + win streak + lose thud) =====
+  // ---------- audio (тихо и приятно) ----------
   let audioCtx = null;
-  const ensureAudio = () => {
+  function ensureAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  };
-
-  const tone = (type, f0, f1, dur, vol = 0.03) => {
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  }
+  function beep({ f = 440, t = 0.06, type = "sine", v = 0.025, slide = 0, delay = 0 }) {
     if (!soundOn) return;
-    try {
-      ensureAudio();
-      const t0 = audioCtx.currentTime;
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(f0, t0);
-      if (f1 != null) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
-      g.gain.setValueAtTime(vol, t0);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(t0); o.stop(t0 + dur);
-    } catch {}
-  };
+    ensureAudio();
+    const ac = audioCtx;
+    const now = ac.currentTime + delay;
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = type;
 
-  const clickSfx = () => tone("triangle", 520, 420, 0.045, 0.02);
-  const betSfx = () => { tone("sine", 640, 780, 0.06, 0.025); setTimeout(()=>tone("sine", 920, 980, 0.05, 0.02), 55); };
-  const eggSfx = () => tone("sine", 820, 1060, 0.06, 0.028);
-  const skullSfx = () => tone("sawtooth", 220, 120, 0.10, 0.02);
-  const cashoutSfx = () => {
-    tone("sine", 820, 980, 0.06, 0.03);
-    setTimeout(()=>tone("sine", 980, 1180, 0.06, 0.028), 70);
-    setTimeout(()=>tone("sine", 1180, 1380, 0.06, 0.026), 140);
-  };
+    o.frequency.setValueAtTime(f, now);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, f * slide), now + t);
 
-  // ===== INIT =====
-  function init() {
-    renderBalance();
-    setSoundUI();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(v, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + t);
 
-    betInput.value = String(bet);
-
-    resetBoard();
-    buildGrid();
-    renderXScale();
-    setModeUI();
-    setStatus("Ожидание");
-    updateNumbers();
-
-    // Events
-    tabNormal.addEventListener("click", () => switchMode(MODE.NORMAL));
-    tabHard.addEventListener("click", () => switchMode(MODE.HARD));
-
-    betMinus.addEventListener("click", () => { setBet(bet - 10); clickSfx(); });
-    betPlus.addEventListener("click", () => { setBet(bet + 10); clickSfx(); });
-
-    betInput.addEventListener("input", () => {
-      const n = parseInt(String(betInput.value).replace(/\D/g, ""), 10);
-      if (Number.isFinite(n)) bet = clamp(n, 10, 1_000_000);
-      betInput.value = String(bet);
-    });
-
-    document.querySelectorAll(".chip").forEach((b) => {
-      b.addEventListener("click", () => {
-        const v = b.getAttribute("data-v");
-        if (v === "MAX") setBet(balance);
-        else setBet(parseInt(v, 10));
-        clickSfx();
-      });
-    });
-
-    btnBet.addEventListener("click", onBetClick);
-    btnCashout.addEventListener("click", onCashout);
-
-    soundBtn.addEventListener("click", () => {
-      soundOn = !soundOn;
-      saveSound(soundOn);
-      setSoundUI();
-      clickSfx();
-    });
-
-    modalOk.addEventListener("click", closeModal);
-    modalBackdrop.addEventListener("click", closeModal);
+    o.connect(g);
+    g.connect(ac.destination);
+    o.start(now);
+    o.stop(now + t + 0.02);
+  }
+  function sfxStart() {
+    beep({ f: 280, t: 0.08, type: "triangle", v: 0.02, slide: 1.6 });
+    beep({ f: 520, t: 0.06, type: "sine", v: 0.018, delay: 0.06 });
+  }
+  function sfxJump() {
+    beep({ f: 360, t: 0.05, type: "triangle", v: 0.016, slide: 1.25 });
+  }
+  function sfxSafe() {
+    beep({ f: 640, t: 0.05, type: "sine", v: 0.018 });
+    beep({ f: 880, t: 0.05, type: "sine", v: 0.012, delay: 0.045 });
+  }
+  function sfxHit() {
+    beep({ f: 220, t: 0.10, type: "sawtooth", v: 0.018, slide: 0.55 });
+    beep({ f: 110, t: 0.12, type: "square", v: 0.010, delay: 0.05 });
+  }
+  function sfxCashout() {
+    beep({ f: 520, t: 0.06, type: "triangle", v: 0.017, slide: 1.3 });
+    beep({ f: 740, t: 0.06, type: "triangle", v: 0.014, delay: 0.05 });
   }
 
-  // ===== MODE =====
-  function setModeUI() {
-    tabNormal.classList.toggle("is-active", mode === MODE.NORMAL);
-    tabHard.classList.toggle("is-active", mode === MODE.HARD);
+  // ---------- game config ----------
+  const MODES = {
+    easy: {
+      name: "Лёгкий",
+      steps: 6,
+      // мягкая математика, чтобы не дюпалось
+      multipliers: [1.09, 1.15, 1.23, 1.31, 1.40, 1.55],
+      // только машины: шанс умереть растёт
+      deathChances: [0.08, 0.10, 0.12, 0.14, 0.16, 0.18],
+      hazards: ["car"], // визуально — машина
+    },
+    hard: {
+      name: "Эксперт",
+      steps: 6,
+      // близко к примеру со скринов (жёстко)
+      multipliers: [1.96, 4.14, 9.31, 22.61, 60.29, 180.00],
+      // тут опасности сильнее (машина/огонь/провал)
+      deathChances: [0.22, 0.24, 0.26, 0.28, 0.30, 0.32],
+      hazards: ["car", "fire", "hole"],
+    },
+  };
 
-    towerMeta.textContent =
-      mode === MODE.NORMAL
-        ? "Обычный: 3 яйца / 1 череп"
-        : "Сложный: 1 яйцо / 3 черепа";
+  // ---------- game state ----------
+  const S = {
+    modeKey: "easy",
+    running: false,     // ставка принята и игра активна
+    alive: false,       // ещё не проиграл
+    anim: false,        // идёт анимация прыжка
+    step: 0,            // пройдено шагов
+    bet: 100,
+    x: 1.0,
+    payout: 0,          // total payout (ставка * X)
+    lastMsg: "Ожидание",
+    // path pre-roll outcomes for each forward step
+    outcomes: [],       // 'safe' | 'dead'
+    hazardType: [],     // 'car'|'fire'|'hole' for dead
+    // visuals
+    chicken: { x: 0, y: 0, vx: 0, vy: 0, bob: 0, scale: 1, rot: 0 },
+    hit: { t: 0, type: null },
+    cashBurst: { t: 0 },
+  };
+
+  // ---------- layout / canvas sizing ----------
+  function resizeCanvas() {
+    const w = Math.max(320, wrapArena?.clientWidth || 900);
+    // высота как у stake панели (приятно)
+    const h = clamp(Math.round(w * 0.58), 360, 560);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // init chicken position
+    placeChickenAtStep(S.step, true);
   }
 
-  function switchMode(next) {
-    if (mode === next) return;
-    if (inGame) {
-      showModal("Режим", "Нельзя менять режим во время игры. Сначала заверши раунд.");
-      return;
+  window.addEventListener("resize", resizeCanvas);
+
+  // ---------- UI update ----------
+  function setStatus(text) {
+    S.lastMsg = text;
+    if (statusTextEl) statusTextEl.textContent = text;
+  }
+  function setBalance(v) {
+    balance = Math.max(0, Math.floor(v));
+    localStorage.setItem(LS_BAL, String(balance));
+    if (balanceEl) balanceEl.textContent = fmtRub(balance);
+  }
+  function setSoundUI() {
+    if (soundText) soundText.textContent = soundOn ? "Звук: on" : "Звук: off";
+    if (soundDot) {
+      soundDot.style.background = soundOn ? "var(--green)" : "var(--red)";
+      soundDot.style.boxShadow = soundOn
+        ? "0 0 0 4px rgba(32,208,122,.15)"
+        : "0 0 0 4px rgba(255,77,94,.14)";
     }
-    mode = next;
-    setModeUI();
-    resetBoard();
-    buildGrid();
-    renderXScale();
-    updateNumbers();
-    clickSfx();
+  }
+  function setBetUI(v) {
+    const val = clamp(Math.floor(v), 1, 999999);
+    S.bet = val;
+    if (betInput) betInput.value = String(val);
+  }
+  function updatePayout() {
+    S.payout = S.bet * S.x;
+    // показываем как "прибыль" — именно payout (как обычно у стейка в подобных)
+    if (profitValueEl) profitValueEl.textContent = fmtRub(S.payout);
+    if (hudXEl) hudXEl.textContent = fmtX(S.x);
+    if (hudStepEl) hudStepEl.textContent = `${S.step}/${MODES[S.modeKey].steps}`;
   }
 
-  function getMultArr() {
-    return mode === MODE.NORMAL ? MULT_NORMAL : MULT_HARD;
+  function syncButtons() {
+    // можно ставить только когда игра не в процессе анимации и нет активной серии
+    const canBet = !S.anim && !S.running;
+    const canForward = !S.anim && S.running && S.alive && S.step < MODES[S.modeKey].steps;
+    const canCashout = !S.anim && S.running && S.alive && S.step > 0;
+
+    if (btnBet) btnBet.disabled = !canBet;
+    if (btnForward) btnForward.disabled = !canForward;
+    if (btnCashout) btnCashout.disabled = !canCashout;
+
+    // косметика: primary/ghost
+    if (btnForward) {
+      btnForward.classList.toggle("ghost", !canForward && S.running);
+    }
+    if (btnCashout) {
+      btnCashout.classList.toggle("cashout", true);
+    }
   }
 
-  // ===== BOARD =====
-  function resetBoard() {
-    board = [];
-    for (let r = 0; r < ROWS; r++) {
-      const safe = new Set();
-      if (mode === MODE.NORMAL) {
-        const skullIndex = randInt(0, COLS - 1);
-        for (let c = 0; c < COLS; c++) if (c !== skullIndex) safe.add(c);
+  function buildMultiplierStrip() {
+    if (!multStrip) return;
+    multStrip.innerHTML = "";
+    const m = MODES[S.modeKey].multipliers;
+    m.forEach((xv, i) => {
+      const pill = document.createElement("div");
+      pill.className = "multPill";
+      pill.textContent = fmtX(xv);
+      pill.dataset.i = String(i + 1);
+      multStrip.appendChild(pill);
+    });
+    refreshStripState();
+  }
+
+  function refreshStripState() {
+    if (!multStrip) return;
+    const pills = $$(".multPill", multStrip);
+    pills.forEach((p, idx) => {
+      const stepIndex = idx + 1; // 1..N
+      p.classList.toggle("active", stepIndex === S.step + 1 && S.running && S.alive);
+      p.classList.toggle("done", stepIndex <= S.step && S.running);
+    });
+  }
+
+  // ---------- mode ----------
+  function getModeKey() {
+    const v = (difficultySel?.value || "").toLowerCase();
+    if (v.includes("hard") || v.includes("эксп") || v.includes("expert")) return "hard";
+    return "easy";
+  }
+  function setMode(key) {
+    S.modeKey = key;
+    // если во время игры переключили — сбрасываем (без багов)
+    resetRound("Ожидание");
+    buildMultiplierStrip();
+    updatePayout();
+    syncButtons();
+  }
+
+  // ---------- round / RNG ----------
+  function rollOutcomes() {
+    const mode = MODES[S.modeKey];
+    S.outcomes = [];
+    S.hazardType = [];
+    for (let i = 0; i < mode.steps; i++) {
+      const die = Math.random() < mode.deathChances[i];
+      S.outcomes.push(die ? "dead" : "safe");
+      if (die) {
+        const ht = mode.hazards[Math.floor(Math.random() * mode.hazards.length)];
+        S.hazardType.push(ht);
       } else {
-        const eggIndex = randInt(0, COLS - 1);
-        safe.add(eggIndex);
-      }
-      board.push({ safe, revealed: new Set() });
-    }
-
-    inGame = false;
-    lock = false;
-    passedRows = 0;
-    currentRow = 0;
-    currentX = 1.0;
-
-    btnCashout.disabled = true;
-    btnBet.disabled = false;
-
-    lastResultValue.textContent = "—";
-    lastWinValue.textContent = "—";
-
-    fxLayer.innerHTML = "";
-  }
-
-  // ===== GRID =====
-  function buildGrid() {
-    towerGrid.innerHTML = "";
-
-    // render from top to bottom visually
-    for (let visualRow = ROWS - 1; visualRow >= 0; visualRow--) {
-      for (let c = 0; c < COLS; c++) {
-        const tile = document.createElement("button");
-        tile.type = "button";
-        tile.className = "tile";
-        tile.setAttribute("data-row", String(visualRow));
-        tile.setAttribute("data-col", String(c));
-
-        tile.innerHTML = `
-          <div class="face front"><div class="frontHint"></div></div>
-          <div class="face back"><div class="iconWrap"></div></div>
-        `;
-
-        tile.addEventListener("click", () => onTileClick(visualRow, c, tile));
-        towerGrid.appendChild(tile);
+        S.hazardType.push(null);
       }
     }
-    refreshActiveRow();
   }
 
-  function refreshActiveRow() {
-    const tiles = towerGrid.querySelectorAll(".tile");
-    tiles.forEach((t) => {
-      const r = parseInt(t.getAttribute("data-row"), 10);
-      const isCurrent = inGame && r === currentRow && !lock;
-      const isDisabled = !inGame || r !== currentRow || lock;
-
-      t.classList.toggle("is-current", isCurrent);
-      t.classList.toggle("is-disabled", isDisabled);
-      t.disabled = isDisabled;
-    });
+  function resetRound(msg = "Ожидание") {
+    S.running = false;
+    S.alive = false;
+    S.anim = false;
+    S.step = 0;
+    S.x = 1.0;
+    S.payout = 0;
+    S.outcomes = [];
+    S.hazardType = [];
+    S.hit.t = 0;
+    S.hit.type = null;
+    S.cashBurst.t = 0;
+    placeChickenAtStep(0, true);
+    setStatus(msg);
+    updatePayout();
+    refreshStripState();
+    syncButtons();
   }
 
-  // ===== X SCALE =====
-  function renderXScale() {
-    const arr = getMultArr();
-    xScale.innerHTML = "";
-    for (let i = ROWS; i >= 1; i--) {
-      const mult = arr[i - 1];
-      const row = document.createElement("div");
-      row.className = "xRow";
-      row.innerHTML = `<span>Ряд ${i}</span><b>x${mult.toFixed(2)}</b>`;
-      xScale.appendChild(row);
-    }
-    markActiveXRow();
-  }
-
-  function markActiveXRow() {
-    const rows = xScale.querySelectorAll(".xRow");
-    rows.forEach((el) => el.classList.remove("is-active"));
-    const nextRow = passedRows + 1;
-    if (nextRow < 1 || nextRow > ROWS) return;
-    const idx = ROWS - nextRow;
-    if (rows[idx]) rows[idx].classList.add("is-active");
-  }
-
-  // ===== GAME =====
-  function onBetClick() {
-    if (inGame) return;
-
-    bet = clamp(parseInt(String(betInput.value).replace(/\D/g, ""), 10) || 100, 10, 1_000_000);
-    betInput.value = String(bet);
-
+  function startRound() {
+    const bet = clamp(Math.floor(Number(betInput?.value || S.bet)), 1, 999999);
     if (bet > balance) {
-      showModal("Недостаточно средств", "Баланс меньше ставки.");
-      skullSfx();
+      setStatus("Недостаточно баланса");
+      beep({ f: 200, t: 0.08, type: "square", v: 0.012 });
       return;
     }
 
-    balance -= bet;
-    saveBalance(balance);
-    renderBalance();
+    setBetUI(bet);
+    setBalance(balance - bet);
 
-    inGame = true;
-    lock = false;
-    passedRows = 0;
-    currentRow = 0;
-    currentX = 1.0;
+    S.running = true;
+    S.alive = true;
+    S.anim = false;
+    S.step = 0;
+    S.x = 1.0;
+    S.hit.t = 0;
+    S.hit.type = null;
+    S.cashBurst.t = 0;
 
-    btnBet.disabled = true;
-    btnCashout.disabled = true;
+    rollOutcomes();
+    placeChickenAtStep(0, true);
 
-    setStatus("Игра");
-    updateNumbers();
-    renderXScale();
-    refreshActiveRow();
-
-    betSfx();
+    setStatus("Серия началась — жми «Вперёд»");
+    sfxStart();
+    updatePayout();
+    refreshStripState();
+    syncButtons();
   }
 
-  async function onTileClick(r, c, tileEl) {
-    if (!inGame || lock) return;
-    if (r !== currentRow) return;
+  function cashout() {
+    if (!S.running || !S.alive || S.step <= 0 || S.anim) return;
 
-    const rowData = board[r];
-    if (rowData.revealed.has(c)) return;
+    const payout = S.bet * S.x;
+    setBalance(balance + payout);
+    S.cashBurst.t = 1;
+    setStatus(`Кэшаут: ${fmtRub(payout)} (${fmtX(S.x)})`);
+    sfxCashout();
 
-    lock = true;
-    refreshActiveRow();
+    // закрываем раунд
+    S.running = false;
+    S.alive = false;
+    syncButtons();
 
-    tileEl.classList.add("pop");
-    setTimeout(() => tileEl.classList.remove("pop"), 220);
+    // мягкая пауза и сброс
+    setTimeout(() => {
+      resetRound("Ожидание");
+    }, 750);
+  }
 
-    rowData.revealed.add(c);
+  function lose(type) {
+    S.alive = false;
+    S.running = false;
+    S.anim = false;
 
-    const safe = rowData.safe.has(c);
+    S.hit.t = 1;
+    S.hit.type = type || "car";
+    setStatus("Проигрыш");
+    sfxHit();
+    syncButtons();
 
-    // дуга “как на стейке”
-    spawnArcFX(tileEl, safe ? "egg" : "skull");
+    setTimeout(() => {
+      resetRound("Ожидание");
+    }, 900);
+  }
 
-    // reveal selected
-    reveal(tileEl, safe ? "egg" : "skull");
+  // ---------- geometry ----------
+  function geo() {
+    const w = parseFloat(canvas.style.width || "900");
+    const h = parseFloat(canvas.style.height || "520");
 
-    if (safe) {
-      eggSfx();
+    // игровая дорожка справа от "стартовой зоны"
+    const pad = 18;
+    const leftArea = w * 0.20;
+    const roadX = leftArea;
+    const roadW = w - roadX - pad;
+    const roadY = pad;
+    const roadH = h - pad * 2;
 
-      passedRows += 1;
-      currentX = getMultArr()[passedRows - 1];
+    return { w, h, pad, leftArea, roadX, roadW, roadY, roadH };
+  }
 
-      btnCashout.disabled = false;
-      setStatus(`Ряд пройден (${passedRows}/${ROWS})`);
-      updateNumbers();
-      markActiveXRow();
+  function stepPos(stepIndex /*0..steps*/) {
+    const g = geo();
+    const mode = MODES[S.modeKey];
+    const steps = mode.steps;
+    // позиции лунок по X
+    const x0 = g.roadX + g.roadW * 0.10;
+    const x1 = g.roadX + g.roadW * 0.92;
+    const t = steps === 0 ? 0 : stepIndex / steps;
+    const x = lerp(x0, x1, t);
+    const y = g.roadY + g.roadH * 0.64;
+    return { x, y };
+  }
 
-      await sleep(320);
+  function placeChickenAtStep(stepIndex, hardSet = false) {
+    const p = stepPos(stepIndex);
+    if (hardSet) {
+      S.chicken.x = p.x;
+      S.chicken.y = p.y;
+      S.chicken.vx = 0;
+      S.chicken.vy = 0;
+      S.chicken.rot = 0;
+      S.chicken.scale = 1;
+    }
+  }
 
-      if (passedRows >= ROWS) {
-        await sleep(240);
-        doCashout(true);
+  // ---------- forward / animation ----------
+  function forward() {
+    if (!S.running || !S.alive || S.anim) return;
+
+    const mode = MODES[S.modeKey];
+    if (S.step >= mode.steps) return;
+
+    S.anim = true;
+    syncButtons();
+
+    const nextStep = S.step + 1;
+    const from = stepPos(S.step);
+    const to = stepPos(nextStep);
+
+    const outcome = S.outcomes[S.step]; // result for THIS move
+    const hazard = S.hazardType[S.step];
+
+    const dur = 380; // ms
+    const start = performance.now();
+
+    sfxJump();
+
+    const jumpArc = (t) => Math.sin(Math.PI * t) * 28; // arc height
+
+    function tick(now) {
+      const t = clamp((now - start) / dur, 0, 1);
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+      S.chicken.x = lerp(from.x, to.x, ease);
+      S.chicken.y = lerp(from.y, to.y, ease) - jumpArc(ease);
+      S.chicken.rot = lerp(0, 0.12, ease);
+
+      if (t < 1) {
+        requestAnimationFrame(tick);
         return;
       }
 
-      currentRow += 1;
-      lock = false;
-      refreshActiveRow();
-      return;
+      // landing
+      S.chicken.x = to.x;
+      S.chicken.y = to.y;
+      S.chicken.rot = 0;
+
+      if (outcome === "safe") {
+        S.step = nextStep;
+        S.x = mode.multipliers[S.step - 1]; // step 1 => mult[0]
+        updatePayout();
+        refreshStripState();
+        setStatus(`Успех • ${fmtX(S.x)}`);
+        sfxSafe();
+
+        // done?
+        if (S.step >= mode.steps) {
+          // авто-кэшаут в конце (как финиш)
+          setTimeout(() => cashout(), 420);
+          S.anim = false;
+          return;
+        }
+
+        S.anim = false;
+        syncButtons();
+        return;
+      }
+
+      // dead
+      S.anim = false;
+      syncButtons();
+      lose(hazard || "car");
     }
 
-    // LOSE
-    skullSfx();
-
-    revealRow(r);
-    await sleep(520);
-
-    inGame = false;
-    btnCashout.disabled = true;
-    btnBet.disabled = false;
-
-    setStatus("Поражение");
-    updateNumbers();
-
-    lastResultValue.textContent = "Череп";
-    lastWinValue.textContent = "0 ₽";
-
-    showModal("Итог", `Череп! Ставка ${fmtMoney(bet)} сгорела.`);
-
-    lock = false;
-    refreshActiveRow();
+    requestAnimationFrame(tick);
   }
 
-  function onCashout() {
-    if (!inGame) return;
-    if (passedRows <= 0) return;
-    doCashout(false);
+  // ---------- drawing ----------
+  function drawRoundedRect(x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
   }
 
-  function doCashout(autoTop) {
-    const win = Math.floor(bet * currentX);
+  function drawRoad() {
+    const g = geo();
 
-    balance += win;
-    saveBalance(balance);
-    renderBalance();
+    // base
+    drawRoundedRect(g.roadX, g.roadY, g.roadW, g.roadH, 18);
+    const grd = ctx.createLinearGradient(g.roadX, g.roadY, g.roadX, g.roadY + g.roadH);
+    grd.addColorStop(0, "rgba(0,0,0,.20)");
+    grd.addColorStop(1, "rgba(0,0,0,.08)");
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.08)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
-    inGame = false;
-    btnCashout.disabled = true;
-    btnBet.disabled = false;
+    // lane lines
+    const lanes = 6;
+    for (let i = 1; i < lanes; i++) {
+      const y = g.roadY + (g.roadH / lanes) * i;
+      ctx.strokeStyle = "rgba(255,255,255,.06)";
+      ctx.setLineDash([6, 10]);
+      ctx.beginPath();
+      ctx.moveTo(g.roadX + 18, y);
+      ctx.lineTo(g.roadX + g.roadW - 18, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
-    setStatus("Кэшаут");
-    updateNumbers();
+    // vertical "movement guide" faint
+    ctx.strokeStyle = "rgba(255,255,255,.05)";
+    ctx.setLineDash([2, 14]);
+    for (let k = 0; k < 8; k++) {
+      const x = g.roadX + 28 + (g.roadW - 56) * (k / 7);
+      ctx.beginPath();
+      ctx.moveTo(x, g.roadY + 18);
+      ctx.lineTo(x, g.roadY + g.roadH - 18);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
 
-    lastResultValue.textContent = `Кэшаут x${currentX.toFixed(2)}`;
-    lastWinValue.textContent = fmtMoney(win);
+    // left sidewalk decoration
+    ctx.fillStyle = "rgba(255,255,255,.04)";
+    drawRoundedRect(g.roadX - g.leftArea + 10, g.roadY, g.leftArea - 20, g.roadH, 18);
+    ctx.fill();
 
-    revealRow(currentRow);
+    // traffic light small
+    const tlx = g.roadX - g.leftArea / 2;
+    const tly = g.roadY + g.roadH * 0.20;
+    ctx.fillStyle = "rgba(0,0,0,.18)";
+    drawRoundedRect(tlx - 18, tly - 26, 36, 52, 12);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.10)";
+    ctx.stroke();
 
-    showModal(
-      "Итог",
-      autoTop
-        ? `Вершина! Авто-кэшаут: x${currentX.toFixed(2)}. Выигрыш: ${fmtMoney(win)}.`
-        : `Кэшаут: x${currentX.toFixed(2)}. Выигрыш: ${fmtMoney(win)}.`
-    );
+    const r = 8;
+    ctx.beginPath();
+    ctx.arc(tlx, tly - 10, r, 0, Math.PI * 2);
+    ctx.fillStyle = S.running && S.alive ? "rgba(255,210,80,.90)" : "rgba(255,255,255,.10)";
+    ctx.fill();
 
-    cashoutSfx();
-    refreshActiveRow();
+    ctx.beginPath();
+    ctx.arc(tlx, tly + 12, r, 0, Math.PI * 2);
+    ctx.fillStyle = S.running && S.alive ? "rgba(255,255,255,.10)" : "rgba(255,255,255,.06)";
+    ctx.fill();
   }
 
-  // ===== REVEAL =====
-  function reveal(tileEl, type) {
-    tileEl.classList.add("revealed", type);
-    const wrap = tileEl.querySelector(".iconWrap");
-    if (!wrap) return;
-    wrap.innerHTML = type === "egg" ? EggSVG : SkullSVG;
+  function drawManholes() {
+    const g = geo();
+    const mode = MODES[S.modeKey];
+    const steps = mode.steps;
+
+    for (let i = 1; i <= steps; i++) {
+      const p = stepPos(i);
+      const rr = clamp(g.roadW * 0.035, 16, 24);
+      // base lid
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      const base = ctx.createRadialGradient(0, -rr * 0.2, rr * 0.4, 0, 0, rr * 1.2);
+      base.addColorStop(0, "rgba(255,255,255,.14)");
+      base.addColorStop(1, "rgba(0,0,0,.22)");
+      ctx.fillStyle = base;
+      ctx.beginPath();
+      ctx.arc(0, 0, rr, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255,255,255,.10)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, rr - 2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // highlight current next target
+      const isNext = S.running && S.alive && (i === S.step + 1);
+      const isDone = S.running && i <= S.step;
+      if (isNext) {
+        ctx.strokeStyle = "rgba(61,121,255,.75)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, rr + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (isDone) {
+        ctx.strokeStyle = "rgba(32,208,122,.35)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, rr + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // show label x on lid (subtle)
+      ctx.fillStyle = "rgba(233,241,255,.60)";
+      ctx.font = `800 ${Math.round(rr * 0.78)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${mode.multipliers[i - 1].toFixed(i === steps ? 0 : 2)}x`, 0, 0);
+
+      ctx.restore();
+    }
   }
 
-  function revealRow(r) {
-    const tiles = towerGrid.querySelectorAll(`.tile[data-row="${r}"]`);
-    const rowData = board[r];
-    tiles.forEach((t) => {
-      if (t.classList.contains("revealed")) return;
-      const c = parseInt(t.getAttribute("data-col"), 10);
-      const safe = rowData.safe.has(c);
-      reveal(t, safe ? "egg" : "skull");
+  function drawChicken() {
+    const g = geo();
+    const p = S.chicken;
+    const size = clamp(g.roadW * 0.05, 18, 26);
+
+    ctx.save();
+    ctx.translate(p.x, p.y - size * 0.85);
+    ctx.rotate(p.rot);
+
+    // shadow
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.beginPath();
+    ctx.ellipse(0, size * 1.25, size * 0.9, size * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // body
+    const body = ctx.createLinearGradient(0, -size, 0, size);
+    body.addColorStop(0, "rgba(255,255,255,.95)");
+    body.addColorStop(1, "rgba(230,240,255,.75)");
+    ctx.fillStyle = body;
+    drawRoundedRect(-size * 0.72, -size * 0.85, size * 1.44, size * 1.55, 14);
+    ctx.fill();
+
+    // head highlight
+    ctx.fillStyle = "rgba(255,255,255,.55)";
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.18, -size * 0.50, size * 0.45, size * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // beak
+    ctx.fillStyle = "rgba(255,210,80,.95)";
+    ctx.beginPath();
+    ctx.moveTo(size * 0.55, -size * 0.25);
+    ctx.lineTo(size * 0.85, -size * 0.12);
+    ctx.lineTo(size * 0.55, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // eye
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.beginPath();
+    ctx.arc(size * 0.28, -size * 0.42, size * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+
+    // comb
+    ctx.fillStyle = "rgba(255,80,110,.85)";
+    ctx.beginPath();
+    ctx.arc(-size * 0.20, -size * 0.95, size * 0.18, 0, Math.PI * 2);
+    ctx.arc(0, -size * 1.02, size * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+    // tiny feet
+    ctx.strokeStyle = "rgba(255,210,80,.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.15, size * 0.70);
+    ctx.lineTo(-size * 0.28, size * 0.88);
+    ctx.moveTo(size * 0.10, size * 0.70);
+    ctx.lineTo(size * 0.00, size * 0.90);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawHazardFX() {
+    if (S.hit.t <= 0) return;
+    const g = geo();
+    const t = S.hit.t;
+    const p = stepPos(S.step + 1); // приблизительно место смерти
+
+    ctx.save();
+    ctx.globalAlpha = t;
+
+    if (S.hit.type === "fire") {
+      const r = 18 + (1 - t) * 40;
+      const grd = ctx.createRadialGradient(p.x, p.y, 5, p.x, p.y, r);
+      grd.addColorStop(0, "rgba(255,120,60,.85)");
+      grd.addColorStop(1, "rgba(255,60,90,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (S.hit.type === "hole") {
+      const r = 20 + (1 - t) * 20;
+      ctx.fillStyle = "rgba(0,0,0,.65)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.10)";
+      ctx.stroke();
+    } else {
+      // car hit / generic
+      const r = 16 + (1 - t) * 55;
+      const grd = ctx.createRadialGradient(p.x, p.y, 6, p.x, p.y, r);
+      grd.addColorStop(0, "rgba(255,80,110,.85)");
+      grd.addColorStop(1, "rgba(255,80,110,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawCarGhost() {
+    // для атмосферы: на hard иногда проезжает машина сверху
+    const g = geo();
+    if (!(S.running && S.alive)) return;
+
+    const time = performance.now() * 0.001;
+    const show = S.modeKey === "hard" ? 0.75 : 0.45;
+    if (Math.sin(time * 1.2) < show) return;
+
+    const laneY = g.roadY + g.roadH * 0.30;
+    const x = g.roadX + ((time * 110) % (g.roadW + 220)) - 110;
+
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.translate(x, laneY);
+    const w = 54, h = 28;
+
+    ctx.fillStyle = "rgba(61,121,255,.55)";
+    drawRoundedRect(-w / 2, -h / 2, w, h, 10);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,.18)";
+    drawRoundedRect(-w * 0.12, -h * 0.33, w * 0.5, h * 0.35, 8);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(0,0,0,.35)";
+    ctx.beginPath(); ctx.arc(-w * 0.28, h * 0.46, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w * 0.28, h * 0.46, 6, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawCashBurst() {
+    if (S.cashBurst.t <= 0) return;
+    const g = geo();
+    const t = S.cashBurst.t;
+    const p = stepPos(S.step);
+
+    ctx.save();
+    ctx.globalAlpha = t;
+    const r = 30 + (1 - t) * 90;
+    const grd = ctx.createRadialGradient(p.x, p.y - 20, 10, p.x, p.y - 20, r);
+    grd.addColorStop(0, "rgba(32,208,122,.35)");
+    grd.addColorStop(1, "rgba(32,208,122,0)");
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - 20, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function render() {
+    const g = geo();
+    ctx.clearRect(0, 0, g.w, g.h);
+
+    drawRoad();
+    drawCarGhost();
+    drawManholes();
+    drawCashBurst();
+    drawChicken();
+    drawHazardFX();
+
+    // legend is in HTML (CSS). Here we just animate decay.
+    const dt = 1 / 60;
+    if (S.hit.t > 0) S.hit.t = Math.max(0, S.hit.t - dt * 2.4);
+    if (S.cashBurst.t > 0) S.cashBurst.t = Math.max(0, S.cashBurst.t - dt * 1.6);
+
+    requestAnimationFrame(render);
+  }
+
+  // ---------- events ----------
+  function wire() {
+    // sound
+    if (soundBtn) {
+      soundBtn.addEventListener("click", () => {
+        soundOn = !soundOn;
+        localStorage.setItem(LS_SND, soundOn ? "1" : "0");
+        setSoundUI();
+        if (soundOn) beep({ f: 520, t: 0.06, type: "triangle", v: 0.015 });
+      });
+    }
+
+    // chips
+    chipBtns.forEach((b) => {
+      b.addEventListener("click", () => {
+        const amt = Number(b.dataset.amt || b.textContent?.replace(/[^\d]/g, "") || "0");
+        if (amt > 0) setBetUI(amt);
+      });
     });
+
+    // bet +/- buttons (если в index есть)
+    const minus = $("#betMinus") || $("[data-role='betMinus']");
+    const plus = $("#betPlus") || $("[data-role='betPlus']");
+    if (minus) minus.addEventListener("click", () => setBetUI(S.bet - 10));
+    if (plus) plus.addEventListener("click", () => setBetUI(S.bet + 10));
+
+    // difficulty
+    if (difficultySel) {
+      difficultySel.addEventListener("change", () => {
+        setMode(getModeKey());
+      });
+    }
+
+    // main actions
+    if (btnBet) {
+      btnBet.addEventListener("click", () => startRound());
+    }
+    if (btnForward) {
+      btnForward.addEventListener("click", () => forward());
+    }
+    if (btnCashout) {
+      btnCashout.addEventListener("click", () => cashout());
+    }
+
+    // enter to bet/forward
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      if (!S.running) startRound();
+      else forward();
+    });
+
+    // unlock audio on first user interaction (mobile)
+    window.addEventListener("pointerdown", () => {
+      if (!soundOn) return;
+      ensureAudio();
+    }, { once: true });
   }
 
-  // ===== FX ARC (duga egg/skull) =====
-  function spawnArcFX(tileEl, type) {
-    const rectTile = tileEl.getBoundingClientRect();
-    const rectBoard = towerGrid.getBoundingClientRect();
+  // ---------- init ----------
+  function init() {
+    setBalance(balance);
+    setSoundUI();
+    setBetUI(Number(betInput?.value || 100) || 100);
 
-    // позиция относительно board/grid
-    const x = rectTile.left - rectBoard.left + rectTile.width / 2;
-    const y = rectTile.top - rectBoard.top + rectTile.height / 2;
+    setMode(getModeKey());
 
-    const el = document.createElement("div");
-    el.className = "fxItem " + (Math.random() < 0.5 ? "arcL" : "arcR");
-    el.style.left = `${x - 22}px`;
-    el.style.top = `${y - 22}px`;
-    el.innerHTML = (type === "egg") ? EggSVG : SkullSVG;
-
-    fxLayer.appendChild(el);
-    setTimeout(() => el.remove(), 720);
-  }
-
-  // ===== UI =====
-  function setStatus(t) { statusValue.textContent = t; }
-
-  function updateNumbers() {
-    curXValue.textContent = `x${currentX.toFixed(2)}`;
-    const potential = inGame && passedRows > 0 ? Math.floor(bet * currentX) : 0;
-    potentialValue.textContent = fmtMoney(potential);
-    markActiveXRow();
-  }
-
-  function renderBalance() {
-    balanceValue.textContent = fmtMoney(balance);
-  }
-
-  function setSoundUI() {
-    soundDot.style.background = soundOn ? "var(--egg)" : "rgba(255,255,255,.25)";
-    soundText.textContent = `Звук: ${soundOn ? "on" : "off"}`;
-  }
-
-  // ===== MODAL =====
-  function showModal(title, text) {
-    modalTitle.textContent = title;
-    modalText.textContent = text;
-    modal.classList.remove("hidden");
-  }
-
-  function closeModal() {
-    modal.classList.add("hidden");
-    // после итога: новый раунд, но режим сохраняем
-    resetBoard();
-    buildGrid();
-    renderXScale();
-    setModeUI();
     setStatus("Ожидание");
-    updateNumbers();
+    updatePayout();
+    syncButtons();
+
+    resizeCanvas();
+    wire();
+    requestAnimationFrame(render);
   }
 
-  // ===== STORAGE =====
-  function loadBalance() {
-    const raw = localStorage.getItem(LS_BAL);
-    const n = raw ? parseInt(raw, 10) : 1000;
-    return Number.isFinite(n) && n >= 0 ? n : 1000;
-  }
-  function saveBalance(v) { localStorage.setItem(LS_BAL, String(v)); }
-
-  function loadSound() {
-    const raw = localStorage.getItem(LS_SOUND);
-    if (raw === null) return true;
-    return raw === "1";
-  }
-  function saveSound(v) { localStorage.setItem(LS_SOUND, v ? "1" : "0"); }
-
-  // ===== UTIL =====
-  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
-  function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
-  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-  function fmtMoney(v) { return `${Math.floor(v).toLocaleString("ru-RU")} ₽`; }
-  function setBet(v) {
-    bet = clamp(v, 10, 1_000_000);
-    betInput.value = String(bet);
-  }
-
-  // ===== START =====
   init();
 })();
