@@ -11,7 +11,6 @@
   <div class="bg"></div>
 
   <div class="app">
-    <!-- TOP BAR -->
     <header class="topbar">
       <div class="brand">
         <div class="brandTitle">Dragon Tower</div>
@@ -19,7 +18,7 @@
       </div>
 
       <div class="topbarRight">
-        <button id="soundBtn" class="pill" type="button">
+        <button id="soundBtn" class="pill" type="button" aria-label="Переключить звук">
           <span id="soundDot" class="dot"></span>
           <span id="soundText">Звук: on</span>
         </button>
@@ -31,9 +30,8 @@
       </div>
     </header>
 
-    <!-- MAIN -->
     <main class="layout">
-      <!-- LEFT PANEL -->
+      <!-- LEFT -->
       <section class="panel left">
         <div class="card tabs">
           <button id="tabNormal" class="tab is-active" type="button">Обычный</button>
@@ -44,9 +42,9 @@
           <div class="cardTitle">Ставка</div>
 
           <div class="betRow">
-            <button id="betMinus" class="iconBtn" type="button" aria-label="Минус">−</button>
+            <button id="betMinus" class="iconBtn" type="button">−</button>
             <input id="betInput" class="betInput" inputmode="numeric" value="100" />
-            <button id="betPlus" class="iconBtn" type="button" aria-label="Плюс">+</button>
+            <button id="betPlus" class="iconBtn" type="button">+</button>
           </div>
 
           <div class="chips">
@@ -67,9 +65,8 @@
             <div class="rulesTitle">Правила</div>
             <ul>
               <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
-              <li>Выбирай плитку в текущем ряду. Безопасно — идёшь выше.</li>
-              <li>Ловушка — поражение, ставка сгорает.</li>
-              <li>Кэшаут — забираешь <b>Ставка × X</b> после победы.</li>
+              <li>Выбирай плитку в текущем ряду. <b>Яйцо</b> — вверх, <b>Череп</b> — проигрыш.</li>
+              <li>Кэшаут доступен после победы ряда: <b>Ставка × X</b>.</li>
             </ul>
           </div>
         </div>
@@ -87,10 +84,10 @@
         <div class="card board">
           <div class="boardHead">
             <div class="boardTitle">Башня</div>
-            <div id="towerMeta" class="boardMeta">Обычный: 3 яйца / 1 ловушка в ряду</div>
+            <div id="towerMeta" class="boardMeta">Обычный: 3 яйца / 1 череп</div>
           </div>
 
-          <!-- DECOR (по центру, не кликается, не мешает) -->
+          <!-- Декор (не кликается) -->
           <div class="decorRow" aria-hidden="true">
             <div class="tower t1"></div>
             <div class="tower t2"></div>
@@ -99,22 +96,25 @@
 
           <div id="towerGrid" class="grid" aria-label="Игровое поле"></div>
 
+          <!-- FX слой для “вылета” яйца/черепа (дуга) -->
+          <div id="fxLayer" class="fxLayer" aria-hidden="true"></div>
+
           <div class="boardFoot">
             <div class="legend">
               <span class="leg egg"></span><span>Яйцо</span>
-              <span class="leg trap"></span><span>Ловушка</span>
+              <span class="leg skull"></span><span>Череп</span>
             </div>
             <div class="footNote">Локально • RNG</div>
           </div>
         </div>
       </section>
 
-      <!-- RIGHT PANEL -->
+      <!-- RIGHT -->
       <section class="panel right">
         <div class="card">
           <div class="cardTitle">Шкала X</div>
           <div id="xScale" class="xScale"></div>
-          <div class="xHint">Прошёл ряд — X растёт. Проиграл — ставка сгорает.</div>
+          <div class="xHint">Прошёл ряд — X растёт. Череп — ставка сгорает.</div>
         </div>
 
         <div class="card">
@@ -129,13 +129,11 @@
   <!-- MODAL -->
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
     <div id="modalBackdrop" class="modalBackdrop"></div>
-
     <div class="modalBox" role="document">
       <div class="modalTop">
         <div id="modalTitle" class="modalTitle">Итог</div>
       </div>
       <div id="modalText" class="modalText">—</div>
-
       <div class="modalActions">
         <button id="modalOk" class="btn primary" type="button">Ок</button>
       </div>
@@ -145,3 +143,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+
