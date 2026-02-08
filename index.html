@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dragon Tower</title>
   <link rel="stylesheet" href="style.css" />
@@ -9,131 +9,151 @@
 <body>
   <div class="bg"></div>
 
-  <div class="wrap">
+  <main class="app">
+    <!-- Header -->
     <header class="topbar">
       <div class="brand">
-        <div class="title">Dragon Tower</div>
-        <div class="sub">Открой это в Telegram</div>
+        <div class="brand__title">Dragon Tower</div>
+        <div class="brand__sub">Открой это в Telegram</div>
       </div>
 
-      <div class="top-actions">
-        <button id="soundBtn" class="chip" type="button" aria-pressed="false">
-          <span class="dot"></span>
-          <span id="soundTxt">Звук: off</span>
+      <div class="topbar__right">
+        <button id="soundBtn" class="pill" type="button" aria-pressed="false">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="soundLabel">Звук: off</span>
         </button>
 
-        <div class="chip balance">
-          <span class="muted">Баланс</span>
-          <span id="balance">1000 ₽</span>
+        <div class="pill pill--balance">
+          <div class="pill__label">Баланс</div>
+          <div class="pill__value"><span id="balance">1000</span> ₽</div>
         </div>
       </div>
     </header>
 
-    <main class="grid3">
-      <!-- LEFT -->
-      <section class="card left">
-        <div class="seg">
-          <button id="modeNormal" class="seg-btn active" type="button">Обычный</button>
-          <button id="modeHard" class="seg-btn" type="button">Сложный</button>
+    <!-- Layout -->
+    <section class="layout">
+      <!-- Left panel -->
+      <aside class="panel panel--left">
+        <div class="tabs">
+          <button id="modeNormal" class="tab is-active" type="button">Обычный</button>
+          <button id="modeHard" class="tab" type="button">Сложный</button>
         </div>
 
-        <div class="block">
-          <div class="block-title">Ставка</div>
+        <div class="card">
+          <div class="card__title">Ставка</div>
 
-          <div class="betrow">
-            <button class="mini" id="betMinus" type="button">−</button>
+          <div class="bet-row">
+            <button id="betMinus" class="mini-btn" type="button">−</button>
             <input id="betInput" class="bet-input" type="number" min="1" step="1" value="100" />
-            <button class="mini" id="betPlus" type="button">+</button>
+            <button id="betPlus" class="mini-btn" type="button">+</button>
           </div>
 
-          <div class="chips">
-            <button class="chipbtn" data-chip="10" type="button">10</button>
-            <button class="chipbtn" data-chip="50" type="button">50</button>
-            <button class="chipbtn" data-chip="100" type="button">100</button>
-            <button class="chipbtn" data-chip="250" type="button">250</button>
-            <button class="chipbtn" data-chip="500" type="button">500</button>
-            <button class="chipbtn" data-chip="max" type="button">MAX</button>
+          <div class="chip-row">
+            <button class="chip" data-chip="10" type="button">10</button>
+            <button class="chip" data-chip="50" type="button">50</button>
+            <button class="chip" data-chip="100" type="button">100</button>
+            <button class="chip" data-chip="250" type="button">250</button>
+            <button class="chip" data-chip="500" type="button">500</button>
+            <button class="chip chip--max" data-chip="max" type="button">MAX</button>
           </div>
 
-          <div class="btnrow">
-            <button id="startBtn" class="btn primary" type="button">Ставка</button>
-            <button id="cashoutBtn" class="btn danger" type="button" disabled>Кэшаут</button>
+          <div class="actions">
+            <button id="startBtn" class="btn btn--primary" type="button">Ставка</button>
+            <button id="cashoutBtn" class="btn btn--danger" type="button" disabled>Кэшаут</button>
           </div>
 
           <div class="rules">
-            <div class="rules-title">Правила</div>
+            <div class="rules__title">Правила</div>
             <ul>
               <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
-              <li>Выбирай плитку в <b>текущем ряду</b>. Безопасно — идёшь выше.</li>
-              <li>Ловушка — <b>поражение</b>, ставка сгорает.</li>
+              <li>Выбирай плитку в текущем ряду. Безопасно — идёшь выше.</li>
+              <li>Ловушка — поражение, ставка сгорает.</li>
               <li>Кэшаут — забираешь <b>Ставка × X</b> после любой победы.</li>
             </ul>
           </div>
         </div>
 
-        <div class="status">
-          <div class="status-row">
-            <div class="k">Статус</div><div class="v" id="statusTxt">Ожидание</div>
-          </div>
-          <div class="status-row">
-            <div class="k">Текущий X</div><div class="v" id="xTxt">x1.00</div>
-          </div>
-          <div class="status-row">
-            <div class="k">Потенциал</div><div class="v" id="potTxt">0 ₽</div>
+        <div class="card card--status">
+          <div class="grid2">
+            <div class="kv">
+              <div class="kv__k">Статус</div>
+              <div id="statusText" class="kv__v">Ожидание</div>
+            </div>
+            <div class="kv">
+              <div class="kv__k">Текущий X</div>
+              <div id="currentX" class="kv__v">x1.00</div>
+            </div>
+            <div class="kv">
+              <div class="kv__k">Потенциал</div>
+              <div id="potential" class="kv__v">0 ₽</div>
+            </div>
           </div>
         </div>
-      </section>
+      </aside>
 
-      <!-- CENTER -->
-      <section class="card center">
-        <div class="center-head">
-          <div class="center-title">Башня</div>
-          <div class="center-sub" id="modeHint">Обычный: 3 яйца / 1 ловушка в ряду</div>
+      <!-- Center tower -->
+      <section class="panel panel--center">
+        <div class="tower-head">
+          <div class="tower-head__title">Башня</div>
+          <div id="modeHint" class="tower-head__hint">Обычный: 3 яйца / 1 ловушка в ряду</div>
         </div>
 
-        <div class="tower">
-          <div class="dragonWrap" aria-hidden="true">
-            <!-- Встроенный дракон (не пропадёт) -->
-            <svg id="dragonSvg" class="dragonSvg" viewBox="0 0 512 512" role="img" aria-label="dragon">
-              <path d="M446 153c-21-39-67-67-124-76 17-18 34-33 41-37 6-4 7-12 2-18-5-6-13-7-19-2-9 6-33 26-56 52-20-2-40-2-61 0-9-23-22-45-39-63-5-6-14-6-20-1-6 5-6 14-1 20 12 13 22 28 30 44-51 10-92 35-112 71-25 44-12 102 34 152 14 15 31 29 51 41-13 17-21 35-24 54-6 41 18 78 61 95 33 13 74 12 114-2 13 36 41 63 79 74 51 16 105-3 140-49 16-21 24-46 23-71-2-46-31-87-77-110 10-8 19-17 27-26 41-48 52-103 31-139ZM144 310c-30-12-46-34-42-58 2-13 8-26 18-38 17 8 35 14 54 18-8 30-5 57 7 78-13 6-26 6-37 0Zm284 44c1 18-5 35-17 50-27 36-69 51-107 39-27-9-46-29-55-55 44-23 78-58 97-100 42 17 80 46 82 66Z"/>
-            </svg>
+        <div class="tower-stage">
+          <!-- Decorative dragon -->
+          <div class="dragon-wrap" aria-hidden="true">
+            <!-- PNG вставим в CSS/JS: фон или img -->
+            <img id="dragonImg" class="dragon" alt="dragon" />
+            <div class="dragon-glow"></div>
           </div>
 
-          <div id="board" class="board"></div>
+          <!-- Board -->
+          <div id="board" class="board" aria-label="Поле"></div>
 
           <div class="legend">
-            <div class="leg"><span class="dot egg"></span> Яйцо</div>
-            <div class="leg"><span class="dot trap"></span> Ловушка</div>
-            <div class="leg muted" style="margin-left:auto;">Локально • RNG</div>
-          </div>
-
-          <div id="fx" class="fx" aria-hidden="true"></div>
-        </div>
-      </section>
-
-      <!-- RIGHT -->
-      <section class="card right">
-        <div class="block-title">Шкала X</div>
-        <div id="ladder" class="ladder"></div>
-
-        <div class="block-title" style="margin-top:14px;">Результат</div>
-        <div class="result">
-          <div class="status-row">
-            <div class="k">Последнее</div><div class="v" id="lastTxt">—</div>
-          </div>
-          <div class="status-row">
-            <div class="k">Выигрыш</div><div class="v" id="winTxt">—</div>
+            <span class="dotl dotl--egg"></span><span>Яйцо</span>
+            <span class="sep"></span>
+            <span class="dotl dotl--trap"></span><span>Ловушка</span>
+            <span class="right">Локально • RNG</span>
           </div>
         </div>
       </section>
-    </main>
-  </div>
 
-  <!-- НЕБЛОКИРУЮЩИЙ ТОСТ (вместо "Итог") -->
-  <div id="toast" class="toast" hidden>
-    <div id="toastText" class="toastCard">—</div>
-  </div>
+      <!-- Right panel -->
+      <aside class="panel panel--right">
+        <div class="card">
+          <div class="card__title">Шкала X</div>
+          <div id="xList" class="xlist" aria-label="Множители"></div>
+          <div class="hint">
+            Прошёл ряд — X растёт. Проиграл — ставка сгорает.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__title">Результат</div>
+          <div class="kvline">
+            <div class="kvline__k">Последнее:</div>
+            <div id="lastResult" class="kvline__v">—</div>
+          </div>
+          <div class="kvline">
+            <div class="kvline__k">Выигрыш:</div>
+            <div id="lastWin" class="kvline__v">—</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- Modal -->
+    <div id="modal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal__backdrop" data-close="1"></div>
+      <div class="modal__box">
+        <div class="modal__title" id="modalTitle">Итог</div>
+        <div id="modalText" class="modal__text">—</div>
+        <button id="modalOk" class="btn btn--primary modal__ok" type="button">Ок</button>
+      </div>
+    </div>
+  </main>
 
   <script src="app.js"></script>
 </body>
 </html>
+
