@@ -21,6 +21,7 @@
           <span class="dot"></span>
           <span id="soundTxt">Звук: off</span>
         </button>
+
         <div class="chip balance">
           <span class="muted">Баланс</span>
           <span id="balance">1000 ₽</span>
@@ -91,20 +92,22 @@
         </div>
 
         <div class="tower">
-          <div class="dragon">
-            <!-- положи dragon.png рядом с index.html -->
-            <img id="dragonImg" src="dragon.png" alt="dragon" />
+          <div class="dragonWrap" aria-hidden="true">
+            <!-- Встроенный дракон (не пропадёт) -->
+            <svg id="dragonSvg" class="dragonSvg" viewBox="0 0 512 512" role="img" aria-label="dragon">
+              <path d="M446 153c-21-39-67-67-124-76 17-18 34-33 41-37 6-4 7-12 2-18-5-6-13-7-19-2-9 6-33 26-56 52-20-2-40-2-61 0-9-23-22-45-39-63-5-6-14-6-20-1-6 5-6 14-1 20 12 13 22 28 30 44-51 10-92 35-112 71-25 44-12 102 34 152 14 15 31 29 51 41-13 17-21 35-24 54-6 41 18 78 61 95 33 13 74 12 114-2 13 36 41 63 79 74 51 16 105-3 140-49 16-21 24-46 23-71-2-46-31-87-77-110 10-8 19-17 27-26 41-48 52-103 31-139ZM144 310c-30-12-46-34-42-58 2-13 8-26 18-38 17 8 35 14 54 18-8 30-5 57 7 78-13 6-26 6-37 0Zm284 44c1 18-5 35-17 50-27 36-69 51-107 39-27-9-46-29-55-55 44-23 78-58 97-100 42 17 80 46 82 66Z"/>
+            </svg>
           </div>
 
-          <div id="board" class="board" aria-label="tower board"></div>
+          <div id="board" class="board"></div>
 
           <div class="legend">
             <div class="leg"><span class="dot egg"></span> Яйцо</div>
             <div class="leg"><span class="dot trap"></span> Ловушка</div>
-            <div class="leg muted" style="margin-left:auto;">Режим локальный • RNG</div>
+            <div class="leg muted" style="margin-left:auto;">Локально • RNG</div>
           </div>
 
-          <div id="fxDragon" class="fx-dragon" aria-hidden="true"></div>
+          <div id="fx" class="fx" aria-hidden="true"></div>
         </div>
       </section>
 
@@ -126,15 +129,9 @@
     </main>
   </div>
 
-  <!-- MODAL -->
-  <div id="modal" class="modal" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal-title" id="modalTitle">Итог</div>
-      <div class="modal-text" id="modalText">—</div>
-      <div class="modal-actions">
-        <button id="modalOk" class="btn primary" type="button">Ок</button>
-      </div>
-    </div>
+  <!-- НЕБЛОКИРУЮЩИЙ ТОСТ (вместо "Итог") -->
+  <div id="toast" class="toast" hidden>
+    <div id="toastText" class="toastCard">—</div>
   </div>
 
   <script src="app.js"></script>
