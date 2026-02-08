@@ -1,513 +1,528 @@
-/* =========================
-   Dragon Tower — app.js (FINAL)
-   Фиксы:
-   1) Башни не мешают — это в CSS (pointer-events:none + размер)
-   2) На плитках видно ЯЙЦО/ЛОВУШКУ после клика (классы is-egg / is-trap + mark)
-   3) Кнопки/ставка работают чётко
-   4) Модалка "Итог" не залипает (ок кликается + закрытие по backdrop/ESC)
-   5) Шкала X: без лишних "ползунков" (скролл обычный — в CSS)
-   6) Баланс localStorage
-   ========================= */
-
 (() => {
-  // ---------- helpers ----------
-  const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-  const r2 = (n) => Math.round(n * 100) / 100;
-  const fmt = (n) => `${Math.max(0, Math.floor(n))} ₽`;
+  // ====== DOM ======
+  const $ = (id) => document.getElementById(id);
 
-  // ---------- storage ----------
-  const LS_BAL = "dt_balance_v1";
-  const LS_SND = "dt_sound_v1";
+  const tabNormal = $("tabNormal");
+  const tabHard = $("tabHard");
 
-  // ---------- DOM (ожидаемые id из индекса) ----------
-  const el = {
-    balance: $("#balanceValue"),
-    soundBtn: $("#soundBtn"),
-    soundDot: $("#soundDot"),
+  const betMinus = $("betMinus");
+  const betPlus = $("betPlus");
+  const betInput = $("betInput");
+  const btnBet = $("btnBet");
+  const btnCashout = $("btnCashout");
 
-    tabNormal: $("#tabNormal"),
-    tabHard: $("#tabHard"),
+  const balanceValue = $("balanceValue");
+  const statusValue = $("statusValue");
+  const curXValue = $("curXValue");
+  const potentialValue = $("potentialValue");
 
-    betInput: $("#betInput"),
-    betMinus: $("#betMinus"),
-    betPlus: $("#betPlus"),
-    chips: $$(".chip"),
+  const towerMeta = $("towerMeta");
+  const towerGrid = $("towerGrid");
+  const xScale = $("xScale");
 
-    btnBet: $("#btnBet"),
-    btnCashout: $("#btnCashout"),
+  const lastResultValue = $("lastResultValue");
+  const lastWinValue = $("lastWinValue");
 
-    status: $("#statusValue"),
-    curX: $("#curXValue"),
-    potential: $("#potentialValue"),
+  const modal = $("modal");
+  const modalBackdrop = $("modalBackdrop");
+  const modalTitle = $("modalTitle");
+  const modalText = $("modalText");
+  const modalOk = $("modalOk");
 
-    towerMeta: $("#towerMeta"),
-    towerGrid: $("#towerGrid"),
+  const soundBtn = $("soundBtn");
+  const soundDot = $("soundDot");
+  const soundText = $("soundText");
 
-    xScale: $("#xScale"),
-    lastResult: $("#lastResultValue"),
-    lastWin: $("#lastWinValue"),
-
-    modal: $("#modal"),
-    modalTitle: $("#modalTitle"),
-    modalText: $("#modalText"),
-    modalOk: $("#modalOk"),
-    modalBackdrop: $("#modalBackdrop"),
-  };
-
-  // ---------- guard (если индексы чуть разные — покажем в консоли) ----------
-  const required = Object.entries(el).filter(([k, v]) => v == null && !["chips"].includes(k));
-  if (required.length) {
-    console.warn("Dragon Tower: missing DOM nodes:", required.map(([k]) => k));
-  }
-
-  // ---------- audio (простые тихие сигналы) ----------
-  let audioCtx = null;
-  let soundOn = (localStorage.getItem(LS_SND) ?? "1") === "1";
-
-  function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  function beep({ freq = 440, dur = 0.06, type = "sine", gain = 0.05 } = {}) {
-    if (!soundOn) return;
-    ensureAudio();
-    const t0 = audioCtx.currentTime;
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t0);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(audioCtx.destination);
-    o.start(t0);
-    o.stop(t0 + dur + 0.02);
-  }
-  function sClick() { beep({ freq: 520, dur: 0.05, type: "triangle", gain: 0.035 }); }
-  function sWin() {
-    beep({ freq: 660, dur: 0.06, type: "sine", gain: 0.05 });
-    setTimeout(() => beep({ freq: 880, dur: 0.08, type: "sine", gain: 0.05 }), 70);
-  }
-  function sLose() {
-    beep({ freq: 220, dur: 0.10, type: "sawtooth", gain: 0.035 });
-    setTimeout(() => beep({ freq: 160, dur: 0.12, type: "sawtooth", gain: 0.03 }), 70);
-  }
-
-  function syncSoundUI() {
-    if (!el.soundBtn) return;
-    el.soundBtn.textContent = soundOn ? "Звук: on" : "Звук: off";
-    if (el.soundDot) el.soundDot.style.opacity = soundOn ? "1" : ".35";
-  }
-
-  // ---------- game config ----------
-  // 9 рядов, 4 плитки в ряду
-  const ROWS = 9;
+  // ====== SETTINGS ======
+  const ROWS = 7;        // по скрину у тебя Ряд 7 сверху в списке
   const COLS = 4;
 
-  // Вероятности:
-  // normal: 3 яйца (safe) + 1 ловушка
-  // hard:   1 яйцо + 3 ловушки
-  const MODES = {
-    normal: { name: "Обычный", safe: 3, trap: 1 },
-    hard: { name: "Сложный", safe: 1, trap: 3 },
+  // Множители подкручены ниже, чтобы на "3 яйца" не было дюпа
+  // (умеренные X, как на твоём скрине)
+  const MULT_NORMAL = [1.17, 1.37, 1.60, 1.87, 2.19, 2.57, 3.00]; // Ряд 1..7
+  const MULT_HARD   = [2.60, 3.40, 4.50, 5.90, 7.70, 10.10, 13.20];
+
+  const MODE = {
+    NORMAL: "normal",
+    HARD: "hard",
   };
 
-  // Математика множителей (чуть "срезанная", чтобы меньше дюпа при 3 яйцах)
-  // Мультипликатор растёт по рядам: baseFactor^(rowIndex)
-  // baseFactor подбираем так, чтобы к верху было ~4.25x (как на твоём скрине)
-  // Для normal делаем мягче.
-  const MULT = {
-    normal: { base: 1.17 }, // мягче
-    hard: { base: 1.28 },   // жёстче/выше
+  // ====== STATE ======
+  const LS_BAL = "dt_balance_v1";
+  const LS_SOUND = "dt_sound_v1";
+
+  let mode = MODE.NORMAL;
+
+  let balance = loadBalance();
+  let soundOn = loadSound();
+
+  let inGame = false;
+  let bet = 100;
+
+  // rows indexed from 0 (нижний) до ROWS-1 (верхний)
+  let currentRow = 0;
+  let passedRows = 0; // сколько победных рядов прошёл
+  let currentX = 1.0;
+
+  // board[row] = { trapIndex: number, safeIndices: Set<number>, revealed: Set<number> }
+  let board = [];
+
+  // блокировка кликов на время анимации
+  let lock = false;
+
+  // ====== SOUND (простые тихие "пики") ======
+  let audioCtx = null;
+  const ensureAudio = () => {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  };
+  const beep = (freq = 440, dur = 0.06, vol = 0.03) => {
+    if (!soundOn) return;
+    try {
+      ensureAudio();
+      const t0 = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(freq, t0);
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      o.start(t0);
+      o.stop(t0 + dur);
+    } catch {}
   };
 
-  // ---------- state ----------
-  const state = {
-    mode: "normal",
-    balance: 1000,
-    bet: 100,
-    inRun: false,
-    started: false,     // ставка списана
-    row: 0,             // текущий ряд (0..ROWS-1)
-    curX: 1.0,
-    plan: [],           // [row] => { trapIdx:Set, safeIdx:Set }
-    revealed: [],       // [row] => Set(clicked indices)
-    last: { text: "—", win: "—" },
-  };
-
-  // ---------- init ----------
-  function loadBalance() {
-    const v = Number(localStorage.getItem(LS_BAL));
-    state.balance = Number.isFinite(v) ? v : 1000;
+  // ====== INIT ======
+  function init() {
     renderBalance();
-  }
-  function saveBalance() {
-    localStorage.setItem(LS_BAL, String(state.balance));
-  }
-  function renderBalance() {
-    if (el.balance) el.balance.textContent = fmt(state.balance);
+    setSoundUI();
+    setModeUI();
+    betInput.value = String(bet);
+
+    buildBoard();
+    buildGrid();
+    renderXScale();
+    setStatus("Ожидание");
+    updateNumbers();
+
+    // events
+    tabNormal.addEventListener("click", () => switchMode(MODE.NORMAL));
+    tabHard.addEventListener("click", () => switchMode(MODE.HARD));
+
+    betMinus.addEventListener("click", () => setBet(bet - 10));
+    betPlus.addEventListener("click", () => setBet(bet + 10));
+    betInput.addEventListener("input", () => {
+      const n = parseInt(String(betInput.value).replace(/\D/g, ""), 10);
+      if (Number.isFinite(n)) bet = clamp(n, 10, 1_000_000);
+      betInput.value = String(bet);
+    });
+
+    // chips
+    document.querySelectorAll(".chip").forEach((b) => {
+      b.addEventListener("click", () => {
+        const v = b.getAttribute("data-v");
+        if (v === "MAX") {
+          setBet(balance);
+        } else {
+          setBet(parseInt(v, 10));
+        }
+        beep(520, 0.05, 0.02);
+      });
+    });
+
+    // ВАЖНО: ставка должна нажиматься
+    btnBet.addEventListener("click", onBetClick);
+    btnCashout.addEventListener("click", onCashout);
+
+    soundBtn.addEventListener("click", () => {
+      soundOn = !soundOn;
+      saveSound(soundOn);
+      setSoundUI();
+      beep(660, 0.05, 0.02);
+    });
+
+    modalOk.addEventListener("click", closeModal);
+    modalBackdrop.addEventListener("click", closeModal);
   }
 
-  function setMode(m) {
-    state.mode = m;
-    if (el.tabNormal) el.tabNormal.classList.toggle("is-active", m === "normal");
-    if (el.tabHard) el.tabHard.classList.toggle("is-active", m === "hard");
-
-    if (el.towerMeta) {
-      const cfg = MODES[m];
-      el.towerMeta.textContent = `${cfg.name}: ${cfg.safe} яйца / ${cfg.trap} ловушка в ряду`;
+  // ====== MODE ======
+  function switchMode(next) {
+    if (mode === next) return;
+    if (inGame) {
+      showModal("Режим", "Нельзя менять режим во время игры. Сначала завершите раунд.");
+      return;
     }
-    buildXScale();
-    resetRoundUI(true);
+    mode = next;
+    setModeUI();
+    buildBoard();
+    buildGrid();
+    renderXScale();
+    updateNumbers();
+    beep(480, 0.05, 0.02);
   }
 
-  function setBet(v) {
-    state.bet = clamp(Math.floor(v || 0), 1, 1000000);
-    if (el.betInput) el.betInput.value = state.bet;
+  function setModeUI() {
+    tabNormal.classList.toggle("is-active", mode === MODE.NORMAL);
+    tabHard.classList.toggle("is-active", mode === MODE.HARD);
+
+    towerMeta.textContent =
+      mode === MODE.NORMAL
+        ? "Обычный: 3 яйца / 1 ловушка в ряду"
+        : "Сложный: 1 яйцо / 3 ловушки в ряду";
   }
 
-  // ---------- multipliers ----------
-  function rowMultiplier(mode, rowPassed /*1..ROWS*/) {
-    const base = MULT[mode].base;
-    // x = base^rowPassed
-    return r2(Math.pow(base, rowPassed));
-  }
-
-  function buildXScale() {
-    if (!el.xScale) return;
-    el.xScale.innerHTML = "";
-    for (let r = ROWS; r >= 1; r--) {
-      const x = rowMultiplier(state.mode, r);
-      const row = document.createElement("div");
-      row.className = "xRow";
-      row.dataset.row = String(r);
-      row.innerHTML = `<span>Ряд ${r}</span><b>x${x.toFixed(2)}</b>`;
-      el.xScale.appendChild(row);
-    }
-    highlightXRow(0);
-  }
-
-  function highlightXRow(passedRows) {
-    // passedRows: 0..ROWS
-    if (!el.xScale) return;
-    const rows = $$(".xRow");
-    rows.forEach((n) => n.classList.remove("is-current"));
-    const currentRowNumber = passedRows; // сколько пройдено
-    // подсвечиваем следующий "целевой" ряд: currentRowNumber+1 (или последний пройденный)
-    const target = clamp(currentRowNumber + 1, 1, ROWS);
-    const node = rows.find((x) => Number(x.dataset.row) === target);
-    if (node) node.classList.add("is-current");
-  }
-
-  // ---------- plan generation ----------
-  function makePlan() {
-    const cfg = MODES[state.mode];
-    state.plan = [];
-    state.revealed = [];
+  // ====== BOARD GENERATION ======
+  function buildBoard() {
+    board = [];
     for (let r = 0; r < ROWS; r++) {
-      const indices = [...Array(COLS).keys()];
-      // shuffle
-      for (let i = indices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [indices[i], indices[j]] = [indices[j], indices[i]];
+      const trapIndex = randInt(0, COLS - 1);
+
+      const safeIndices = new Set();
+      if (mode === MODE.NORMAL) {
+        // 3 яйца (все кроме trap)
+        for (let c = 0; c < COLS; c++) if (c !== trapIndex) safeIndices.add(c);
+      } else {
+        // Сложный: 1 яйцо в ряду
+        const eggIndex = randInt(0, COLS - 1);
+        safeIndices.add(eggIndex);
+        // ловушка не обязана быть одна — считаем всё что не egg ловушка
+        // trapIndex используется только для "эффекта" при проигрыше, но логика в safeIndices
       }
-      const safeSet = new Set(indices.slice(0, cfg.safe));
-      const trapSet = new Set(indices.slice(cfg.safe, cfg.safe + cfg.trap));
-      state.plan.push({ safeSet, trapSet });
-      state.revealed.push(new Set());
+
+      board.push({
+        trapIndex,
+        safeIndices,
+        revealed: new Set(),
+      });
     }
+
+    // reset run
+    inGame = false;
+    lock = false;
+    passedRows = 0;
+    currentRow = 0;
+    currentX = 1.0;
+
+    btnCashout.disabled = true;
+    btnBet.disabled = false;
+
+    setStatus("Ожидание");
+    lastResultValue.textContent = "—";
+    lastWinValue.textContent = "—";
   }
 
-  // ---------- grid render ----------
+  // ====== GRID RENDER ======
   function buildGrid() {
-    if (!el.towerGrid) return;
-    el.towerGrid.innerHTML = "";
+    towerGrid.innerHTML = "";
 
-    // рисуем сверху вниз (ROW 0 снизу? на скрине снизу старт)
-    // делаем ROW 0 = нижний ряд. Значит в DOM сначала верхние, потом нижние
-    for (let r = ROWS - 1; r >= 0; r--) {
+    // рисуем сверху вниз визуально, но клики будем маппить на rowIndex (0 низ)
+    for (let visualRow = ROWS - 1; visualRow >= 0; visualRow--) {
       for (let c = 0; c < COLS; c++) {
         const tile = document.createElement("button");
         tile.type = "button";
         tile.className = "tile";
-        tile.dataset.row = String(r);
-        tile.dataset.col = String(c);
-        tile.innerHTML = `<span class="mark"></span>`;
-        el.towerGrid.appendChild(tile);
+        tile.setAttribute("data-row", String(visualRow));
+        tile.setAttribute("data-col", String(c));
+        tile.innerHTML = `<div class="mark"></div>`;
+
+        tile.addEventListener("click", () => onTileClick(visualRow, c, tile));
+        towerGrid.appendChild(tile);
       }
     }
-    refreshActiveRow();
+    refreshActiveRowHighlight();
   }
 
-  function refreshActiveRow() {
-    if (!el.towerGrid) return;
-    const tiles = $$(".tile");
+  function refreshActiveRowHighlight() {
+    const tiles = towerGrid.querySelectorAll(".tile");
     tiles.forEach((t) => {
-      t.classList.remove("is-activeRow", "is-disabled");
-      const r = Number(t.dataset.row);
-      // доступен только текущий ряд и только если игра начата
-      const enabled = state.inRun && r === state.row;
-      if (!enabled) t.classList.add("is-disabled");
-      if (enabled) t.classList.add("is-activeRow");
+      const r = parseInt(t.getAttribute("data-row"), 10);
+      const isCurrent = inGame && r === currentRow && !lock;
+      const isDisabled = !inGame || r !== currentRow || lock;
+
+      t.classList.toggle("is-current", isCurrent);
+      t.classList.toggle("is-disabled", isDisabled);
+      t.disabled = isDisabled;
     });
   }
 
-  // ---------- UI state ----------
-  function resetRoundUI(keepBet = false) {
-    state.inRun = false;
-    state.started = false;
-    state.row = 0;
-    state.curX = 1.0;
-
-    if (!keepBet) setBet(100);
-
-    if (el.status) el.status.textContent = "Ожидание";
-    if (el.curX) el.curX.textContent = "x1.00";
-    if (el.potential) el.potential.textContent = fmt(0);
-    if (el.lastResult) el.lastResult.textContent = state.last.text;
-    if (el.lastWin) el.lastWin.textContent = state.last.win;
-
-    if (el.btnBet) el.btnBet.disabled = false;
-    if (el.btnCashout) el.btnCashout.disabled = true;
-
-    makePlan();
-    buildGrid();
+  // ====== X SCALE ======
+  function getMultArr() {
+    return mode === MODE.NORMAL ? MULT_NORMAL : MULT_HARD;
   }
 
-  function startRun() {
-    // ставка списывается один раз на старте игры
-    const b = state.bet;
-    if (b <= 0) return showModal("Ошибка", "Ставка должна быть больше 0.");
-    if (state.balance < b) return showModal("Недостаточно средств", "Попробуй уменьшить ставку.");
+  function renderXScale() {
+    const arr = getMultArr();
+    xScale.innerHTML = "";
 
-    state.balance -= b;
-    saveBalance();
-    renderBalance();
+    // показываем сверху (Ряд ROWS) -> вниз (Ряд 1)
+    for (let i = ROWS; i >= 1; i--) {
+      const mult = arr[i - 1];
+      const row = document.createElement("div");
+      row.className = "xRow";
+      row.innerHTML = `<span>Ряд ${i}</span><b>x${mult.toFixed(2)}</b>`;
+      xScale.appendChild(row);
+    }
 
-    state.inRun = true;
-    state.started = true;
-    state.row = 0;
-    state.curX = 1.0;
-
-    if (el.status) el.status.textContent = "Игра";
-    if (el.curX) el.curX.textContent = "x1.00";
-    if (el.potential) el.potential.textContent = fmt(0);
-
-    if (el.btnBet) el.btnBet.disabled = true;
-    if (el.btnCashout) el.btnCashout.disabled = true; // можно только после 1 победы
-
-    highlightXRow(0);
-    refreshActiveRow();
-    sClick();
+    markActiveXRow();
   }
 
-  function updateAfterWin() {
-    const passed = state.row + 1; // прошли этот ряд
-    state.curX = rowMultiplier(state.mode, passed);
+  function markActiveXRow() {
+    const rows = xScale.querySelectorAll(".xRow");
+    rows.forEach((el) => el.classList.remove("is-active"));
 
-    if (el.curX) el.curX.textContent = `x${state.curX.toFixed(2)}`;
-    const pot = Math.floor(state.bet * state.curX);
-    if (el.potential) el.potential.textContent = fmt(pot);
+    // активный следующий ряд = passedRows+1
+    const nextRowNumber = passedRows + 1; // 1..ROWS
+    if (nextRowNumber < 1 || nextRowNumber > ROWS) return;
 
-    highlightXRow(passed);
+    // В списке сверху ROWS, снизу 1 => индекс = ROWS - nextRowNumber
+    const idx = ROWS - nextRowNumber;
+    const el = rows[idx];
+    if (el) el.classList.add("is-active");
+  }
 
-    // cashout доступен после хотя бы одной победы
-    if (el.btnCashout) el.btnCashout.disabled = false;
+  // ====== GAME FLOW ======
+  function onBetClick() {
+    if (inGame) return;
 
-    // если достигли вершины — авто кэшаут
-    if (passed >= ROWS) {
-      cashout(true);
+    bet = clamp(parseInt(String(betInput.value).replace(/\D/g, ""), 10) || 100, 10, 1_000_000);
+    betInput.value = String(bet);
+
+    if (bet > balance) {
+      showModal("Недостаточно средств", "Баланс меньше ставки.");
+      beep(220, 0.08, 0.02);
       return;
     }
 
-    // следующий ряд
-    state.row += 1;
-    refreshActiveRow();
+    // списываем 1 раз
+    balance -= bet;
+    saveBalance(balance);
+    renderBalance();
+
+    // старт
+    inGame = true;
+    lock = false;
+    passedRows = 0;
+    currentRow = 0;
+    currentX = 1.0;
+
+    btnBet.disabled = true;
+    btnCashout.disabled = true;
+
+    setStatus("Игра");
+    updateNumbers();
+    renderXScale();
+    refreshActiveRowHighlight();
+    beep(640, 0.05, 0.02);
   }
 
-  function revealRowAll(r) {
-    // раскрыть весь ряд (после луз/кэшаут)
-    if (!el.towerGrid) return;
-    const tiles = $$(".tile").filter((t) => Number(t.dataset.row) === r);
+  async function onTileClick(r, c, tileEl) {
+    if (!inGame || lock) return;
+    if (r !== currentRow) return;
+
+    lock = true;
+    refreshActiveRowHighlight();
+
+    // анимация "поп"
+    tileEl.classList.add("pop");
+    setTimeout(() => tileEl.classList.remove("pop"), 240);
+
+    const rowData = board[r];
+    if (rowData.revealed.has(c)) {
+      lock = false;
+      refreshActiveRowHighlight();
+      return;
+    }
+    rowData.revealed.add(c);
+
+    // определяем безопасно/ловушка
+    const safe = rowData.safeIndices.has(c);
+
+    // раскрываем выбранную
+    revealTile(tileEl, safe ? "egg" : "trap");
+
+    if (safe) {
+      beep(720, 0.05, 0.02);
+
+      passedRows += 1;
+      currentX = getMultArr()[passedRows - 1];
+
+      btnCashout.disabled = false;
+      setStatus(`Ряд пройден (${passedRows}/${ROWS})`);
+      updateNumbers();
+      markActiveXRow();
+
+      // ряд визуально подсветить? мы уже раскрыли плитку
+      await sleep(260);
+
+      if (passedRows >= ROWS) {
+        // авто-кэшаут на вершине
+        await sleep(250);
+        doCashout(true);
+        return;
+      }
+
+      // следующий ряд
+      currentRow += 1;
+      lock = false;
+      refreshActiveRowHighlight();
+      return;
+    }
+
+    // проигрыш: показать весь ряд
+    beep(180, 0.10, 0.02);
+
+    revealWholeRow(r);
+    await sleep(450);
+
+    inGame = false;
+    btnCashout.disabled = true;
+    btnBet.disabled = false;
+
+    setStatus("Поражение");
+    updateNumbers();
+
+    lastResultValue.textContent = "Ловушка";
+    lastWinValue.textContent = "0 ₽";
+
+    showModal("Итог", `Ловушка! Ты проиграл. Ставка ${fmtMoney(bet)} сгорела.`);
+
+    lock = false;
+    refreshActiveRowHighlight();
+  }
+
+  function revealTile(tileEl, type) {
+    tileEl.classList.add("revealed", type);
+    const mark = tileEl.querySelector(".mark");
+    if (!mark) return;
+
+    // понятные метки (видно что яйцо/ловушка)
+    mark.textContent = type === "egg" ? "ЯЙЦО" : "ЛОВУШКА";
+  }
+
+  function revealWholeRow(r) {
+    const tiles = towerGrid.querySelectorAll(`.tile[data-row="${r}"]`);
+    const rowData = board[r];
+
     tiles.forEach((t) => {
-      const col = Number(t.dataset.col);
-      applyReveal(t, r, col);
+      const c = parseInt(t.getAttribute("data-col"), 10);
+      if (t.classList.contains("revealed")) return;
+
+      const safe = rowData.safeIndices.has(c);
+      revealTile(t, safe ? "egg" : "trap");
     });
   }
 
-  function applyReveal(tile, r, c) {
-    tile.classList.add("revealed");
-    const plan = state.plan[r];
-    const mark = tile.querySelector(".mark");
-    if (plan.safeSet.has(c)) {
-      tile.classList.add("is-egg");
-      tile.classList.remove("is-trap");
-      if (mark) mark.textContent = ""; // emoji через CSS ::before
-    } else {
-      tile.classList.add("is-trap");
-      tile.classList.remove("is-egg");
-      if (mark) mark.textContent = "";
-    }
+  function onCashout() {
+    if (!inGame) return;
+    if (passedRows <= 0) return;
+    doCashout(false);
   }
 
-  function lose(r, clickedCol) {
-    // показать весь текущий ряд
-    revealRowAll(r);
+  function doCashout(autoTop) {
+    const win = Math.floor(bet * currentX);
 
-    state.inRun = false;
-    if (el.status) el.status.textContent = "Поражение";
-    if (el.btnCashout) el.btnCashout.disabled = true;
-
-    state.last = { text: "Ловушка 💀", win: fmt(0) };
-    if (el.lastResult) el.lastResult.textContent = state.last.text;
-    if (el.lastWin) el.lastWin.textContent = state.last.win;
-
-    // ставка сгорела
-    if (el.potential) el.potential.textContent = fmt(0);
-
-    // вернуть возможность новой ставки
-    if (el.btnBet) el.btnBet.disabled = false;
-
-    refreshActiveRow();
-    sLose();
-
-    showModal("Итог", "Ловушка! Ставка сгорела. Попробуй ещё раз.");
-  }
-
-  function cashout(auto = false) {
-    if (!state.started) return;
-    const pot = Math.floor(state.bet * state.curX);
-    state.balance += pot;
-    saveBalance();
+    balance += win;
+    saveBalance(balance);
     renderBalance();
 
-    state.inRun = false;
+    inGame = false;
+    btnCashout.disabled = true;
+    btnBet.disabled = false;
 
-    if (el.status) el.status.textContent = auto ? "Финиш" : "Кэшаут";
-    state.last = { text: `Кэшаут x${state.curX.toFixed(2)}`, win: fmt(pot) };
-    if (el.lastResult) el.lastResult.textContent = state.last.text;
-    if (el.lastWin) el.lastWin.textContent = state.last.win;
+    setStatus("Кэшаут");
+    updateNumbers();
 
-    if (el.btnBet) el.btnBet.disabled = false;
-    if (el.btnCashout) el.btnCashout.disabled = true;
+    lastResultValue.textContent = `Кэшаут x${currentX.toFixed(2)}`;
+    lastWinValue.textContent = fmtMoney(win);
 
-    // раскрыть текущий ряд для "красоты"
-    // (если игра в процессе, покажем текущий активный ряд)
-    if (state.row >= 0 && state.row < ROWS) revealRowAll(state.row);
+    // раскрыть текущий ряд (для красоты) — безопасные/ловушки
+    revealWholeRow(currentRow);
 
-    refreshActiveRow();
-    sWin();
+    showModal(
+      "Итог",
+      autoTop
+        ? `Вершина! Авто-кэшаут: x${currentX.toFixed(2)}. Выигрыш: ${fmtMoney(win)}.`
+        : `Кэшаут: x${currentX.toFixed(2)}. Выигрыш: ${fmtMoney(win)}.`
+    );
 
-    showModal("Итог", `Ты забрал: ${fmt(pot)} (x${state.curX.toFixed(2)}).`);
+    beep(860, 0.06, 0.02);
+    setTimeout(() => beep(980, 0.06, 0.02), 90);
+
+    refreshActiveRowHighlight();
   }
 
-  // ---------- modal ----------
+  // ====== UI HELPERS ======
+  function setStatus(t) {
+    statusValue.textContent = t;
+  }
+
+  function updateNumbers() {
+    curXValue.textContent = `x${currentX.toFixed(2)}`;
+    const potential = inGame && passedRows > 0 ? Math.floor(bet * currentX) : 0;
+    potentialValue.textContent = fmtMoney(potential);
+
+    markActiveXRow();
+  }
+
+  function renderBalance() {
+    balanceValue.textContent = fmtMoney(balance);
+  }
+
+  function setSoundUI() {
+    soundDot.style.background = soundOn ? "var(--egg)" : "rgba(255,255,255,.25)";
+    soundText.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+  }
+
+  // ====== MODAL ======
   function showModal(title, text) {
-    if (!el.modal) return;
-    el.modalTitle.textContent = title;
-    el.modalText.textContent = text;
-    el.modal.classList.remove("hidden");
-
-    // фикс "залипания": гарантируем кликабельность кнопки
-    // (если где-то был overlay — здесь мы не даём ему съесть клики)
-    el.modal.style.pointerEvents = "auto";
-  }
-  function hideModal() {
-    if (!el.modal) return;
-    el.modal.classList.add("hidden");
+    modalTitle.textContent = title;
+    modalText.textContent = text;
+    modal.classList.remove("hidden");
   }
 
-  // ---------- interactions ----------
-  function onTileClick(e) {
-    const tile = e.target.closest(".tile");
-    if (!tile) return;
-    if (!state.inRun) return;
-    const r = Number(tile.dataset.row);
-    const c = Number(tile.dataset.col);
-    if (r !== state.row) return;
-
-    // раскрыть выбранную
-    applyReveal(tile, r, c);
-
-    // если ловушка — луз
-    if (state.plan[r].trapSet.has(c)) {
-      lose(r, c);
-      return;
+  function closeModal() {
+    modal.classList.add("hidden");
+    // после закрытия итога — перегенерим поле (чтобы чисто было)
+    if (!inGame) {
+      buildBoard();
+      buildGrid();
+      renderXScale();
+      updateNumbers();
+      setModeUI();
     }
-
-    // победа в ряду
-    sClick();
-    updateAfterWin();
   }
 
-  function wireUI() {
-    // sound toggle
-    if (el.soundBtn) {
-      el.soundBtn.addEventListener("click", async () => {
-        soundOn = !soundOn;
-        localStorage.setItem(LS_SND, soundOn ? "1" : "0");
-        syncSoundUI();
-        // короткий сигнал подтверждения (тихий)
-        sClick();
-        // iOS/Chrome — разблокировка аудио после клика
-        try { ensureAudio(); await audioCtx.resume?.(); } catch {}
-      });
-    }
-
-    // tabs
-    if (el.tabNormal) el.tabNormal.addEventListener("click", () => { sClick(); setMode("normal"); });
-    if (el.tabHard) el.tabHard.addEventListener("click", () => { sClick(); setMode("hard"); });
-
-    // bet buttons
-    if (el.betMinus) el.betMinus.addEventListener("click", () => { sClick(); setBet(state.bet - 10); });
-    if (el.betPlus) el.betPlus.addEventListener("click", () => { sClick(); setBet(state.bet + 10); });
-
-    if (el.betInput) {
-      el.betInput.addEventListener("input", () => {
-        // не ломаем ввод: только цифры
-        const v = String(el.betInput.value).replace(/[^\d]/g, "");
-        el.betInput.value = v;
-        setBet(Number(v || 0));
-      });
-      el.betInput.addEventListener("blur", () => {
-        if (!el.betInput.value) setBet(100);
-      });
-    }
-
-    // chips
-    el.chips.forEach((chip) => {
-      chip.addEventListener("click", () => {
-        const v = Number(chip.dataset.v);
-        if (!Number.isFinite(v)) return;
-        sClick();
-        setBet(v);
-      });
-    });
-
-    // actions
-    if (el.btnBet) el.btnBet.addEventListener("click", () => startRun());
-    if (el.btnCashout) el.btnCashout.addEventListener("click", () => cashout(false));
-
-    // grid click
-    if (el.towerGrid) el.towerGrid.addEventListener("click", onTileClick);
-
-    // modal close
-    if (el.modalOk) el.modalOk.addEventListener("click", () => hideModal());
-    if (el.modalBackdrop) el.modalBackdrop.addEventListener("click", () => hideModal());
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && el.modal && !el.modal.classList.contains("hidden")) hideModal();
-    });
+  // ====== STORAGE ======
+  function loadBalance() {
+    const raw = localStorage.getItem(LS_BAL);
+    const n = raw ? parseInt(raw, 10) : 1000;
+    return Number.isFinite(n) && n >= 0 ? n : 1000;
+  }
+  function saveBalance(v) {
+    localStorage.setItem(LS_BAL, String(v));
+  }
+  function loadSound() {
+    const raw = localStorage.getItem(LS_SOUND);
+    if (raw === null) return true;
+    return raw === "1";
+  }
+  function saveSound(v) {
+    localStorage.setItem(LS_SOUND, v ? "1" : "0");
   }
 
-  // ---------- boot ----------
-  function init() {
-    loadBalance();
-    syncSoundUI();
-    setBet(100);
-    setMode("normal");
-    wireUI();
+  // ====== UTIL ======
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+  function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+  function fmtMoney(v) { return `${Math.floor(v).toLocaleString("ru-RU")} ₽`; }
+  function setBet(v) {
+    bet = clamp(v, 10, 1_000_000);
+    betInput.value = String(bet);
   }
 
+  // старт
   init();
 })();
