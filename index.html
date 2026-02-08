@@ -1,180 +1,163 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Chicken Road</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <div class="bg"></div>
 
   <div class="wrap">
-    <header class="topbar">
+    <header class="topbar glass">
       <div class="brand">
-        <div class="title">Chicken Road</div>
-        <div class="sub">Открой это в Telegram</div>
+        <div class="brandTitle">Chicken Road</div>
+        <div class="brandSub">Открой это в Telegram</div>
       </div>
 
-      <div class="top-right">
-        <button id="soundBtn" class="pill">
-          <span class="dot"></span>
-          <span id="soundLabel">Звук: on</span>
+      <div class="topRight">
+        <button id="soundBtn" class="pill" type="button" aria-pressed="true">
+          <span class="dot on" id="soundDot"></span>
+          <span id="soundText">Звук: on</span>
         </button>
-
-        <div class="balance pill">
-          <div class="balance-cap">Баланс</div>
-          <div class="balance-val"><span id="bal">1000</span> ₽</div>
+        <div class="balance glass">
+          <div class="balanceLabel">Баланс</div>
+          <div class="balanceValue"><span id="bal">1000</span> ₽</div>
         </div>
       </div>
     </header>
 
     <main class="grid">
       <!-- LEFT -->
-      <section class="panel left">
-        <div class="panel-title">Ручной режим</div>
+      <section class="panel glass">
+        <div class="panelTitle">Ручной режим</div>
 
-        <div class="card">
-          <div class="card-h">Сумма ставки</div>
-
-          <div class="bet-row">
-            <button class="mini" id="betMinus">−</button>
-            <input id="betInput" class="bet-input" value="100" inputmode="numeric" />
-            <button class="mini" id="betPlus">+</button>
+        <div class="group">
+          <div class="label">Сумма ставки</div>
+          <div class="betRow">
+            <button class="sq" id="betMinus" type="button">−</button>
+            <input id="betInput" class="betInput" inputmode="numeric" value="100" />
+            <button class="sq" id="betPlus" type="button">+</button>
           </div>
 
           <div class="chips">
-            <button class="chip" data-chip="10">10</button>
-            <button class="chip" data-chip="50">50</button>
-            <button class="chip" data-chip="100">100</button>
-            <button class="chip" data-chip="250">250</button>
-            <button class="chip" data-chip="500">500</button>
-            <button class="chip" data-chip="max">MAX</button>
+            <button class="chip" data-chip="10" type="button">10</button>
+            <button class="chip" data-chip="50" type="button">50</button>
+            <button class="chip" data-chip="100" type="button">100</button>
+            <button class="chip" data-chip="250" type="button">250</button>
+            <button class="chip" data-chip="500" type="button">500</button>
+            <button class="chip" data-chip="max" type="button">MAX</button>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-h">Уровень сложности</div>
-          <select id="diffSelect" class="select">
+        <div class="group">
+          <div class="label">Уровень сложности</div>
+          <select id="difficulty" class="select">
             <option value="low">Низкий (машины)</option>
             <option value="expert">Эксперт (машины + огонь + провал)</option>
           </select>
         </div>
 
-        <div class="card actions">
-          <button id="startBtn" class="btn primary">Ставка</button>
-          <button id="cashBtn" class="btn danger" disabled>Кэшаут</button>
-          <button id="goBtn" class="btn ghost" disabled>Вперёд</button>
+        <div class="btnStack">
+          <button id="startBtn" class="btn primary" type="button">Ставка</button>
+          <button id="cashoutBtn" class="btn danger" type="button" disabled>Кэшаут</button>
+          <button id="forwardBtn" class="btn ghost" type="button" disabled>Вперёд</button>
         </div>
 
-        <div class="card">
-          <div class="card-h">Общая прибыль</div>
-          <div class="profit">
-            <div class="profit-val"><span id="profit">0</span> ₽</div>
-            <div class="profit-x">(<span id="profitX">x1.00</span>)</div>
-          </div>
+        <div class="profitBox glass">
+          <div class="profitLabel">Общая прибыль</div>
+          <div class="profitValue"><span id="profit">0</span> ₽ <span class="muted" id="profitMul">(x1.00)</span></div>
         </div>
 
-        <div class="card rules">
-          <div class="card-h">Правила</div>
+        <div class="rules glass">
+          <div class="rulesTitle">Правила</div>
           <ul>
-            <li><b>Ставка</b> списывается 1 раз при старте попытки.</li>
-            <li><b>Вперёд</b> — прыжок на следующий люк (выбираешь кликом).</li>
+            <li><b>Ставка</b> списывается <b>1 раз</b> при старте попытки.</li>
+            <li><b>Вперёд</b> — прыжок на следующий люк (сначала выбери дорожку кликом).</li>
             <li>Каждый удачный шаг повышает <b>X</b>.</li>
             <li><b>Низкий</b>: опасность — машины.</li>
             <li><b>Эксперт</b>: машины + огонь + провал.</li>
-            <li><b>Кэшаут</b> доступен после 1 удачного шага.</li>
+            <li><b>Кэшаут</b> доступен после <b>1</b> удачного шага.</li>
           </ul>
         </div>
       </section>
 
       <!-- CENTER -->
-      <section class="panel center">
-        <div class="center-head">
-          <div class="h-left">
-            <div class="panel-title">Дорога</div>
-            <div id="hintLine" class="muted">Нажми “Ставка”, затем выбери люк и жми “Вперёд”.</div>
+      <section class="stage glass">
+        <div class="stageHead">
+          <div>
+            <div class="stageTitle">Дорога</div>
+            <div class="stageSub" id="stageSub">Нажми “Ставка” чтобы начать.</div>
           </div>
-          <div class="h-right">
-            <div class="statbox">
-              <div class="cap">Текущий X</div>
-              <div class="val" id="curX">1.00x</div>
+          <div class="stats">
+            <div class="stat glass">
+              <div class="statLabel">Текущий X</div>
+              <div class="statValue" id="xNow">1.00x</div>
             </div>
-            <div class="statbox">
-              <div class="cap">Шаг</div>
-              <div class="val" id="step">0</div>
+            <div class="stat glass">
+              <div class="statLabel">Шаг</div>
+              <div class="statValue" id="stepNow">0</div>
             </div>
           </div>
         </div>
 
-        <div class="road">
-          <!-- decor -->
-          <div class="streetlight">
-            <div class="lightHead"></div>
-            <div class="pole"></div>
-            <div class="base"></div>
+        <div class="roadFrame">
+          <!-- traffic light -->
+          <div class="trafficLight">
+            <div class="tLamp red" id="lampRed"></div>
+            <div class="tLamp yellow" id="lampYellow"></div>
+            <div class="tLamp green" id="lampGreen"></div>
           </div>
 
-          <div class="trafficLight" id="tLight">
-            <div class="lamp r"></div>
-            <div class="lamp y on"></div>
-            <div class="lamp g"></div>
+          <!-- road -->
+          <div class="road" id="road">
+            <div class="laneMarkings"></div>
+
+            <!-- cars (visual + hit animation) -->
+            <div class="carsLayer" id="carsLayer"></div>
+
+            <!-- manholes row -->
+            <div class="holesRow" id="holesRow"></div>
+
+            <!-- barrier behind chicken -->
+            <div class="barrier" id="barrier"></div>
+
+            <!-- chicken -->
+            <div class="chicken" id="chicken" aria-hidden="true">
+              <div class="chickenBody"></div>
+              <div class="chickenShadow"></div>
+            </div>
+
+            <!-- fx overlays -->
+            <div class="fxLayer" id="fxLayer"></div>
           </div>
-
-          <!-- lane area -->
-          <div id="laneArea" class="laneArea">
-            <!-- JS generates lanes -->
-          </div>
-
-          <!-- chicken -->
-          <div id="chicken" class="chicken" aria-hidden="true">
-            <div class="ch-body"></div>
-            <div class="ch-wing"></div>
-            <div class="ch-eye"></div>
-            <div class="ch-beak"></div>
-            <div class="ch-feet"></div>
-          </div>
-
-          <!-- FX -->
-          <div id="fx" class="fx" aria-hidden="true"></div>
-
-          <div class="legend">
-            <span class="lg ok"><i></i> безопасно</span>
-            <span class="lg bad"><i></i> опасно</span>
-          </div>
-
-          <div class="footnote">Локально • RNG</div>
         </div>
 
-        <div class="ladder card">
-          <div class="card-h">Лестница X</div>
-          <div id="ladderRow" class="ladderRow"></div>
+        <div class="ladder glass">
+          <div class="ladderTitle">Лестница X</div>
+          <div class="ladderRow" id="ladderRow"></div>
         </div>
       </section>
 
       <!-- RIGHT -->
-      <section class="panel right">
-        <div class="panel-title">Подсказка</div>
-
-        <div class="card tip">
-          <div class="tipText" id="tip">
-            Нажми <b>Ставка</b> чтобы начать. Затем выбери люк кликом и жми <b>Вперёд</b>.
-          </div>
+      <section class="panel glass right">
+        <div class="panelTitle">Подсказка</div>
+        <div class="hint glass" id="hint">
+          Нажми <b>Ставка</b> чтобы начать. Затем выбери люк кликом и жми <b>Вперёд</b>.
         </div>
 
-        <div class="card state">
-          <div class="card-h">Состояние</div>
-          <div class="kv">
-            <div>Режим</div><div id="modeOut">Низкий</div>
-            <div>Ставка</div><div><span id="betOut">0</span> ₽</div>
-            <div>Кэшаут</div><div id="cashOut">—</div>
-          </div>
-          <div class="tiny muted">v1 — Chicken Road (локально • RNG)</div>
+        <div class="state glass">
+          <div class="stateTitle">Состояние</div>
+          <div class="kv"><span>Режим</span><b id="modeText">Низкий</b></div>
+          <div class="kv"><span>Ставка</span><b><span id="betView">100</span> ₽</b></div>
+          <div class="kv"><span>Кэшаут</span><b id="cashView">—</b></div>
+          <div class="foot">v1 — Chicken Road (локально • RNG)</div>
         </div>
       </section>
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
