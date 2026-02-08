@@ -17,7 +17,7 @@
       </div>
 
       <div class="hud">
-        <button id="soundBtn" class="pill" title="Звук (визуально, можно подключить позже)" aria-label="sound">
+        <button id="soundBtn" class="pill" type="button">
           <span class="dot"></span>
           <span id="soundText">Звук: off</span>
         </button>
@@ -30,43 +30,43 @@
     </header>
 
     <main class="grid">
-      <!-- LEFT / CONTROL -->
+      <!-- LEFT -->
       <section class="panel panel-left">
         <div class="seg">
-          <button class="segbtn active" data-mode="easy" id="modeEasy">Обычный</button>
-          <button class="segbtn" data-mode="hard" id="modeHard">Сложный</button>
+          <button class="segbtn active" id="modeEasy" type="button">Обычный</button>
+          <button class="segbtn" id="modeHard" type="button">Сложный</button>
         </div>
 
         <div class="box">
           <div class="box-title">Ставка</div>
 
           <div class="bet-row">
-            <button class="step" id="betMinus" aria-label="minus">−</button>
+            <button class="step" id="betMinus" type="button">−</button>
             <input id="betInput" type="number" min="1" step="1" value="100" />
-            <button class="step" id="betPlus" aria-label="plus">+</button>
+            <button class="step" id="betPlus" type="button">+</button>
           </div>
 
           <div class="chips">
-            <button class="chip" data-chip="10">10</button>
-            <button class="chip" data-chip="50">50</button>
-            <button class="chip" data-chip="100">100</button>
-            <button class="chip" data-chip="250">250</button>
-            <button class="chip" data-chip="500">500</button>
-            <button class="chip" data-chip="max">MAX</button>
+            <button class="chip" data-chip="10" type="button">10</button>
+            <button class="chip" data-chip="50" type="button">50</button>
+            <button class="chip" data-chip="100" type="button">100</button>
+            <button class="chip" data-chip="250" type="button">250</button>
+            <button class="chip" data-chip="500" type="button">500</button>
+            <button class="chip" data-chip="max" type="button">MAX</button>
           </div>
 
           <div class="actions">
-            <button id="startBtn" class="btn btn-primary">Ставка</button>
-            <button id="cashoutBtn" class="btn btn-ghost" disabled>Кэшаут</button>
+            <button id="startBtn" class="btn btn-primary" type="button">Ставка</button>
+            <button id="cashoutBtn" class="btn btn-ghost" type="button" disabled>Кэшаут</button>
           </div>
 
           <div class="hint">
             <div><b>Правила</b></div>
             <ul>
               <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
-              <li>Выбирай плитку в текущем ряду. <b>Безопасно</b> — идёшь выше.</li>
-              <li><b>Ловушка</b> — поражение, ставка сгорает.</li>
-              <li><b>Кэшаут</b> — забираешь <span class="mono">Ставка × X</span> в любой момент после 1 победы.</li>
+              <li>Выбирай плитку в текущем ряду. Безопасно — идёшь выше.</li>
+              <li>Ловушка — поражение, ставка сгорает.</li>
+              <li>Кэшаут — забираешь <span class="mono">Ставка × X</span> после 1 победы.</li>
             </ul>
           </div>
         </div>
@@ -90,7 +90,7 @@
         </div>
       </section>
 
-      <!-- CENTER / GAME -->
+      <!-- CENTER -->
       <section class="panel panel-center">
         <div class="arena">
           <div class="arena-head">
@@ -98,36 +98,62 @@
             <div class="arena-sub" id="arenaSub">Выбери режим и нажми “Ставка”</div>
           </div>
 
-          <!-- Dragon + FX -->
-          <div class="dragonWrap" id="dragonWrap">
-            <div class="dragon" id="dragon">
-              <!-- simple SVG dragon head -->
-              <svg viewBox="0 0 220 140" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M28 78c10-28 42-56 82-56 44 0 78 28 82 56 2 18-8 32-22 40-14 9-36 14-60 14s-46-5-60-14C36 110 26 96 28 78Z" fill="url(#g1)"/>
-                <path d="M64 52c-10-10-28-12-38-4 12 2 20 8 22 18 6-6 10-10 16-14Z" fill="#7b8aa8" opacity=".7"/>
-                <path d="M156 52c10-10 28-12 38-4-12 2-20 8-22 18-6-6-10-10-16-14Z" fill="#7b8aa8" opacity=".7"/>
-                <path d="M92 92c10 6 26 6 36 0-4 10-14 18-18 18s-14-8-18-18Z" fill="#0b1222" opacity=".55"/>
-                <circle cx="82" cy="76" r="7" fill="#0b1222"/>
-                <circle cx="138" cy="76" r="7" fill="#0b1222"/>
-                <circle cx="82" cy="74" r="2" fill="#cfe8ff"/>
-                <circle cx="138" cy="74" r="2" fill="#cfe8ff"/>
-                <path d="M108 58c-8 6-14 14-16 26 8-6 16-10 22-10s14 4 22 10c-2-12-8-20-16-26-4 3-8 3-12 0Z" fill="#22304b" opacity=".8"/>
-                <defs>
-                  <linearGradient id="g1" x1="40" y1="26" x2="180" y2="128" gradientUnits="userSpaceOnUse">
-                    <stop stop-color="#9fb4d6"/>
-                    <stop offset="1" stop-color="#566784"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+          <!-- NEW: dragon emblem (не детский) -->
+          <div class="dragonEmblem" aria-hidden="true">
+            <svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="dA" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#b9c9e6"/>
+                  <stop offset="1" stop-color="#6c7f9d"/>
+                </linearGradient>
+                <linearGradient id="dB" x1="0" y1="1" x2="1" y2="0">
+                  <stop offset="0" stop-color="#1b2a45" stop-opacity="0.9"/>
+                  <stop offset="1" stop-color="#0b1222" stop-opacity="0.6"/>
+                </linearGradient>
+                <radialGradient id="eyeGlow" cx="50%" cy="50%" r="60%">
+                  <stop offset="0" stop-color="#7dd3fc"/>
+                  <stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
 
-            <div class="breath" id="breath" aria-hidden="true"></div>
-            <div class="sparkles" id="sparkles" aria-hidden="true"></div>
+              <!-- wings silhouette -->
+              <path d="M52 138c-18-20-26-52-12-78 18 22 34 26 52 26-12 10-18 28-18 52 0 12-6 22-22 0Z"
+                    fill="url(#dB)" opacity=".9"/>
+              <path d="M308 138c18-20 26-52 12-78-18 22-34 26-52 26 12 10 18 28 18 52 0 12 6 22 22 0Z"
+                    fill="url(#dB)" opacity=".9"/>
+
+              <!-- head -->
+              <path d="M110 150c0-52 30-98 70-98s70 46 70 98c0 22-10 40-26 52-14 10-30 14-44 14s-30-4-44-14c-16-12-26-30-26-52Z"
+                    fill="url(#dA)"/>
+              <!-- horns -->
+              <path d="M140 78c-18-16-26-32-26-48 16 6 30 18 40 34-6 4-10 8-14 14Z"
+                    fill="#7b8aa8" opacity=".9"/>
+              <path d="M220 78c18-16 26-32 26-48-16 6-30 18-40 34 6 4 10 8 14 14Z"
+                    fill="#7b8aa8" opacity=".9"/>
+
+              <!-- snout -->
+              <path d="M144 142c10 10 22 16 36 16s26-6 36-16c-2 20-16 42-36 42s-34-22-36-42Z"
+                    fill="#0b1222" opacity=".45"/>
+
+              <!-- eyes + glow -->
+              <circle cx="148" cy="126" r="14" fill="url(#eyeGlow)" opacity=".55"/>
+              <circle cx="212" cy="126" r="14" fill="url(#eyeGlow)" opacity=".55"/>
+              <circle cx="148" cy="126" r="6" fill="#081022"/>
+              <circle cx="212" cy="126" r="6" fill="#081022"/>
+              <circle cx="150" cy="124" r="2" fill="#cfe8ff"/>
+              <circle cx="214" cy="124" r="2" fill="#cfe8ff"/>
+
+              <!-- teeth -->
+              <path d="M164 158l6 10 6-10M184 158l6 10 6-10" stroke="#dbeafe" stroke-opacity=".6" stroke-width="3" stroke-linecap="round"/>
+
+              <!-- frame circle -->
+              <circle cx="180" cy="140" r="96" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="6"/>
+            </svg>
           </div>
 
           <!-- Board -->
           <div class="boardWrap">
-            <div class="board" id="board" aria-label="tower board"></div>
+            <div class="board" id="board"></div>
           </div>
 
           <div class="boardFooter">
@@ -140,7 +166,7 @@
         </div>
       </section>
 
-      <!-- RIGHT / LADDER -->
+      <!-- RIGHT -->
       <section class="panel panel-right">
         <div class="box">
           <div class="box-title">Шкала X</div>
@@ -161,15 +187,18 @@
         </div>
       </section>
     </main>
+  </div>
 
-    <!-- Overlay result -->
-    <div class="overlay" id="overlay" hidden>
-      <div class="modal" role="dialog" aria-modal="true">
+  <!-- IMPORTANT: overlay вынесен в конец body + будет z-index в CSS -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Итог">
+      <div class="modalTop">
         <div class="modalTitle" id="modalTitle">Итог</div>
-        <div class="modalText" id="modalText">—</div>
-        <div class="modalActions">
-          <button class="btn btn-primary" id="modalOk">Ок</button>
-        </div>
+        <button class="modalClose" id="modalClose" type="button" aria-label="close">✕</button>
+      </div>
+      <div class="modalText" id="modalText">—</div>
+      <div class="modalActions">
+        <button class="btn btn-primary" id="modalOk" type="button">Ок</button>
       </div>
     </div>
   </div>
