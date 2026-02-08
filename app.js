@@ -1,859 +1,667 @@
-/* app.js — Chicken (Stake-style) | GitHub Pages | без зависимостей
-   ✅ Ставка 1 раз на старт
-   ✅ Forward (прыжок) + Cashout
-   ✅ Easy: только машины (мягкая математика)
-   ✅ Hard: машины + огонь + провал (жёсткая математика)
-   ✅ Плавные анимации на canvas
-   ✅ X-лестница (видна заранее) + подсветка шага
-   ✅ Звук (тихий) + тумблер
-   ✅ localStorage баланс
-*/
-
 (() => {
-  // ---------- helpers ----------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  // ======= Telegram WebApp safe init (optional) =======
+  const tg = window.Telegram?.WebApp;
+  if (tg) { try { tg.ready(); tg.expand(); } catch {} }
+
+  // ======= Helpers =======
+  const $ = (id) => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const fmtRub = (n) => `${Math.max(0, Math.floor(n))} ₽`;
-  const fmtX = (x) => `x${x.toFixed(2)}`;
+  const fmt2 = (n) => (Math.round(n * 100) / 100).toFixed(2);
 
-  // ---------- DOM (без "магии": если id нет — подхватим по data-role) ----------
-  const canvas = $("#gameCanvas") || $("[data-role='canvas']");
-  const wrapArena = canvas?.parentElement;
+  // ======= DOM =======
+  const el = {
+    balance: $("balance"),
+    soundBtn: $("soundBtn"),
+    soundLabel: $("soundLabel"),
 
-  const soundBtn = $("#soundToggle") || $("[data-role='sound']");
-  const soundText = $("#soundText") || $("[data-role='soundText']");
-  const soundDot = $(".soundDot") || $("[data-role='soundDot']");
+    betMinus: $("betMinus"),
+    betPlus: $("betPlus"),
+    betInput: $("betInput"),
+    difficulty: $("difficulty"),
 
-  const balanceEl = $("#balanceValue") || $("[data-role='balance']");
-  const betInput = $("#betInput") || $("[data-role='bet']");
-  const btnBet = $("#btnBet") || $("[data-role='betBtn']");
-  const btnForward = $("#btnForward") || $("[data-role='forwardBtn']");
-  const btnCashout = $("#btnCashout") || $("[data-role='cashoutBtn']");
-  const difficultySel = $("#difficulty") || $("[data-role='difficulty']");
+    startBtn: $("startBtn"),
+    cashoutBtn: $("cashoutBtn"),
+    forwardBtn: $("forwardBtn"),
 
-  const profitValueEl = $("#profitValue") || $("[data-role='profitValue']");
-  const statusTextEl = $("#statusText") || $("[data-role='statusText']");
-  const hudXEl = $("#hudX") || $("[data-role='hudX']");
-  const hudStepEl = $("#hudStep") || $("[data-role='hudStep']");
+    profit: $("profit"),
+    totalMul: $("totalMul"),
 
-  const multStrip = $("#multStrip") || $("[data-role='multStrip']");
+    currentX: $("currentX"),
+    step: $("step"),
 
-  const chipBtns = $$("[data-amt], .chip");
+    manholes: $("manholes"),
+    cars: $("cars"),
+    fx: $("fx"),
+    chicken: $("chicken"),
 
-  // ---------- safety: must have canvas ----------
-  if (!canvas) {
-    console.error("Canvas #gameCanvas not found. Проверь index.html");
-    return;
-  }
+    ladderRow: $("ladderRow"),
 
-  const ctx = canvas.getContext("2d", { alpha: true });
-
-  // ---------- persistent state ----------
-  const LS_BAL = "oai_balance_chicken";
-  const LS_SND = "oai_sound_chicken";
-
-  let balance = Number(localStorage.getItem(LS_BAL) || "1000");
-  if (!Number.isFinite(balance) || balance < 0) balance = 1000;
-
-  let soundOn = (localStorage.getItem(LS_SND) ?? "1") === "1";
-
-  // ---------- audio (тихо и приятно) ----------
-  let audioCtx = null;
-  function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
-  }
-  function beep({ f = 440, t = 0.06, type = "sine", v = 0.025, slide = 0, delay = 0 }) {
-    if (!soundOn) return;
-    ensureAudio();
-    const ac = audioCtx;
-    const now = ac.currentTime + delay;
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type = type;
-
-    o.frequency.setValueAtTime(f, now);
-    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, f * slide), now + t);
-
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(v, now + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + t);
-
-    o.connect(g);
-    g.connect(ac.destination);
-    o.start(now);
-    o.stop(now + t + 0.02);
-  }
-  function sfxStart() {
-    beep({ f: 280, t: 0.08, type: "triangle", v: 0.02, slide: 1.6 });
-    beep({ f: 520, t: 0.06, type: "sine", v: 0.018, delay: 0.06 });
-  }
-  function sfxJump() {
-    beep({ f: 360, t: 0.05, type: "triangle", v: 0.016, slide: 1.25 });
-  }
-  function sfxSafe() {
-    beep({ f: 640, t: 0.05, type: "sine", v: 0.018 });
-    beep({ f: 880, t: 0.05, type: "sine", v: 0.012, delay: 0.045 });
-  }
-  function sfxHit() {
-    beep({ f: 220, t: 0.10, type: "sawtooth", v: 0.018, slide: 0.55 });
-    beep({ f: 110, t: 0.12, type: "square", v: 0.010, delay: 0.05 });
-  }
-  function sfxCashout() {
-    beep({ f: 520, t: 0.06, type: "triangle", v: 0.017, slide: 1.3 });
-    beep({ f: 740, t: 0.06, type: "triangle", v: 0.014, delay: 0.05 });
-  }
-
-  // ---------- game config ----------
-  const MODES = {
-    easy: {
-      name: "Лёгкий",
-      steps: 6,
-      // мягкая математика, чтобы не дюпалось
-      multipliers: [1.09, 1.15, 1.23, 1.31, 1.40, 1.55],
-      // только машины: шанс умереть растёт
-      deathChances: [0.08, 0.10, 0.12, 0.14, 0.16, 0.18],
-      hazards: ["car"], // визуально — машина
-    },
-    hard: {
-      name: "Эксперт",
-      steps: 6,
-      // близко к примеру со скринов (жёстко)
-      multipliers: [1.96, 4.14, 9.31, 22.61, 60.29, 180.00],
-      // тут опасности сильнее (машина/огонь/провал)
-      deathChances: [0.22, 0.24, 0.26, 0.28, 0.30, 0.32],
-      hazards: ["car", "fire", "hole"],
-    },
+    statusText: $("statusText"),
+    modeLabel: $("modeLabel"),
+    betView: $("betView"),
+    cashoutView: $("cashoutView"),
   };
 
-  // ---------- game state ----------
-  const S = {
-    modeKey: "easy",
-    running: false,     // ставка принята и игра активна
-    alive: false,       // ещё не проиграл
-    anim: false,        // идёт анимация прыжка
-    step: 0,            // пройдено шагов
-    bet: 100,
-    x: 1.0,
-    payout: 0,          // total payout (ставка * X)
-    lastMsg: "Ожидание",
-    // path pre-roll outcomes for each forward step
-    outcomes: [],       // 'safe' | 'dead'
-    hazardType: [],     // 'car'|'fire'|'hole' for dead
-    // visuals
-    chicken: { x: 0, y: 0, vx: 0, vy: 0, bob: 0, scale: 1, rot: 0 },
-    hit: { t: 0, type: null },
-    cashBurst: { t: 0 },
-  };
+  // ======= Balance (virtual) =======
+  const LS_BAL = "chicken_balance_v1";
+  const DEFAULT_BAL = 1000;
 
-  // ---------- layout / canvas sizing ----------
-  function resizeCanvas() {
-    const w = Math.max(320, wrapArena?.clientWidth || 900);
-    // высота как у stake панели (приятно)
-    const h = clamp(Math.round(w * 0.58), 360, 560);
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let balance = (() => {
+    const raw = localStorage.getItem(LS_BAL);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : DEFAULT_BAL;
+  })();
 
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // init chicken position
-    placeChickenAtStep(S.step, true);
-  }
-
-  window.addEventListener("resize", resizeCanvas);
-
-  // ---------- UI update ----------
-  function setStatus(text) {
-    S.lastMsg = text;
-    if (statusTextEl) statusTextEl.textContent = text;
-  }
   function setBalance(v) {
     balance = Math.max(0, Math.floor(v));
     localStorage.setItem(LS_BAL, String(balance));
-    if (balanceEl) balanceEl.textContent = fmtRub(balance);
+    if (el.balance) el.balance.textContent = String(balance);
   }
-  function setSoundUI() {
-    if (soundText) soundText.textContent = soundOn ? "Звук: on" : "Звук: off";
-    if (soundDot) {
-      soundDot.style.background = soundOn ? "var(--green)" : "var(--red)";
-      soundDot.style.boxShadow = soundOn
-        ? "0 0 0 4px rgba(32,208,122,.15)"
-        : "0 0 0 4px rgba(255,77,94,.14)";
+  setBalance(balance);
+
+  // ======= Audio (quiet + toggle) =======
+  let soundOn = true;
+  let audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  function blip(freq = 520, dur = 0.06, type = "sine", vol = 0.03) {
+    if (!soundOn) return;
+    try {
+      ensureAudio();
+      const t0 = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+    } catch {}
+  }
+  function setSound(on) {
+    soundOn = !!on;
+    if (el.soundLabel) el.soundLabel.textContent = soundOn ? "Звук: on" : "Звук: off";
+    const dot = el.soundBtn?.querySelector(".dot");
+    if (dot) {
+      dot.style.background = soundOn ? "var(--green)" : "rgba(255,255,255,.18)";
+      dot.style.boxShadow = soundOn ? "0 0 14px rgba(42,211,122,.45)" : "none";
     }
   }
-  function setBetUI(v) {
-    const val = clamp(Math.floor(v), 1, 999999);
-    S.bet = val;
-    if (betInput) betInput.value = String(val);
+  setSound(true);
+
+  // ======= Game tuning =======
+  const COLS = 6;            // lanes/manholes per row
+  const STEP_LIMIT = 12;     // ladder length
+  const ROW_Y = 66;          // fixed visual Y of clickable row (px from top-ish via CSS; we’ll compute)
+  const ROAD_PADDING_TOP_PCT = 28; // where row sits (percent), stable on all screens
+
+  // Multipliers ladder (balanced: no crazy dupe)
+  // Low grows slower, Expert faster but riskier.
+  const LADDER_LOW = [1.08, 1.14, 1.22, 1.31, 1.42, 1.56, 1.74, 1.96, 2.25, 2.62, 3.12, 3.85];
+  const LADDER_EX  = [1.22, 1.44, 1.72, 2.08, 2.55, 3.18, 4.05, 5.20, 6.80, 9.00, 12.2, 16.9];
+
+  // Hazard chances per step (visual cars always move; logic uses RNG)
+  // Low: only "car"
+  const lowCarP = (s) => clamp(0.10 + s * 0.016, 0.10, 0.28);
+
+  // Expert: car + fire + fall (sum capped)
+  const exRisk = (s) => {
+    const car  = clamp(0.12 + s * 0.022, 0.12, 0.36);
+    const fire = clamp(0.06 + s * 0.014, 0.06, 0.24);
+    const fall = clamp(0.05 + s * 0.012, 0.05, 0.20);
+    const total = clamp(car + fire + fall, 0, 0.70);
+    return { car, fire, fall, total };
+  };
+
+  // Cars spawn tuning (more cars, vertical)
+  const carSpawnEvery = (mode) => mode === "expert" ? 0.45 : 0.65;
+  const carSpeedRange = (mode) => mode === "expert" ? [240, 520] : [180, 380];
+
+  // ======= State =======
+  let mode = "low";         // low | expert
+  let bet = 100;
+  let inRun = false;
+  let betLocked = false;    // bet deducted
+  let step = 0;
+  let currentX = 1.0;
+
+  // player selected lane (0..COLS-1)
+  let selectedLane = 0;
+
+  // manholes DOM
+  let mhWraps = []; // {wrap, hole, badge}
+  let roadRect = null;
+
+  // cars sim
+  let carPool = [];
+  let spawnAcc = 0;
+  let lastTs = null;
+  let rafId = null;
+
+  // ======= UI helpers =======
+  function setStatus(html) {
+    if (el.statusText) el.statusText.innerHTML = html;
   }
-  function updatePayout() {
-    S.payout = S.bet * S.x;
-    // показываем как "прибыль" — именно payout (как обычно у стейка в подобных)
-    if (profitValueEl) profitValueEl.textContent = fmtRub(S.payout);
-    if (hudXEl) hudXEl.textContent = fmtX(S.x);
-    if (hudStepEl) hudStepEl.textContent = `${S.step}/${MODES[S.modeKey].steps}`;
-  }
-
-  function syncButtons() {
-    // можно ставить только когда игра не в процессе анимации и нет активной серии
-    const canBet = !S.anim && !S.running;
-    const canForward = !S.anim && S.running && S.alive && S.step < MODES[S.modeKey].steps;
-    const canCashout = !S.anim && S.running && S.alive && S.step > 0;
-
-    if (btnBet) btnBet.disabled = !canBet;
-    if (btnForward) btnForward.disabled = !canForward;
-    if (btnCashout) btnCashout.disabled = !canCashout;
-
-    // косметика: primary/ghost
-    if (btnForward) {
-      btnForward.classList.toggle("ghost", !canForward && S.running);
+  function updateMeta() {
+    if (el.modeLabel) el.modeLabel.textContent = (mode === "expert" ? "Эксперт" : "Низкий");
+    if (el.betView) el.betView.textContent = String(bet);
+    if (el.currentX) el.currentX.textContent = `${fmt2(currentX)}x`;
+    if (el.step) el.step.textContent = String(step);
+    if (el.totalMul) el.totalMul.textContent = `x${fmt2(currentX)}`;
+    if (el.profit) {
+      const p = betLocked ? Math.floor(bet * currentX) : 0;
+      el.profit.textContent = String(p);
     }
-    if (btnCashout) {
-      btnCashout.classList.toggle("cashout", true);
+    if (el.cashoutView) {
+      el.cashoutView.textContent = (inRun && step >= 1) ? `${Math.floor(bet * currentX)} ₽` : "—";
     }
   }
+  function setButtons() {
+    if (el.startBtn) el.startBtn.disabled = inRun;
+    if (el.forwardBtn) el.forwardBtn.disabled = !inRun;
+    if (el.cashoutBtn) el.cashoutBtn.disabled = !(inRun && step >= 1);
+  }
 
-  function buildMultiplierStrip() {
-    if (!multStrip) return;
-    multStrip.innerHTML = "";
-    const m = MODES[S.modeKey].multipliers;
-    m.forEach((xv, i) => {
-      const pill = document.createElement("div");
-      pill.className = "multPill";
-      pill.textContent = fmtX(xv);
-      pill.dataset.i = String(i + 1);
-      multStrip.appendChild(pill);
+  function ladderArr() {
+    return mode === "expert" ? LADDER_EX : LADDER_LOW;
+  }
+  function nextX() {
+    const arr = ladderArr();
+    const idx = clamp(step, 0, arr.length - 1);
+    return arr[idx];
+  }
+  function renderLadder() {
+    if (!el.ladderRow) return;
+    const arr = ladderArr();
+    el.ladderRow.innerHTML = "";
+    arr.forEach((x, i) => {
+      const d = document.createElement("div");
+      d.className = "ladderItem" + (i === step - 1 ? " active" : "");
+      d.textContent = `${fmt2(x)}x`;
+      el.ladderRow.appendChild(d);
     });
-    refreshStripState();
   }
 
-  function refreshStripState() {
-    if (!multStrip) return;
-    const pills = $$(".multPill", multStrip);
-    pills.forEach((p, idx) => {
-      const stepIndex = idx + 1; // 1..N
-      p.classList.toggle("active", stepIndex === S.step + 1 && S.running && S.alive);
-      p.classList.toggle("done", stepIndex <= S.step && S.running);
-    });
-  }
+  // ======= Road build (single clickable row like stake) =======
+  function buildManholes() {
+    if (!el.manholes) return;
+    el.manholes.innerHTML = "";
+    mhWraps = [];
 
-  // ---------- mode ----------
-  function getModeKey() {
-    const v = (difficultySel?.value || "").toLowerCase();
-    if (v.includes("hard") || v.includes("эксп") || v.includes("expert")) return "hard";
-    return "easy";
-  }
-  function setMode(key) {
-    S.modeKey = key;
-    // если во время игры переключили — сбрасываем (без багов)
-    resetRound("Ожидание");
-    buildMultiplierStrip();
-    updatePayout();
-    syncButtons();
-  }
+    roadRect = el.manholes.getBoundingClientRect();
 
-  // ---------- round / RNG ----------
-  function rollOutcomes() {
-    const mode = MODES[S.modeKey];
-    S.outcomes = [];
-    S.hazardType = [];
-    for (let i = 0; i < mode.steps; i++) {
-      const die = Math.random() < mode.deathChances[i];
-      S.outcomes.push(die ? "dead" : "safe");
-      if (die) {
-        const ht = mode.hazards[Math.floor(Math.random() * mode.hazards.length)];
-        S.hazardType.push(ht);
-      } else {
-        S.hazardType.push(null);
-      }
-    }
-  }
+    // Create a single row centered vertically around ROAD_PADDING_TOP_PCT
+    const row = document.createElement("div");
+    row.className = "mhRow";
+    row.style.top = `${ROAD_PADDING_TOP_PCT}%`;
 
-  function resetRound(msg = "Ожидание") {
-    S.running = false;
-    S.alive = false;
-    S.anim = false;
-    S.step = 0;
-    S.x = 1.0;
-    S.payout = 0;
-    S.outcomes = [];
-    S.hazardType = [];
-    S.hit.t = 0;
-    S.hit.type = null;
-    S.cashBurst.t = 0;
-    placeChickenAtStep(0, true);
-    setStatus(msg);
-    updatePayout();
-    refreshStripState();
-    syncButtons();
-  }
+    for (let i = 0; i < COLS; i++) {
+      const wrap = document.createElement("div");
+      wrap.className = "mhWrap";
 
-  function startRound() {
-    const bet = clamp(Math.floor(Number(betInput?.value || S.bet)), 1, 999999);
-    if (bet > balance) {
-      setStatus("Недостаточно баланса");
-      beep({ f: 200, t: 0.08, type: "square", v: 0.012 });
-      return;
+      const hole = document.createElement("div");
+      hole.className = "manhole";
+      hole.dataset.lane = String(i);
+      hole.title = "Выбери люк";
+
+      const badge = document.createElement("div");
+      badge.className = "mhBadge";
+      badge.textContent = `${fmt2(nextX())}x`;
+
+      wrap.appendChild(hole);
+      wrap.appendChild(badge);
+      row.appendChild(wrap);
+
+      mhWraps.push({ wrap, hole, badge });
     }
 
-    setBetUI(bet);
-    setBalance(balance - bet);
+    el.manholes.appendChild(row);
 
-    S.running = true;
-    S.alive = true;
-    S.anim = false;
-    S.step = 0;
-    S.x = 1.0;
-    S.hit.t = 0;
-    S.hit.type = null;
-    S.cashBurst.t = 0;
-
-    rollOutcomes();
-    placeChickenAtStep(0, true);
-
-    setStatus("Серия началась — жми «Вперёд»");
-    sfxStart();
-    updatePayout();
-    refreshStripState();
-    syncButtons();
+    // default selection
+    setSelectedLane(selectedLane, true);
   }
 
-  function cashout() {
-    if (!S.running || !S.alive || S.step <= 0 || S.anim) return;
-
-    const payout = S.bet * S.x;
-    setBalance(balance + payout);
-    S.cashBurst.t = 1;
-    setStatus(`Кэшаут: ${fmtRub(payout)} (${fmtX(S.x)})`);
-    sfxCashout();
-
-    // закрываем раунд
-    S.running = false;
-    S.alive = false;
-    syncButtons();
-
-    // мягкая пауза и сброс
-    setTimeout(() => {
-      resetRound("Ожидание");
-    }, 750);
+  function updateBadges() {
+    const nx = nextX();
+    mhWraps.forEach(o => (o.badge.textContent = `${fmt2(nx)}x`));
   }
 
-  function lose(type) {
-    S.alive = false;
-    S.running = false;
-    S.anim = false;
-
-    S.hit.t = 1;
-    S.hit.type = type || "car";
-    setStatus("Проигрыш");
-    sfxHit();
-    syncButtons();
-
-    setTimeout(() => {
-      resetRound("Ожидание");
-    }, 900);
+  function setSelectedLane(lane, silent = false) {
+    selectedLane = clamp(lane, 0, COLS - 1);
+    mhWraps.forEach(({ hole }, idx) => hole.classList.toggle("selected", idx === selectedLane));
+    if (!silent) blip(640, 0.045, "sine", 0.02);
   }
 
-  // ---------- geometry ----------
-  function geo() {
-    const w = parseFloat(canvas.style.width || "900");
-    const h = parseFloat(canvas.style.height || "520");
+  // ======= Chicken positioning + jump arc =======
+  function roadLocalXYFromHole(laneIndex) {
+    const road = el.manholes?.closest(".road");
+    if (!road) return { x: 0, y: 0 };
+    const rr = road.getBoundingClientRect();
+    const hole = mhWraps[laneIndex]?.hole;
+    if (!hole) return { x: rr.width / 2, y: rr.height * (ROAD_PADDING_TOP_PCT / 100) };
 
-    // игровая дорожка справа от "стартовой зоны"
-    const pad = 18;
-    const leftArea = w * 0.20;
-    const roadX = leftArea;
-    const roadW = w - roadX - pad;
-    const roadY = pad;
-    const roadH = h - pad * 2;
-
-    return { w, h, pad, leftArea, roadX, roadW, roadY, roadH };
-  }
-
-  function stepPos(stepIndex /*0..steps*/) {
-    const g = geo();
-    const mode = MODES[S.modeKey];
-    const steps = mode.steps;
-    // позиции лунок по X
-    const x0 = g.roadX + g.roadW * 0.10;
-    const x1 = g.roadX + g.roadW * 0.92;
-    const t = steps === 0 ? 0 : stepIndex / steps;
-    const x = lerp(x0, x1, t);
-    const y = g.roadY + g.roadH * 0.64;
+    const hr = hole.getBoundingClientRect();
+    const x = (hr.left + hr.right) / 2 - rr.left;
+    const y = (hr.top + hr.bottom) / 2 - rr.top - 10; // slightly above hole
     return { x, y };
   }
 
-  function placeChickenAtStep(stepIndex, hardSet = false) {
-    const p = stepPos(stepIndex);
-    if (hardSet) {
-      S.chicken.x = p.x;
-      S.chicken.y = p.y;
-      S.chicken.vx = 0;
-      S.chicken.vy = 0;
-      S.chicken.rot = 0;
-      S.chicken.scale = 1;
+  function setChickenPos(x, y, immediate = false) {
+    if (!el.chicken) return;
+    if (immediate) {
+      el.chicken.style.transition = "none";
+      el.chicken.style.left = `${x}px`;
+      el.chicken.style.top = `${y}px`;
+      requestAnimationFrame(() => {
+        el.chicken.style.transition = "left .28s ease, top .28s ease, transform .18s ease";
+      });
+    } else {
+      el.chicken.style.left = `${x}px`;
+      el.chicken.style.top = `${y}px`;
     }
   }
 
-  // ---------- forward / animation ----------
-  function forward() {
-    if (!S.running || !S.alive || S.anim) return;
+  function jumpChickenToLane(laneIndex) {
+    // simple arc illusion: scale + quick mid bump
+    const { x, y } = roadLocalXYFromHole(laneIndex);
+    if (!el.chicken) return;
 
-    const mode = MODES[S.modeKey];
-    if (S.step >= mode.steps) return;
+    el.chicken.classList.add("jump");
+    setChickenPos(x, y, false);
 
-    S.anim = true;
-    syncButtons();
+    setTimeout(() => el.chicken && el.chicken.classList.remove("jump"), 230);
+  }
 
-    const nextStep = S.step + 1;
-    const from = stepPos(S.step);
-    const to = stepPos(nextStep);
+  // ======= Cars =======
+  function clearCars() {
+    carPool.forEach(c => c.el.remove());
+    carPool = [];
+    if (el.cars) el.cars.innerHTML = "";
+  }
 
-    const outcome = S.outcomes[S.step]; // result for THIS move
-    const hazard = S.hazardType[S.step];
+  function spawnCar() {
+    if (!el.cars) return;
+    const road = el.cars.closest(".road");
+    if (!road) return;
 
-    const dur = 380; // ms
-    const start = performance.now();
+    const rr = road.getBoundingClientRect();
+    const lanes = [0.26, 0.42, 0.58, 0.74, 0.88]; // 5 visual lanes across
+    const lane = lanes[Math.floor(Math.random() * lanes.length)];
 
-    sfxJump();
+    const fromTop = Math.random() < 0.5;
+    const x = lane * rr.width;
+    const y0 = fromTop ? -70 : rr.height + 70;
+    const y1 = fromTop ? rr.height + 90 : -90;
 
-    const jumpArc = (t) => Math.sin(Math.PI * t) * 28; // arc height
+    const [sMin, sMax] = carSpeedRange(mode);
+    const speed = sMin + Math.random() * (sMax - sMin);
 
-    function tick(now) {
-      const t = clamp((now - start) / dur, 0, 1);
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const r = Math.random();
+    const color = r < 0.45 ? "blue" : (r < 0.75 ? "taxi" : "red");
 
-      S.chicken.x = lerp(from.x, to.x, ease);
-      S.chicken.y = lerp(from.y, to.y, ease) - jumpArc(ease);
-      S.chicken.rot = lerp(0, 0.12, ease);
+    const div = document.createElement("div");
+    div.className = `car ${color}`;
+    div.style.left = `${x}px`;
+    div.style.top = `${y0}px`;
+    el.cars.appendChild(div);
 
-      if (t < 1) {
-        requestAnimationFrame(tick);
-        return;
+    carPool.push({ el: div, x, y: y0, yEnd: y1, dir: fromTop ? 1 : -1, speed });
+  }
+
+  function tickCars(dt) {
+    if (!el.cars) return;
+    const road = el.cars.closest(".road");
+    if (!road) return;
+    const h = road.getBoundingClientRect().height;
+
+    for (let i = carPool.length - 1; i >= 0; i--) {
+      const c = carPool[i];
+      c.y += c.dir * c.speed * dt;
+      c.el.style.top = `${c.y}px`;
+
+      const out = c.dir > 0 ? c.y > h + 120 : c.y < -140;
+      if (out) {
+        c.el.remove();
+        carPool.splice(i, 1);
       }
+    }
+  }
 
-      // landing
-      S.chicken.x = to.x;
-      S.chicken.y = to.y;
-      S.chicken.rot = 0;
+  // ======= FX =======
+  function fx(className, x, y) {
+    if (!el.fx) return;
+    const d = document.createElement("div");
+    d.className = className;
+    d.style.left = `${x}px`;
+    d.style.top = `${y}px`;
+    el.fx.appendChild(d);
+    setTimeout(() => d.remove(), 800);
+  }
+
+  function chickenCenter() {
+    const road = el.chicken?.closest(".road");
+    if (!road || !el.chicken) return { x: 0, y: 0 };
+    const rr = road.getBoundingClientRect();
+    const cr = el.chicken.getBoundingClientRect();
+    return { x: (cr.left + cr.right) / 2 - rr.left, y: (cr.top + cr.bottom) / 2 - rr.top };
+  }
+
+  // ======= Hazard logic (visual cars are for vibe; logic ensures balance) =======
+  function resolveOutcome() {
+    const s = step; // current step index before success
+    const roll = Math.random();
+
+    if (mode === "low") {
+      const pCar = lowCarP(s);
+      return (roll < pCar) ? "car" : "safe";
+    } else {
+      const r = exRisk(s);
+      if (roll < r.car) return "car";
+      if (roll < r.car + r.fire) return "fire";
+      if (roll < r.car + r.fire + r.fall) return "fall";
+      return "safe";
+    }
+  }
+
+  // ======= Run control =======
+  function resetRun() {
+    inRun = false;
+    betLocked = false;
+    step = 0;
+    currentX = 1.0;
+
+    updateBadges();
+    renderLadder();
+    updateMeta();
+    setButtons();
+
+    clearCars();
+    spawnAcc = 0;
+    lastTs = null;
+
+    setStatus(`Нажми <b>Ставка</b> чтобы начать. Затем выбери люк кликом и жми <b>Вперёд</b>.`);
+    if (el.cashoutView) el.cashoutView.textContent = "—";
+
+    // reset chicken to selected lane (bottom-ish)
+    const { x, y } = roadLocalXYFromHole(selectedLane);
+    setChickenPos(x, y + 120, true); // start a bit below row
+    // then ease into row to feel alive
+    setTimeout(() => setChickenPos(x, y, false), 120);
+  }
+
+  function startRun() {
+    if (inRun) return;
+
+    bet = Math.floor(Number(el.betInput?.value || bet) || 0);
+    if (bet <= 0) { blip(200, 0.08, "square", 0.03); return; }
+    if (bet > balance) { setStatus(`<b>Недостаточно средств</b> для ставки.`); blip(200, 0.09, "square", 0.03); return; }
+
+    // lock mode
+    mode = (el.difficulty?.value === "expert") ? "expert" : "low";
+    if (el.modeLabel) el.modeLabel.textContent = (mode === "expert" ? "Эксперт" : "Низкий");
+
+    // deduct bet once
+    setBalance(balance - bet);
+    betLocked = true;
+
+    inRun = true;
+    step = 0;
+    currentX = 1.0;
+
+    updateBadges();
+    renderLadder();
+    updateMeta();
+    setButtons();
+
+    setStatus(`Серия началась. Выбери люк и жми <b>Вперёд</b>.`);
+
+    // start cars loop
+    rafId && cancelAnimationFrame(rafId);
+    lastTs = null;
+    spawnAcc = 0;
+
+    // spawn initial cars burst
+    clearCars();
+    for (let i = 0; i < 4; i++) spawnCar();
+
+    rafId = requestAnimationFrame(loop);
+
+    blip(620, 0.06, "triangle", 0.03);
+  }
+
+  function endLose(kind) {
+    inRun = false;
+    betLocked = false;
+
+    const c = chickenCenter();
+    if (kind === "car") fx("boom", c.x, c.y);
+    if (kind === "fire") fx("fireFx", c.x, c.y);
+    if (kind === "fall") fx("boom", c.x, c.y + 10);
+
+    // little shake
+    const arena = document.querySelector(".arena");
+    arena && arena.classList.add("roadShake");
+    setTimeout(() => arena && arena.classList.remove("roadShake"), 420);
+
+    if (kind === "car") setStatus(`<b>Столкновение!</b> Проигрыш.`);
+    if (kind === "fire") setStatus(`<b>Пламя!</b> Проигрыш.`);
+    if (kind === "fall") setStatus(`<b>Провал!</b> Проигрыш.`);
+
+    blip(180, 0.10, "square", 0.03);
+
+    clearCars();
+    updateMeta();
+    setButtons();
+
+    // restart ready after short pause
+    setTimeout(() => resetRun(), 900);
+  }
+
+  function cashout(auto = false) {
+    if (!(inRun && betLocked && step >= 1)) return;
+
+    const win = Math.floor(bet * currentX);
+    setBalance(balance + win);
+
+    setStatus(auto
+      ? `Максимум! <b>Кэшаут</b> на <b>${fmt2(currentX)}x</b> (+${win} ₽)`
+      : `Ты забрал: <b>${win} ₽</b> (x${fmt2(currentX)})`
+    );
+
+    const c = chickenCenter();
+    fx("spark", c.x, c.y);
+    blip(820, 0.07, "triangle", 0.03);
+
+    inRun = false;
+    betLocked = false;
+    clearCars();
+
+    updateMeta();
+    setButtons();
+
+    setTimeout(() => resetRun(), 950);
+  }
+
+  function doForward() {
+    if (!inRun) return;
+
+    // jump first (feel)
+    jumpChickenToLane(selectedLane);
+
+    // settle then resolve
+    setTimeout(() => {
+      if (!inRun) return;
+
+      const outcome = resolveOutcome();
 
       if (outcome === "safe") {
-        S.step = nextStep;
-        S.x = mode.multipliers[S.step - 1]; // step 1 => mult[0]
-        updatePayout();
-        refreshStripState();
-        setStatus(`Успех • ${fmtX(S.x)}`);
-        sfxSafe();
+        step += 1;
+        currentX = nextX();
 
-        // done?
-        if (S.step >= mode.steps) {
-          // авто-кэшаут в конце (как финиш)
-          setTimeout(() => cashout(), 420);
-          S.anim = false;
-          return;
+        const c = chickenCenter();
+        fx("spark", c.x, c.y);
+
+        blip(720, 0.05, "sine", 0.02);
+
+        // allow cashout after 1 step
+        updateBadges();
+        renderLadder();
+        updateMeta();
+        setButtons();
+
+        setStatus(`Удачно! Шаг <b>${step}</b>. X = <b>${fmt2(currentX)}x</b>`);
+
+        // reached max ladder -> auto cashout
+        if (step >= STEP_LIMIT || step >= ladderArr().length) {
+          cashout(true);
         }
+      } else {
+        endLose(outcome);
+      }
+    }, 240);
+  }
 
-        S.anim = false;
-        syncButtons();
+  // ======= RAF loop for cars =======
+  function loop(ts) {
+    if (!inRun) return;
+
+    if (!lastTs) lastTs = ts;
+    const dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+
+    // spawn cars
+    spawnAcc += dt;
+    const every = carSpawnEvery(mode);
+    if (spawnAcc >= every) {
+      spawnAcc = 0;
+      spawnCar();
+      if (mode === "expert" && Math.random() < 0.45) spawnCar();
+    }
+
+    tickCars(dt);
+
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ======= Events =======
+  function bind() {
+    // Sound toggle
+    el.soundBtn?.addEventListener("click", () => {
+      setSound(!soundOn);
+      blip(soundOn ? 720 : 220, 0.05, "sine", 0.02);
+    });
+
+    // Bet controls
+    el.betMinus?.addEventListener("click", () => {
+      if (inRun) return;
+      bet = Math.max(1, (Number(el.betInput.value) || bet) - 10);
+      el.betInput.value = String(bet);
+      if (el.betView) el.betView.textContent = String(bet);
+      blip(520, 0.04, "sine", 0.015);
+    });
+    el.betPlus?.addEventListener("click", () => {
+      if (inRun) return;
+      bet = Math.max(1, (Number(el.betInput.value) || bet) + 10);
+      el.betInput.value = String(bet);
+      if (el.betView) el.betView.textContent = String(bet);
+      blip(520, 0.04, "sine", 0.015);
+    });
+
+    document.querySelectorAll(".chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (inRun) return;
+        const v = btn.dataset.chip;
+        if (v === "max") bet = Math.max(1, balance);
+        else bet = Math.max(1, Math.floor(Number(v) || 1));
+        el.betInput.value = String(bet);
+        if (el.betView) el.betView.textContent = String(bet);
+        blip(620, 0.04, "triangle", 0.015);
+      });
+    });
+
+    el.betInput?.addEventListener("input", () => {
+      if (inRun) return;
+      bet = Math.max(1, Math.floor(Number(el.betInput.value) || 1));
+      el.betView && (el.betView.textContent = String(bet));
+    });
+
+    // Difficulty
+    el.difficulty?.addEventListener("change", () => {
+      if (inRun) {
+        // revert
+        el.difficulty.value = mode;
+        blip(200, 0.06, "square", 0.02);
         return;
       }
-
-      // dead
-      S.anim = false;
-      syncButtons();
-      lose(hazard || "car");
-    }
-
-    requestAnimationFrame(tick);
-  }
-
-  // ---------- drawing ----------
-  function drawRoundedRect(x, y, w, h, r) {
-    const rr = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
-    ctx.closePath();
-  }
-
-  function drawRoad() {
-    const g = geo();
-
-    // base
-    drawRoundedRect(g.roadX, g.roadY, g.roadW, g.roadH, 18);
-    const grd = ctx.createLinearGradient(g.roadX, g.roadY, g.roadX, g.roadY + g.roadH);
-    grd.addColorStop(0, "rgba(0,0,0,.20)");
-    grd.addColorStop(1, "rgba(0,0,0,.08)");
-    ctx.fillStyle = grd;
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.08)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // lane lines
-    const lanes = 6;
-    for (let i = 1; i < lanes; i++) {
-      const y = g.roadY + (g.roadH / lanes) * i;
-      ctx.strokeStyle = "rgba(255,255,255,.06)";
-      ctx.setLineDash([6, 10]);
-      ctx.beginPath();
-      ctx.moveTo(g.roadX + 18, y);
-      ctx.lineTo(g.roadX + g.roadW - 18, y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // vertical "movement guide" faint
-    ctx.strokeStyle = "rgba(255,255,255,.05)";
-    ctx.setLineDash([2, 14]);
-    for (let k = 0; k < 8; k++) {
-      const x = g.roadX + 28 + (g.roadW - 56) * (k / 7);
-      ctx.beginPath();
-      ctx.moveTo(x, g.roadY + 18);
-      ctx.lineTo(x, g.roadY + g.roadH - 18);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-
-    // left sidewalk decoration
-    ctx.fillStyle = "rgba(255,255,255,.04)";
-    drawRoundedRect(g.roadX - g.leftArea + 10, g.roadY, g.leftArea - 20, g.roadH, 18);
-    ctx.fill();
-
-    // traffic light small
-    const tlx = g.roadX - g.leftArea / 2;
-    const tly = g.roadY + g.roadH * 0.20;
-    ctx.fillStyle = "rgba(0,0,0,.18)";
-    drawRoundedRect(tlx - 18, tly - 26, 36, 52, 12);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.10)";
-    ctx.stroke();
-
-    const r = 8;
-    ctx.beginPath();
-    ctx.arc(tlx, tly - 10, r, 0, Math.PI * 2);
-    ctx.fillStyle = S.running && S.alive ? "rgba(255,210,80,.90)" : "rgba(255,255,255,.10)";
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(tlx, tly + 12, r, 0, Math.PI * 2);
-    ctx.fillStyle = S.running && S.alive ? "rgba(255,255,255,.10)" : "rgba(255,255,255,.06)";
-    ctx.fill();
-  }
-
-  function drawManholes() {
-    const g = geo();
-    const mode = MODES[S.modeKey];
-    const steps = mode.steps;
-
-    for (let i = 1; i <= steps; i++) {
-      const p = stepPos(i);
-      const rr = clamp(g.roadW * 0.035, 16, 24);
-      // base lid
-      ctx.save();
-      ctx.translate(p.x, p.y);
-
-      const base = ctx.createRadialGradient(0, -rr * 0.2, rr * 0.4, 0, 0, rr * 1.2);
-      base.addColorStop(0, "rgba(255,255,255,.14)");
-      base.addColorStop(1, "rgba(0,0,0,.22)");
-      ctx.fillStyle = base;
-      ctx.beginPath();
-      ctx.arc(0, 0, rr, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(255,255,255,.10)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(0, 0, rr - 2, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // highlight current next target
-      const isNext = S.running && S.alive && (i === S.step + 1);
-      const isDone = S.running && i <= S.step;
-      if (isNext) {
-        ctx.strokeStyle = "rgba(61,121,255,.75)";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, 0, rr + 3, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (isDone) {
-        ctx.strokeStyle = "rgba(32,208,122,.35)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, rr + 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // show label x on lid (subtle)
-      ctx.fillStyle = "rgba(233,241,255,.60)";
-      ctx.font = `800 ${Math.round(rr * 0.78)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`${mode.multipliers[i - 1].toFixed(i === steps ? 0 : 2)}x`, 0, 0);
-
-      ctx.restore();
-    }
-  }
-
-  function drawChicken() {
-    const g = geo();
-    const p = S.chicken;
-    const size = clamp(g.roadW * 0.05, 18, 26);
-
-    ctx.save();
-    ctx.translate(p.x, p.y - size * 0.85);
-    ctx.rotate(p.rot);
-
-    // shadow
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = "rgba(0,0,0,.55)";
-    ctx.beginPath();
-    ctx.ellipse(0, size * 1.25, size * 0.9, size * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // body
-    const body = ctx.createLinearGradient(0, -size, 0, size);
-    body.addColorStop(0, "rgba(255,255,255,.95)");
-    body.addColorStop(1, "rgba(230,240,255,.75)");
-    ctx.fillStyle = body;
-    drawRoundedRect(-size * 0.72, -size * 0.85, size * 1.44, size * 1.55, 14);
-    ctx.fill();
-
-    // head highlight
-    ctx.fillStyle = "rgba(255,255,255,.55)";
-    ctx.beginPath();
-    ctx.ellipse(-size * 0.18, -size * 0.50, size * 0.45, size * 0.32, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // beak
-    ctx.fillStyle = "rgba(255,210,80,.95)";
-    ctx.beginPath();
-    ctx.moveTo(size * 0.55, -size * 0.25);
-    ctx.lineTo(size * 0.85, -size * 0.12);
-    ctx.lineTo(size * 0.55, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    // eye
-    ctx.fillStyle = "rgba(0,0,0,.55)";
-    ctx.beginPath();
-    ctx.arc(size * 0.28, -size * 0.42, size * 0.08, 0, Math.PI * 2);
-    ctx.fill();
-
-    // comb
-    ctx.fillStyle = "rgba(255,80,110,.85)";
-    ctx.beginPath();
-    ctx.arc(-size * 0.20, -size * 0.95, size * 0.18, 0, Math.PI * 2);
-    ctx.arc(0, -size * 1.02, size * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-
-    // tiny feet
-    ctx.strokeStyle = "rgba(255,210,80,.95)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.15, size * 0.70);
-    ctx.lineTo(-size * 0.28, size * 0.88);
-    ctx.moveTo(size * 0.10, size * 0.70);
-    ctx.lineTo(size * 0.00, size * 0.90);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  function drawHazardFX() {
-    if (S.hit.t <= 0) return;
-    const g = geo();
-    const t = S.hit.t;
-    const p = stepPos(S.step + 1); // приблизительно место смерти
-
-    ctx.save();
-    ctx.globalAlpha = t;
-
-    if (S.hit.type === "fire") {
-      const r = 18 + (1 - t) * 40;
-      const grd = ctx.createRadialGradient(p.x, p.y, 5, p.x, p.y, r);
-      grd.addColorStop(0, "rgba(255,120,60,.85)");
-      grd.addColorStop(1, "rgba(255,60,90,0)");
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (S.hit.type === "hole") {
-      const r = 20 + (1 - t) * 20;
-      ctx.fillStyle = "rgba(0,0,0,.65)";
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,.10)";
-      ctx.stroke();
-    } else {
-      // car hit / generic
-      const r = 16 + (1 - t) * 55;
-      const grd = ctx.createRadialGradient(p.x, p.y, 6, p.x, p.y, r);
-      grd.addColorStop(0, "rgba(255,80,110,.85)");
-      grd.addColorStop(1, "rgba(255,80,110,0)");
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
-  }
-
-  function drawCarGhost() {
-    // для атмосферы: на hard иногда проезжает машина сверху
-    const g = geo();
-    if (!(S.running && S.alive)) return;
-
-    const time = performance.now() * 0.001;
-    const show = S.modeKey === "hard" ? 0.75 : 0.45;
-    if (Math.sin(time * 1.2) < show) return;
-
-    const laneY = g.roadY + g.roadH * 0.30;
-    const x = g.roadX + ((time * 110) % (g.roadW + 220)) - 110;
-
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    ctx.translate(x, laneY);
-    const w = 54, h = 28;
-
-    ctx.fillStyle = "rgba(61,121,255,.55)";
-    drawRoundedRect(-w / 2, -h / 2, w, h, 10);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(255,255,255,.18)";
-    drawRoundedRect(-w * 0.12, -h * 0.33, w * 0.5, h * 0.35, 8);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(0,0,0,.35)";
-    ctx.beginPath(); ctx.arc(-w * 0.28, h * 0.46, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(w * 0.28, h * 0.46, 6, 0, Math.PI * 2); ctx.fill();
-
-    ctx.restore();
-  }
-
-  function drawCashBurst() {
-    if (S.cashBurst.t <= 0) return;
-    const g = geo();
-    const t = S.cashBurst.t;
-    const p = stepPos(S.step);
-
-    ctx.save();
-    ctx.globalAlpha = t;
-    const r = 30 + (1 - t) * 90;
-    const grd = ctx.createRadialGradient(p.x, p.y - 20, 10, p.x, p.y - 20, r);
-    grd.addColorStop(0, "rgba(32,208,122,.35)");
-    grd.addColorStop(1, "rgba(32,208,122,0)");
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y - 20, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function render() {
-    const g = geo();
-    ctx.clearRect(0, 0, g.w, g.h);
-
-    drawRoad();
-    drawCarGhost();
-    drawManholes();
-    drawCashBurst();
-    drawChicken();
-    drawHazardFX();
-
-    // legend is in HTML (CSS). Here we just animate decay.
-    const dt = 1 / 60;
-    if (S.hit.t > 0) S.hit.t = Math.max(0, S.hit.t - dt * 2.4);
-    if (S.cashBurst.t > 0) S.cashBurst.t = Math.max(0, S.cashBurst.t - dt * 1.6);
-
-    requestAnimationFrame(render);
-  }
-
-  // ---------- events ----------
-  function wire() {
-    // sound
-    if (soundBtn) {
-      soundBtn.addEventListener("click", () => {
-        soundOn = !soundOn;
-        localStorage.setItem(LS_SND, soundOn ? "1" : "0");
-        setSoundUI();
-        if (soundOn) beep({ f: 520, t: 0.06, type: "triangle", v: 0.015 });
-      });
-    }
-
-    // chips
-    chipBtns.forEach((b) => {
-      b.addEventListener("click", () => {
-        const amt = Number(b.dataset.amt || b.textContent?.replace(/[^\d]/g, "") || "0");
-        if (amt > 0) setBetUI(amt);
-      });
+      mode = (el.difficulty.value === "expert") ? "expert" : "low";
+      el.modeLabel && (el.modeLabel.textContent = mode === "expert" ? "Эксперт" : "Низкий");
+      updateBadges();
+      renderLadder();
+      updateMeta();
+      blip(600, 0.05, "triangle", 0.015);
     });
 
-    // bet +/- buttons (если в index есть)
-    const minus = $("#betMinus") || $("[data-role='betMinus']");
-    const plus = $("#betPlus") || $("[data-role='betPlus']");
-    if (minus) minus.addEventListener("click", () => setBetUI(S.bet - 10));
-    if (plus) plus.addEventListener("click", () => setBetUI(S.bet + 10));
+    // Buttons
+    el.startBtn?.addEventListener("click", startRun);
+    el.cashoutBtn?.addEventListener("click", () => cashout(false));
+    el.forwardBtn?.addEventListener("click", doForward);
 
-    // difficulty
-    if (difficultySel) {
-      difficultySel.addEventListener("change", () => {
-        setMode(getModeKey());
-      });
-    }
+    // Click on manholes
+    el.manholes?.addEventListener("click", (e) => {
+      const t = e.target;
+      const hole = t?.closest?.(".manhole");
+      if (!hole) return;
+      const lane = Number(hole.dataset.lane);
+      if (!Number.isFinite(lane)) return;
+      setSelectedLane(lane, false);
+    });
 
-    // main actions
-    if (btnBet) {
-      btnBet.addEventListener("click", () => startRound());
-    }
-    if (btnForward) {
-      btnForward.addEventListener("click", () => forward());
-    }
-    if (btnCashout) {
-      btnCashout.addEventListener("click", () => cashout());
-    }
-
-    // enter to bet/forward
+    // Keyboard shortcuts
     window.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      if (!S.running) startRound();
-      else forward();
+      if (e.code === "Enter") { if (!inRun) startRun(); }
+      if (e.code === "Space") { e.preventDefault(); doForward(); }
+      if (e.code === "KeyC") { cashout(false); }
+      if (e.code === "ArrowLeft") { setSelectedLane(selectedLane - 1, false); }
+      if (e.code === "ArrowRight") { setSelectedLane(selectedLane + 1, false); }
+    });
+  }
+
+  // ======= Init =======
+  function init() {
+    // initial bet from input
+    bet = Math.max(1, Math.floor(Number(el.betInput?.value || 100) || 100));
+    if (el.betInput) el.betInput.value = String(bet);
+    if (el.betView) el.betView.textContent = String(bet);
+
+    mode = (el.difficulty?.value === "expert") ? "expert" : "low";
+    if (el.modeLabel) el.modeLabel.textContent = (mode === "expert" ? "Эксперт" : "Низкий");
+
+    buildManholes();
+    renderLadder();
+    updateMeta();
+    setButtons();
+    resetRun();
+
+    // position chicken after layout
+    requestAnimationFrame(() => {
+      const { x, y } = roadLocalXYFromHole(selectedLane);
+      setChickenPos(x, y + 120, true);
+      setTimeout(() => setChickenPos(x, y, false), 120);
     });
 
-    // unlock audio on first user interaction (mobile)
-    window.addEventListener("pointerdown", () => {
-      if (!soundOn) return;
-      ensureAudio();
-    }, { once: true });
+    bind();
   }
 
-  // ---------- init ----------
-  function init() {
-    setBalance(balance);
-    setSoundUI();
-    setBetUI(Number(betInput?.value || 100) || 100);
-
-    setMode(getModeKey());
-
-    setStatus("Ожидание");
-    updatePayout();
-    syncButtons();
-
-    resizeCanvas();
-    wire();
-    requestAnimationFrame(render);
-  }
-
-  init();
+  window.addEventListener("load", init);
+  window.addEventListener("resize", () => {
+    // rebuild row for correct center/coords
+    buildManholes();
+    const { x, y } = roadLocalXYFromHole(selectedLane);
+    setChickenPos(x, y, true);
+  });
 })();
