@@ -1,9 +1,10 @@
+<!-- index.html -->
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Dragon Tower</title>
+  <title>Chicken Road</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -13,134 +14,129 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="brandTitle">Dragon Tower</div>
+        <div class="brandTitle">Chicken Road</div>
         <div class="brandSub">Открой это в Telegram</div>
       </div>
 
       <div class="topbarRight">
-        <button id="soundBtn" class="pill" type="button" aria-label="Переключить звук">
-          <span id="soundDot" class="dot"></span>
+        <button id="soundBtn" class="pill sound" type="button" aria-pressed="true">
+          <span class="soundDot"></span>
           <span id="soundText">Звук: on</span>
         </button>
 
-        <div class="pill balancePill">
-          <div class="balanceLabel">Баланс</div>
-          <div id="balanceValue" class="balanceValue">1000 ₽</div>
+        <div class="pill bal">
+          <div class="balLabel">Баланс</div>
+          <div class="balValue"><span id="balance">1000</span> ₽</div>
         </div>
       </div>
     </header>
 
     <main class="layout">
       <!-- LEFT -->
-      <section class="panel left">
-        <div class="card tabs">
-          <button id="tabNormal" class="tab is-active" type="button">Обычный</button>
-          <button id="tabHard" class="tab" type="button">Сложный</button>
+      <aside class="panel left">
+        <div class="tabs">
+          <button class="tab active" type="button">Ручной режим</button>
+          <button class="tab disabled" type="button" title="Авто позже" disabled>Авто</button>
         </div>
 
-        <div class="card">
-          <div class="cardTitle">Ставка</div>
+        <div class="block">
+          <div class="blockLabel">Сумма ставки</div>
 
           <div class="betRow">
-            <button id="betMinus" class="iconBtn" type="button">−</button>
-            <input id="betInput" class="betInput" inputmode="numeric" value="100" />
-            <button id="betPlus" class="iconBtn" type="button">+</button>
+            <button id="betMinus" class="btnIcon" type="button">−</button>
+            <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
+            <button id="betPlus" class="btnIcon" type="button">+</button>
           </div>
 
           <div class="chips">
-            <button class="chip" data-v="10" type="button">10</button>
-            <button class="chip" data-v="50" type="button">50</button>
-            <button class="chip" data-v="100" type="button">100</button>
-            <button class="chip" data-v="250" type="button">250</button>
-            <button class="chip" data-v="500" type="button">500</button>
-            <button class="chip" data-v="MAX" type="button">MAX</button>
-          </div>
-
-          <div class="actionRow">
-            <button id="btnBet" class="btn primary" type="button">Ставка</button>
-            <button id="btnCashout" class="btn danger" type="button" disabled>Кэшаут</button>
-          </div>
-
-          <div class="rules">
-            <div class="rulesTitle">Правила</div>
-            <ul>
-              <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
-              <li>Выбирай плитку в текущем ряду. <b>Яйцо</b> — вверх, <b>Череп</b> — проигрыш.</li>
-              <li>Кэшаут доступен после победы ряда: <b>Ставка × X</b>.</li>
-            </ul>
+            <button class="chip" data-chip="10" type="button">10</button>
+            <button class="chip" data-chip="50" type="button">50</button>
+            <button class="chip" data-chip="100" type="button">100</button>
+            <button class="chip" data-chip="250" type="button">250</button>
+            <button class="chip" data-chip="500" type="button">500</button>
+            <button class="chip" data-chip="max" type="button">MAX</button>
           </div>
         </div>
 
-        <div class="card statusCard">
-          <div class="miniTitle">Статус</div>
-          <div class="kv"><span>Статус</span><b id="statusValue">Ожидание</b></div>
-          <div class="kv"><span>Текущий X</span><b id="curXValue">x1.00</b></div>
-          <div class="kv"><span>Потенциал</span><b id="potentialValue">0 ₽</b></div>
+        <div class="block">
+          <div class="blockLabel">Уровень сложности</div>
+          <select id="difficulty" class="select">
+            <option value="easy" selected>Низкий</option>
+            <option value="hard">Эксперт</option>
+          </select>
         </div>
-      </section>
+
+        <div class="actions">
+          <button id="btnBet" class="btn primary" type="button">Ставка</button>
+          <button id="btnCashout" class="btn cashout" type="button" disabled>Кэшаут</button>
+          <button id="btnForward" class="btn ghost" type="button" disabled>Вперёд</button>
+        </div>
+
+        <div class="block profit">
+          <div class="profitTop">
+            <div class="blockLabel">Общая прибыль</div>
+            <div class="tiny" id="profitHint">(1.00×)</div>
+          </div>
+          <div class="profitValue"><span id="profit">0</span> ₽</div>
+        </div>
+
+        <div class="block rules">
+          <div class="rulesTitle">Правила</div>
+          <ul>
+            <li><b>Ставка</b> списывается 1 раз на старт попытки.</li>
+            <li><b>Вперёд</b> — прыжок на следующий люк.</li>
+            <li>Каждый удачный шаг повышает <b>X</b>.</li>
+            <li><b>Низкий</b>: опасность — машины.</li>
+            <li><b>Эксперт</b>: машины + огонь + провал.</li>
+            <li><b>Кэшаут</b> доступен после 1 удачного шага.</li>
+          </ul>
+        </div>
+      </aside>
 
       <!-- CENTER -->
-      <section class="panel center">
-        <div class="card board">
-          <div class="boardHead">
-            <div class="boardTitle">Башня</div>
-            <div id="towerMeta" class="boardMeta">Обычный: 3 яйца / 1 череп</div>
+      <section class="panel game">
+        <div class="gameTop">
+          <div class="gameTopLeft">
+            <div class="gameTitle">Дорога</div>
+            <div id="statusText" class="gameStatus">Ожидание</div>
           </div>
 
-          <!-- Декор (не кликается) -->
-          <div class="decorRow" aria-hidden="true">
-            <div class="tower t1"></div>
-            <div class="tower t2"></div>
-            <div class="tower t3"></div>
-          </div>
-
-          <div id="towerGrid" class="grid" aria-label="Игровое поле"></div>
-
-          <!-- FX слой для “вылета” яйца/черепа (дуга) -->
-          <div id="fxLayer" class="fxLayer" aria-hidden="true"></div>
-
-          <div class="boardFoot">
-            <div class="legend">
-              <span class="leg egg"></span><span>Яйцо</span>
-              <span class="leg skull"></span><span>Череп</span>
+          <div class="hud">
+            <div class="hudCard">
+              <div class="hudLabel">Текущий X</div>
+              <div class="hudVal"><span id="mult">1.00</span>×</div>
             </div>
-            <div class="footNote">Локально • RNG</div>
+            <div class="hudCard">
+              <div class="hudLabel">Шаг</div>
+              <div class="hudVal"><span id="step">0</span></div>
+            </div>
           </div>
         </div>
-      </section>
 
-      <!-- RIGHT -->
-      <section class="panel right">
-        <div class="card">
-          <div class="cardTitle">Шкала X</div>
-          <div id="xScale" class="xScale"></div>
-          <div class="xHint">Прошёл ряд — X растёт. Череп — ставка сгорает.</div>
+        <div class="arena">
+          <canvas id="gameCanvas" width="980" height="560"></canvas>
+          <div class="legend">
+            <span class="legendDot safe"></span> безопасно
+            <span class="legendDot danger"></span> опасно
+          </div>
         </div>
 
-        <div class="card">
-          <div class="cardTitle">Результат</div>
-          <div class="kv"><span>Последнее</span><b id="lastResultValue">—</b></div>
-          <div class="kv"><span>Выигрыш</span><b id="lastWinValue">—</b></div>
+        <div class="multStrip" id="multStrip">
+          <!-- множители шагов -->
         </div>
       </section>
     </main>
   </div>
 
   <!-- MODAL -->
-  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
-    <div id="modalBackdrop" class="modalBackdrop"></div>
-    <div class="modalBox" role="document">
-      <div class="modalTop">
-        <div id="modalTitle" class="modalTitle">Итог</div>
-      </div>
-      <div id="modalText" class="modalText">—</div>
-      <div class="modalActions">
-        <button id="modalOk" class="btn primary" type="button">Ок</button>
-      </div>
+  <div id="overlay" class="overlay hidden">
+    <div class="modal">
+      <div id="modalTitle" class="modalTitle">Итог</div>
+      <div id="modalBody" class="modalBody">—</div>
+      <button id="modalOk" class="btn primary" type="button">Ок</button>
     </div>
   </div>
 
   <script src="app.js"></script>
 </body>
 </html>
-
