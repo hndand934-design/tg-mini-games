@@ -4,138 +4,139 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dragon Tower</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
+  <div class="bg"></div>
 
-    <header class="topbar card">
+  <div class="wrap">
+    <header class="topbar">
       <div class="brand">
-        <div class="brand__title">Dragon Tower</div>
-        <div class="brand__sub">Открой это в Telegram</div>
+        <div class="title">Dragon Tower</div>
+        <div class="sub">Открой это в Telegram</div>
       </div>
 
-      <div class="topbar__right">
-        <button id="soundBtn" class="pill" type="button" aria-pressed="true">
-          Звук: <span id="soundState">on</span>
+      <div class="top-actions">
+        <button id="soundBtn" class="chip" type="button" aria-pressed="false">
+          <span class="dot"></span>
+          <span id="soundTxt">Звук: off</span>
         </button>
-
-        <div class="pill pill--balance">
-          Баланс&nbsp;<b><span id="balanceText">1000</span> ₽</b>
+        <div class="chip balance">
+          <span class="muted">Баланс</span>
+          <span id="balance">1000 ₽</span>
         </div>
       </div>
     </header>
 
-    <main class="layout">
+    <main class="grid3">
       <!-- LEFT -->
-      <section class="left card">
-        <div class="tabs">
-          <button id="modeNormal" class="tab is-active" type="button">Обычный</button>
-          <button id="modeHard" class="tab" type="button">Сложный</button>
+      <section class="card left">
+        <div class="seg">
+          <button id="modeNormal" class="seg-btn active" type="button">Обычный</button>
+          <button id="modeHard" class="seg-btn" type="button">Сложный</button>
         </div>
 
         <div class="block">
-          <div class="block__title">Ставка</div>
+          <div class="block-title">Ставка</div>
 
-          <div class="betRow">
-            <button id="betMinus" class="iconBtn" type="button" aria-label="Уменьшить">−</button>
-            <input id="betInput" class="betInput" inputmode="numeric" value="100" />
-            <button id="betPlus" class="iconBtn" type="button" aria-label="Увеличить">+</button>
+          <div class="betrow">
+            <button class="mini" id="betMinus" type="button">−</button>
+            <input id="betInput" class="bet-input" type="number" min="1" step="1" value="100" />
+            <button class="mini" id="betPlus" type="button">+</button>
           </div>
 
           <div class="chips">
-            <button class="chip" data-chip="10" type="button">10</button>
-            <button class="chip" data-chip="50" type="button">50</button>
-            <button class="chip" data-chip="100" type="button">100</button>
-            <button class="chip" data-chip="250" type="button">250</button>
-            <button class="chip" data-chip="500" type="button">500</button>
-            <button id="betMax" class="chip chip--max" type="button">MAX</button>
+            <button class="chipbtn" data-chip="10" type="button">10</button>
+            <button class="chipbtn" data-chip="50" type="button">50</button>
+            <button class="chipbtn" data-chip="100" type="button">100</button>
+            <button class="chipbtn" data-chip="250" type="button">250</button>
+            <button class="chipbtn" data-chip="500" type="button">500</button>
+            <button class="chipbtn" data-chip="max" type="button">MAX</button>
           </div>
 
-          <div class="actions">
-            <button id="startBtn" class="btn btn--primary" type="button">Ставка</button>
-            <button id="cashoutBtn" class="btn" type="button" disabled>Кэшаут</button>
+          <div class="btnrow">
+            <button id="startBtn" class="btn primary" type="button">Ставка</button>
+            <button id="cashoutBtn" class="btn danger" type="button" disabled>Кэшаут</button>
           </div>
 
           <div class="rules">
-            <div class="rules__title">Правила</div>
+            <div class="rules-title">Правила</div>
             <ul>
-              <li>Ставка списывается 1 раз при старте игры.</li>
-              <li>Выбирай плитку в текущем ряду. Безопасно — идёшь выше.</li>
-              <li>Ловушка — поражение, ставка сгорает.</li>
-              <li>Кэшаут — забираешь ставка × текущий X.</li>
+              <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
+              <li>Выбирай плитку в <b>текущем ряду</b>. Безопасно — идёшь выше.</li>
+              <li>Ловушка — <b>поражение</b>, ставка сгорает.</li>
+              <li>Кэшаут — забираешь <b>Ставка × X</b> после любой победы.</li>
             </ul>
           </div>
         </div>
 
-        <div class="block">
-          <div class="block__title">Статус</div>
-          <div class="statusGrid">
-            <div class="statusItem">
-              <div class="statusItem__k">Статус</div>
-              <div id="statusText" class="statusItem__v">Ожидание</div>
-            </div>
-            <div class="statusItem">
-              <div class="statusItem__k">Текущий X</div>
-              <div id="xText" class="statusItem__v">x1.00</div>
-            </div>
-            <div class="statusItem">
-              <div class="statusItem__k">Потенциал</div>
-              <div id="potentialText" class="statusItem__v">0 ₽</div>
-            </div>
+        <div class="status">
+          <div class="status-row">
+            <div class="k">Статус</div><div class="v" id="statusTxt">Ожидание</div>
+          </div>
+          <div class="status-row">
+            <div class="k">Текущий X</div><div class="v" id="xTxt">x1.00</div>
+          </div>
+          <div class="status-row">
+            <div class="k">Потенциал</div><div class="v" id="potTxt">0 ₽</div>
           </div>
         </div>
       </section>
 
       <!-- CENTER -->
-      <section class="center card">
-        <div class="towerHeader">
-          <div class="towerHeader__title">Башня</div>
-          <div id="modeHint" class="towerHeader__hint">Обычный: 3 яйца / 1 ловушка в ряду</div>
+      <section class="card center">
+        <div class="center-head">
+          <div class="center-title">Башня</div>
+          <div class="center-sub" id="modeHint">Обычный: 3 яйца / 1 ловушка в ряду</div>
         </div>
 
-        <!-- ВАЖНО: дракон как декоративный слой с pointer-events:none, не мешает кликам -->
-        <div class="towerArt" aria-hidden="true">
-          <img class="towerArt__img" src="./assets/dragon.png" alt="" />
-        </div>
-
-        <div id="towerGrid" class="towerGrid" aria-label="Башня"></div>
-
-        <div class="towerFooter">
-          <div class="legend">
-            <span class="dot dot--egg"></span> Яйцо
-            <span class="dot dot--trap"></span> Ловушка
+        <div class="tower">
+          <div class="dragon">
+            <!-- положи dragon.png рядом с index.html -->
+            <img id="dragonImg" src="dragon.png" alt="dragon" />
           </div>
-          <div class="footnote">Режим локальный • RNG</div>
+
+          <div id="board" class="board" aria-label="tower board"></div>
+
+          <div class="legend">
+            <div class="leg"><span class="dot egg"></span> Яйцо</div>
+            <div class="leg"><span class="dot trap"></span> Ловушка</div>
+            <div class="leg muted" style="margin-left:auto;">Режим локальный • RNG</div>
+          </div>
+
+          <div id="fxDragon" class="fx-dragon" aria-hidden="true"></div>
         </div>
       </section>
 
       <!-- RIGHT -->
-      <section class="right card">
-        <div class="block">
-          <div class="block__title">Шкала X</div>
-          <div id="xScale" class="xScale"></div>
-          <div class="muted small">Прошёл ряд — X растёт. Проиграл — серия обнуляется.</div>
-        </div>
+      <section class="card right">
+        <div class="block-title">Шкала X</div>
+        <div id="ladder" class="ladder"></div>
 
-        <div class="block">
-          <div class="block__title">Результат</div>
-          <div class="resultGrid">
-            <div class="resultItem">
-              <div class="resultItem__k">Последнее</div>
-              <div id="lastText" class="resultItem__v">—</div>
-            </div>
-            <div class="resultItem">
-              <div class="resultItem__k">Выигрыш</div>
-              <div id="winText" class="resultItem__v">—</div>
-            </div>
+        <div class="block-title" style="margin-top:14px;">Результат</div>
+        <div class="result">
+          <div class="status-row">
+            <div class="k">Последнее</div><div class="v" id="lastTxt">—</div>
+          </div>
+          <div class="status-row">
+            <div class="k">Выигрыш</div><div class="v" id="winTxt">—</div>
           </div>
         </div>
       </section>
     </main>
-
   </div>
 
-  <script src="./app.js"></script>
+  <!-- MODAL -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-title" id="modalTitle">Итог</div>
+      <div class="modal-text" id="modalText">—</div>
+      <div class="modal-actions">
+        <button id="modalOk" class="btn primary" type="button">Ок</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
