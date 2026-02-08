@@ -1,667 +1,817 @@
 (() => {
-  // ======= Telegram WebApp safe init (optional) =======
-  const tg = window.Telegram?.WebApp;
-  if (tg) { try { tg.ready(); tg.expand(); } catch {} }
-
-  // ======= Helpers =======
+  // =========================
+  // Utils
+  // =========================
   const $ = (id) => document.getElementById(id);
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const fmt2 = (n) => (Math.round(n * 100) / 100).toFixed(2);
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const fmt = (n) => Math.round(n).toString();
+  const fmtX = (x) => x.toFixed(2);
 
-  // ======= DOM =======
-  const el = {
-    balance: $("balance"),
-    soundBtn: $("soundBtn"),
-    soundLabel: $("soundLabel"),
+  // =========================
+  // DOM
+  // =========================
+  const balEl = $("bal");
+  const betInput = $("betInput");
+  const betMinus = $("betMinus");
+  const betPlus = $("betPlus");
+  const chips = document.querySelectorAll(".chip");
+  const diffSelect = $("diffSelect");
 
-    betMinus: $("betMinus"),
-    betPlus: $("betPlus"),
-    betInput: $("betInput"),
-    difficulty: $("difficulty"),
+  const startBtn = $("startBtn");
+  const cashBtn = $("cashBtn");
+  const goBtn = $("goBtn");
 
-    startBtn: $("startBtn"),
-    cashoutBtn: $("cashoutBtn"),
-    forwardBtn: $("forwardBtn"),
+  const profitEl = $("profit");
+  const profitXEl = $("profitX");
 
-    profit: $("profit"),
-    totalMul: $("totalMul"),
+  const curXEl = $("curX");
+  const stepEl = $("step");
 
-    currentX: $("currentX"),
-    step: $("step"),
+  const tipEl = $("tip");
+  const hintLine = $("hintLine");
 
-    manholes: $("manholes"),
-    cars: $("cars"),
-    fx: $("fx"),
-    chicken: $("chicken"),
+  const modeOut = $("modeOut");
+  const betOut = $("betOut");
+  const cashOut = $("cashOut");
 
-    ladderRow: $("ladderRow"),
+  const laneArea = $("laneArea");
+  const chickenEl = $("chicken");
+  const fxEl = $("fx");
 
-    statusText: $("statusText"),
-    modeLabel: $("modeLabel"),
-    betView: $("betView"),
-    cashoutView: $("cashoutView"),
-  };
+  const soundBtn = $("soundBtn");
+  const soundLabel = $("soundLabel");
 
-  // ======= Balance (virtual) =======
-  const LS_BAL = "chicken_balance_v1";
-  const DEFAULT_BAL = 1000;
-
-  let balance = (() => {
-    const raw = localStorage.getItem(LS_BAL);
-    const n = raw ? Number(raw) : NaN;
-    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : DEFAULT_BAL;
-  })();
-
-  function setBalance(v) {
-    balance = Math.max(0, Math.floor(v));
-    localStorage.setItem(LS_BAL, String(balance));
-    if (el.balance) el.balance.textContent = String(balance);
-  }
-  setBalance(balance);
-
-  // ======= Audio (quiet + toggle) =======
-  let soundOn = true;
+  // =========================
+  // Audio (quiet)
+  // =========================
   let audioCtx = null;
+  let soundOn = true;
 
   function ensureAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  function blip(freq = 520, dur = 0.06, type = "sine", vol = 0.03) {
+  function beep(freq = 520, dur = 0.06, gain = 0.05, type = "sine") {
     if (!soundOn) return;
-    try {
-      ensureAudio();
-      const t0 = audioCtx.currentTime;
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(freq, t0);
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g).connect(audioCtx.destination);
-      o.start(t0);
-      o.stop(t0 + dur + 0.02);
-    } catch {}
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
   }
-  function setSound(on) {
-    soundOn = !!on;
-    if (el.soundLabel) el.soundLabel.textContent = soundOn ? "Звук: on" : "Звук: off";
-    const dot = el.soundBtn?.querySelector(".dot");
-    if (dot) {
-      dot.style.background = soundOn ? "var(--green)" : "rgba(255,255,255,.18)";
-      dot.style.boxShadow = soundOn ? "0 0 14px rgba(42,211,122,.45)" : "none";
-    }
+  function sStart(){ beep(420, .07, .05, "triangle"); beep(520, .07, .04, "triangle"); }
+  function sHop(){ beep(650, .05, .035, "sine"); }
+  function sWin(){ beep(520, .07, .05, "triangle"); beep(780, .08, .05, "triangle"); }
+  function sLose(){ beep(240, .12, .05, "sawtooth"); }
+
+  // =========================
+  // Persist balance
+  // =========================
+  const LS_BAL = "chickenroad_balance_v1";
+  function loadBal() {
+    const v = Number(localStorage.getItem(LS_BAL));
+    return Number.isFinite(v) ? v : 1000;
   }
-  setSound(true);
+  function saveBal(v) {
+    localStorage.setItem(LS_BAL, String(v));
+  }
 
-  // ======= Game tuning =======
-  const COLS = 6;            // lanes/manholes per row
-  const STEP_LIMIT = 12;     // ladder length
-  const ROW_Y = 66;          // fixed visual Y of clickable row (px from top-ish via CSS; we’ll compute)
-  const ROAD_PADDING_TOP_PCT = 28; // where row sits (percent), stable on all screens
+  // =========================
+  // Game config
+  // =========================
+  const LANES = 8;          // steps/rows
+  const COLS = 6;           // hatches per lane
+  const LANE_PADDING_TOP = 18;
+  const LANE_PADDING_LEFT = 18;
 
-  // Multipliers ladder (balanced: no crazy dupe)
-  // Low grows slower, Expert faster but riskier.
-  const LADDER_LOW = [1.08, 1.14, 1.22, 1.31, 1.42, 1.56, 1.74, 1.96, 2.25, 2.62, 3.12, 3.85];
-  const LADDER_EX  = [1.22, 1.44, 1.72, 2.08, 2.55, 3.18, 4.05, 5.20, 6.80, 9.00, 12.2, 16.9];
+  // Multipliers tuned to avoid “easy duping”
+  // Low: slower growth (cars only)
+  // Expert: faster growth (more hazards)
+  const MULTI_LOW =    [1.08, 1.14, 1.22, 1.31, 1.42, 1.56, 1.74, 1.96];
+  const MULTI_EXPERT = [1.12, 1.23, 1.40, 1.62, 1.90, 2.25, 2.70, 3.30];
 
-  // Hazard chances per step (visual cars always move; logic uses RNG)
-  // Low: only "car"
-  const lowCarP = (s) => clamp(0.10 + s * 0.016, 0.10, 0.28);
-
-  // Expert: car + fire + fall (sum capped)
-  const exRisk = (s) => {
-    const car  = clamp(0.12 + s * 0.022, 0.12, 0.36);
-    const fire = clamp(0.06 + s * 0.014, 0.06, 0.24);
-    const fall = clamp(0.05 + s * 0.012, 0.05, 0.20);
-    const total = clamp(car + fire + fall, 0, 0.70);
-    return { car, fire, fall, total };
+  // Hazard chances per lane (not too harsh early)
+  const HZ = {
+    low:    { car: 0.20 },                         // per chosen hatch
+    expert: { car: 0.24, fire: 0.10, hole: 0.08 }, // per chosen hatch
   };
 
-  // Cars spawn tuning (more cars, vertical)
-  const carSpawnEvery = (mode) => mode === "expert" ? 0.45 : 0.65;
-  const carSpeedRange = (mode) => mode === "expert" ? [240, 520] : [180, 380];
-
-  // ======= State =======
-  let mode = "low";         // low | expert
+  // =========================
+  // State
+  // =========================
+  let balance = loadBal();
   let bet = 100;
-  let inRun = false;
-  let betLocked = false;    // bet deducted
-  let step = 0;
-  let currentX = 1.0;
 
-  // player selected lane (0..COLS-1)
-  let selectedLane = 0;
+  let running = false;
+  let step = 0;           // 0..LANES
+  let curX = 1.0;
 
-  // manholes DOM
-  let mhWraps = []; // {wrap, hole, badge}
-  let roadRect = null;
+  let difficulty = "low";
+  let ladder = MULTI_LOW;
 
-  // cars sim
-  let carPool = [];
-  let spawnAcc = 0;
-  let lastTs = null;
-  let rafId = null;
+  let selectedCol = null; // 0..COLS-1
+  let lockedThroughLane = -1;
+  let animating = false;
 
-  // ======= UI helpers =======
-  function setStatus(html) {
-    if (el.statusText) el.statusText.innerHTML = html;
-  }
-  function updateMeta() {
-    if (el.modeLabel) el.modeLabel.textContent = (mode === "expert" ? "Эксперт" : "Низкий");
-    if (el.betView) el.betView.textContent = String(bet);
-    if (el.currentX) el.currentX.textContent = `${fmt2(currentX)}x`;
-    if (el.step) el.step.textContent = String(step);
-    if (el.totalMul) el.totalMul.textContent = `x${fmt2(currentX)}`;
-    if (el.profit) {
-      const p = betLocked ? Math.floor(bet * currentX) : 0;
-      el.profit.textContent = String(p);
-    }
-    if (el.cashoutView) {
-      el.cashoutView.textContent = (inRun && step >= 1) ? `${Math.floor(bet * currentX)} ₽` : "—";
-    }
-  }
-  function setButtons() {
-    if (el.startBtn) el.startBtn.disabled = inRun;
-    if (el.forwardBtn) el.forwardBtn.disabled = !inRun;
-    if (el.cashoutBtn) el.cashoutBtn.disabled = !(inRun && step >= 1);
+  // Lanes DOM refs
+  let laneRoot = null;
+  let trafficLayer = null;
+  let hatchGrid = []; // [laneIndex][col] => element
+  let barriers = [];  // laneIndex => element
+  let cars = [];      // active cars {el, lane, x, y, speed}
+
+  // =========================
+  // Render init
+  // =========================
+  function setBalanceUI() {
+    balEl.textContent = fmt(balance);
+    saveBal(balance);
   }
 
-  function ladderArr() {
-    return mode === "expert" ? LADDER_EX : LADDER_LOW;
+  function setBetUI() {
+    betInput.value = String(bet);
+    betOut.textContent = fmt(bet);
   }
-  function nextX() {
-    const arr = ladderArr();
-    const idx = clamp(step, 0, arr.length - 1);
-    return arr[idx];
+
+  function setModeUI() {
+    modeOut.textContent = difficulty === "low" ? "Низкий" : "Эксперт";
   }
-  function renderLadder() {
-    if (!el.ladderRow) return;
-    const arr = ladderArr();
-    el.ladderRow.innerHTML = "";
-    arr.forEach((x, i) => {
+
+  function setXUI() {
+    curXEl.textContent = `${fmtX(curX)}x`;
+    stepEl.textContent = String(step);
+    profitXEl.textContent = `x${fmtX(curX)}`;
+  }
+
+  function setProfitUI(val = 0) {
+    profitEl.textContent = fmt(val);
+  }
+
+  function setCashOutUI(text = "—") {
+    cashOut.textContent = text;
+  }
+
+  function tip(text) {
+    tipEl.innerHTML = text;
+    hintLine.innerHTML = text.replace(/<[^>]+>/g, "");
+  }
+
+  function buildLadder() {
+    const row = $("ladderRow");
+    row.innerHTML = "";
+    for (let i = 0; i < LANES; i++) {
       const d = document.createElement("div");
-      d.className = "ladderItem" + (i === step - 1 ? " active" : "");
-      d.textContent = `${fmt2(x)}x`;
-      el.ladderRow.appendChild(d);
+      d.className = "stepChip";
+      d.textContent = `${ladder[i].toFixed(2)}x`;
+      row.appendChild(d);
+    }
+    highlightLadder();
+  }
+
+  function highlightLadder() {
+    const chips = Array.from($("ladderRow").children);
+    chips.forEach((c, idx) => {
+      c.classList.toggle("active", idx === Math.max(0, step - 1));
     });
   }
 
-  // ======= Road build (single clickable row like stake) =======
-  function buildManholes() {
-    if (!el.manholes) return;
-    el.manholes.innerHTML = "";
-    mhWraps = [];
+  function buildRoad() {
+    laneArea.innerHTML = "";
 
-    roadRect = el.manholes.getBoundingClientRect();
+    // Main lane root
+    laneRoot = document.createElement("div");
+    laneRoot.className = "lane";
+    laneArea.appendChild(laneRoot);
 
-    // Create a single row centered vertically around ROAD_PADDING_TOP_PCT
-    const row = document.createElement("div");
-    row.className = "mhRow";
-    row.style.top = `${ROAD_PADDING_TOP_PCT}%`;
+    // dashed vertical separators
+    const markings = document.createElement("div");
+    markings.className = "markings";
+    for (let i = 0; i < 5; i++) {
+      const d = document.createElement("div");
+      d.className = "dash";
+      markings.appendChild(d);
+    }
+    laneArea.appendChild(markings);
 
-    for (let i = 0; i < COLS; i++) {
-      const wrap = document.createElement("div");
-      wrap.className = "mhWrap";
+    // Traffic underlay layer (cars)
+    trafficLayer = document.createElement("div");
+    trafficLayer.className = "traffic";
+    laneArea.appendChild(trafficLayer);
 
-      const hole = document.createElement("div");
-      hole.className = "manhole";
-      hole.dataset.lane = String(i);
-      hole.title = "Выбери люк";
-
-      const badge = document.createElement("div");
-      badge.className = "mhBadge";
-      badge.textContent = `${fmt2(nextX())}x`;
-
-      wrap.appendChild(hole);
-      wrap.appendChild(badge);
-      row.appendChild(wrap);
-
-      mhWraps.push({ wrap, hole, badge });
+    // Barriers (after each cleared lane)
+    barriers = [];
+    for (let l = 0; l < LANES; l++) {
+      const b = document.createElement("div");
+      b.className = "barrier";
+      // y position between lanes: compute later in layout tick
+      b.style.top = "0px";
+      laneArea.appendChild(b);
+      barriers.push(b);
     }
 
-    el.manholes.appendChild(row);
+    // Hatches grid: one "active lane" at a time visually, но мы рисуем текущую линию как ряд люков.
+    // Мы отрисуем все ряды по высоте, чтобы было “как дорога”.
+    hatchGrid = Array.from({ length: LANES }, () => Array(COLS).fill(null));
 
-    // default selection
-    setSelectedLane(selectedLane, true);
-  }
+    // Create rows positions
+    const { laneW, laneH, cellW, rowY } = computeLayout();
+    for (let r = 0; r < LANES; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const h = document.createElement("div");
+        h.className = "hatch";
+        h.dataset.r = String(r);
+        h.dataset.c = String(c);
 
-  function updateBadges() {
-    const nx = nextX();
-    mhWraps.forEach(o => (o.badge.textContent = `${fmt2(nx)}x`));
-  }
+        const ring = document.createElement("div");
+        ring.className = "ring";
+        h.appendChild(ring);
 
-  function setSelectedLane(lane, silent = false) {
-    selectedLane = clamp(lane, 0, COLS - 1);
-    mhWraps.forEach(({ hole }, idx) => hole.classList.toggle("selected", idx === selectedLane));
-    if (!silent) blip(640, 0.045, "sine", 0.02);
-  }
+        const icon = document.createElement("div");
+        icon.className = "icon";
+        h.appendChild(icon);
 
-  // ======= Chicken positioning + jump arc =======
-  function roadLocalXYFromHole(laneIndex) {
-    const road = el.manholes?.closest(".road");
-    if (!road) return { x: 0, y: 0 };
-    const rr = road.getBoundingClientRect();
-    const hole = mhWraps[laneIndex]?.hole;
-    if (!hole) return { x: rr.width / 2, y: rr.height * (ROAD_PADDING_TOP_PCT / 100) };
+        const lbl = document.createElement("div");
+        lbl.className = "lbl";
+        lbl.textContent = `${ladder[r].toFixed(2)}x`;
+        h.appendChild(lbl);
 
-    const hr = hole.getBoundingClientRect();
-    const x = (hr.left + hr.right) / 2 - rr.left;
-    const y = (hr.top + hr.bottom) / 2 - rr.top - 10; // slightly above hole
-    return { x, y };
-  }
+        // position absolute manually so we can have multiple rows
+        h.style.position = "absolute";
+        h.style.left = `${LANE_PADDING_LEFT + c * (cellW)}px`;
+        h.style.top  = `${rowY(r)}px`;
+        h.style.width = `${cellW - 12}px`; // leave gap
+        h.style.height = `62px`;
 
-  function setChickenPos(x, y, immediate = false) {
-    if (!el.chicken) return;
-    if (immediate) {
-      el.chicken.style.transition = "none";
-      el.chicken.style.left = `${x}px`;
-      el.chicken.style.top = `${y}px`;
-      requestAnimationFrame(() => {
-        el.chicken.style.transition = "left .28s ease, top .28s ease, transform .18s ease";
-      });
-    } else {
-      el.chicken.style.left = `${x}px`;
-      el.chicken.style.top = `${y}px`;
-    }
-  }
+        h.addEventListener("click", onHatchClick);
 
-  function jumpChickenToLane(laneIndex) {
-    // simple arc illusion: scale + quick mid bump
-    const { x, y } = roadLocalXYFromHole(laneIndex);
-    if (!el.chicken) return;
-
-    el.chicken.classList.add("jump");
-    setChickenPos(x, y, false);
-
-    setTimeout(() => el.chicken && el.chicken.classList.remove("jump"), 230);
-  }
-
-  // ======= Cars =======
-  function clearCars() {
-    carPool.forEach(c => c.el.remove());
-    carPool = [];
-    if (el.cars) el.cars.innerHTML = "";
-  }
-
-  function spawnCar() {
-    if (!el.cars) return;
-    const road = el.cars.closest(".road");
-    if (!road) return;
-
-    const rr = road.getBoundingClientRect();
-    const lanes = [0.26, 0.42, 0.58, 0.74, 0.88]; // 5 visual lanes across
-    const lane = lanes[Math.floor(Math.random() * lanes.length)];
-
-    const fromTop = Math.random() < 0.5;
-    const x = lane * rr.width;
-    const y0 = fromTop ? -70 : rr.height + 70;
-    const y1 = fromTop ? rr.height + 90 : -90;
-
-    const [sMin, sMax] = carSpeedRange(mode);
-    const speed = sMin + Math.random() * (sMax - sMin);
-
-    const r = Math.random();
-    const color = r < 0.45 ? "blue" : (r < 0.75 ? "taxi" : "red");
-
-    const div = document.createElement("div");
-    div.className = `car ${color}`;
-    div.style.left = `${x}px`;
-    div.style.top = `${y0}px`;
-    el.cars.appendChild(div);
-
-    carPool.push({ el: div, x, y: y0, yEnd: y1, dir: fromTop ? 1 : -1, speed });
-  }
-
-  function tickCars(dt) {
-    if (!el.cars) return;
-    const road = el.cars.closest(".road");
-    if (!road) return;
-    const h = road.getBoundingClientRect().height;
-
-    for (let i = carPool.length - 1; i >= 0; i--) {
-      const c = carPool[i];
-      c.y += c.dir * c.speed * dt;
-      c.el.style.top = `${c.y}px`;
-
-      const out = c.dir > 0 ? c.y > h + 120 : c.y < -140;
-      if (out) {
-        c.el.remove();
-        carPool.splice(i, 1);
+        laneRoot.appendChild(h);
+        hatchGrid[r][c] = h;
       }
     }
+
+    positionBarriers();
+    resetRoadVisual();
+    spawnCars();
   }
 
-  // ======= FX =======
-  function fx(className, x, y) {
-    if (!el.fx) return;
-    const d = document.createElement("div");
-    d.className = className;
-    d.style.left = `${x}px`;
-    d.style.top = `${y}px`;
-    el.fx.appendChild(d);
-    setTimeout(() => d.remove(), 800);
+  function computeLayout() {
+    const rect = laneArea.getBoundingClientRect();
+    const laneW = rect.width;
+    const laneH = rect.height;
+    const cellW = laneW / COLS; // columns evenly, gap handled in width
+    const rowGap = 16;
+    const rowHeight = 62;
+    const totalH = LANES * rowHeight + (LANES - 1) * rowGap;
+    const topBase = Math.max(18, (laneH - totalH) / 2);
+
+    const rowY = (r) => topBase + r * (rowHeight + rowGap);
+    return { laneW, laneH, cellW, rowY, rowHeight, rowGap, topBase };
   }
 
-  function chickenCenter() {
-    const road = el.chicken?.closest(".road");
-    if (!road || !el.chicken) return { x: 0, y: 0 };
-    const rr = road.getBoundingClientRect();
-    const cr = el.chicken.getBoundingClientRect();
-    return { x: (cr.left + cr.right) / 2 - rr.left, y: (cr.top + cr.bottom) / 2 - rr.top };
-  }
-
-  // ======= Hazard logic (visual cars are for vibe; logic ensures balance) =======
-  function resolveOutcome() {
-    const s = step; // current step index before success
-    const roll = Math.random();
-
-    if (mode === "low") {
-      const pCar = lowCarP(s);
-      return (roll < pCar) ? "car" : "safe";
-    } else {
-      const r = exRisk(s);
-      if (roll < r.car) return "car";
-      if (roll < r.car + r.fire) return "fire";
-      if (roll < r.car + r.fire + r.fall) return "fall";
-      return "safe";
+  function positionBarriers() {
+    const { rowY, rowHeight } = computeLayout();
+    for (let r = 0; r < LANES; r++) {
+      const y = rowY(r) + rowHeight + 6; // between rows
+      barriers[r].style.top = `${y}px`;
     }
   }
 
-  // ======= Run control =======
-  function resetRun() {
-    inRun = false;
-    betLocked = false;
-    step = 0;
-    currentX = 1.0;
-
-    updateBadges();
-    renderLadder();
-    updateMeta();
-    setButtons();
-
-    clearCars();
-    spawnAcc = 0;
-    lastTs = null;
-
-    setStatus(`Нажми <b>Ставка</b> чтобы начать. Затем выбери люк кликом и жми <b>Вперёд</b>.`);
-    if (el.cashoutView) el.cashoutView.textContent = "—";
-
-    // reset chicken to selected lane (bottom-ish)
-    const { x, y } = roadLocalXYFromHole(selectedLane);
-    setChickenPos(x, y + 120, true); // start a bit below row
-    // then ease into row to feel alive
-    setTimeout(() => setChickenPos(x, y, false), 120);
-  }
-
-  function startRun() {
-    if (inRun) return;
-
-    bet = Math.floor(Number(el.betInput?.value || bet) || 0);
-    if (bet <= 0) { blip(200, 0.08, "square", 0.03); return; }
-    if (bet > balance) { setStatus(`<b>Недостаточно средств</b> для ставки.`); blip(200, 0.09, "square", 0.03); return; }
-
-    // lock mode
-    mode = (el.difficulty?.value === "expert") ? "expert" : "low";
-    if (el.modeLabel) el.modeLabel.textContent = (mode === "expert" ? "Эксперт" : "Низкий");
-
-    // deduct bet once
-    setBalance(balance - bet);
-    betLocked = true;
-
-    inRun = true;
-    step = 0;
-    currentX = 1.0;
-
-    updateBadges();
-    renderLadder();
-    updateMeta();
-    setButtons();
-
-    setStatus(`Серия началась. Выбери люк и жми <b>Вперёд</b>.`);
-
-    // start cars loop
-    rafId && cancelAnimationFrame(rafId);
-    lastTs = null;
-    spawnAcc = 0;
-
-    // spawn initial cars burst
-    clearCars();
-    for (let i = 0; i < 4; i++) spawnCar();
-
-    rafId = requestAnimationFrame(loop);
-
-    blip(620, 0.06, "triangle", 0.03);
-  }
-
-  function endLose(kind) {
-    inRun = false;
-    betLocked = false;
-
-    const c = chickenCenter();
-    if (kind === "car") fx("boom", c.x, c.y);
-    if (kind === "fire") fx("fireFx", c.x, c.y);
-    if (kind === "fall") fx("boom", c.x, c.y + 10);
-
-    // little shake
-    const arena = document.querySelector(".arena");
-    arena && arena.classList.add("roadShake");
-    setTimeout(() => arena && arena.classList.remove("roadShake"), 420);
-
-    if (kind === "car") setStatus(`<b>Столкновение!</b> Проигрыш.`);
-    if (kind === "fire") setStatus(`<b>Пламя!</b> Проигрыш.`);
-    if (kind === "fall") setStatus(`<b>Провал!</b> Проигрыш.`);
-
-    blip(180, 0.10, "square", 0.03);
-
-    clearCars();
-    updateMeta();
-    setButtons();
-
-    // restart ready after short pause
-    setTimeout(() => resetRun(), 900);
-  }
-
-  function cashout(auto = false) {
-    if (!(inRun && betLocked && step >= 1)) return;
-
-    const win = Math.floor(bet * currentX);
-    setBalance(balance + win);
-
-    setStatus(auto
-      ? `Максимум! <b>Кэшаут</b> на <b>${fmt2(currentX)}x</b> (+${win} ₽)`
-      : `Ты забрал: <b>${win} ₽</b> (x${fmt2(currentX)})`
-    );
-
-    const c = chickenCenter();
-    fx("spark", c.x, c.y);
-    blip(820, 0.07, "triangle", 0.03);
-
-    inRun = false;
-    betLocked = false;
-    clearCars();
-
-    updateMeta();
-    setButtons();
-
-    setTimeout(() => resetRun(), 950);
-  }
-
-  function doForward() {
-    if (!inRun) return;
-
-    // jump first (feel)
-    jumpChickenToLane(selectedLane);
-
-    // settle then resolve
-    setTimeout(() => {
-      if (!inRun) return;
-
-      const outcome = resolveOutcome();
-
-      if (outcome === "safe") {
-        step += 1;
-        currentX = nextX();
-
-        const c = chickenCenter();
-        fx("spark", c.x, c.y);
-
-        blip(720, 0.05, "sine", 0.02);
-
-        // allow cashout after 1 step
-        updateBadges();
-        renderLadder();
-        updateMeta();
-        setButtons();
-
-        setStatus(`Удачно! Шаг <b>${step}</b>. X = <b>${fmt2(currentX)}x</b>`);
-
-        // reached max ladder -> auto cashout
-        if (step >= STEP_LIMIT || step >= ladderArr().length) {
-          cashout(true);
-        }
-      } else {
-        endLose(outcome);
-      }
-    }, 240);
-  }
-
-  // ======= RAF loop for cars =======
-  function loop(ts) {
-    if (!inRun) return;
-
-    if (!lastTs) lastTs = ts;
-    const dt = (ts - lastTs) / 1000;
-    lastTs = ts;
-
-    // spawn cars
-    spawnAcc += dt;
-    const every = carSpawnEvery(mode);
-    if (spawnAcc >= every) {
-      spawnAcc = 0;
-      spawnCar();
-      if (mode === "expert" && Math.random() < 0.45) spawnCar();
-    }
-
-    tickCars(dt);
-
-    rafId = requestAnimationFrame(loop);
-  }
-
-  // ======= Events =======
-  function bind() {
-    // Sound toggle
-    el.soundBtn?.addEventListener("click", () => {
-      setSound(!soundOn);
-      blip(soundOn ? 720 : 220, 0.05, "sine", 0.02);
-    });
-
-    // Bet controls
-    el.betMinus?.addEventListener("click", () => {
-      if (inRun) return;
-      bet = Math.max(1, (Number(el.betInput.value) || bet) - 10);
-      el.betInput.value = String(bet);
-      if (el.betView) el.betView.textContent = String(bet);
-      blip(520, 0.04, "sine", 0.015);
-    });
-    el.betPlus?.addEventListener("click", () => {
-      if (inRun) return;
-      bet = Math.max(1, (Number(el.betInput.value) || bet) + 10);
-      el.betInput.value = String(bet);
-      if (el.betView) el.betView.textContent = String(bet);
-      blip(520, 0.04, "sine", 0.015);
-    });
-
-    document.querySelectorAll(".chip").forEach(btn => {
-      btn.addEventListener("click", () => {
-        if (inRun) return;
-        const v = btn.dataset.chip;
-        if (v === "max") bet = Math.max(1, balance);
-        else bet = Math.max(1, Math.floor(Number(v) || 1));
-        el.betInput.value = String(bet);
-        if (el.betView) el.betView.textContent = String(bet);
-        blip(620, 0.04, "triangle", 0.015);
-      });
-    });
-
-    el.betInput?.addEventListener("input", () => {
-      if (inRun) return;
-      bet = Math.max(1, Math.floor(Number(el.betInput.value) || 1));
-      el.betView && (el.betView.textContent = String(bet));
-    });
-
-    // Difficulty
-    el.difficulty?.addEventListener("change", () => {
-      if (inRun) {
-        // revert
-        el.difficulty.value = mode;
-        blip(200, 0.06, "square", 0.02);
-        return;
-      }
-      mode = (el.difficulty.value === "expert") ? "expert" : "low";
-      el.modeLabel && (el.modeLabel.textContent = mode === "expert" ? "Эксперт" : "Низкий");
-      updateBadges();
-      renderLadder();
-      updateMeta();
-      blip(600, 0.05, "triangle", 0.015);
-    });
-
-    // Buttons
-    el.startBtn?.addEventListener("click", startRun);
-    el.cashoutBtn?.addEventListener("click", () => cashout(false));
-    el.forwardBtn?.addEventListener("click", doForward);
-
-    // Click on manholes
-    el.manholes?.addEventListener("click", (e) => {
-      const t = e.target;
-      const hole = t?.closest?.(".manhole");
-      if (!hole) return;
-      const lane = Number(hole.dataset.lane);
-      if (!Number.isFinite(lane)) return;
-      setSelectedLane(lane, false);
-    });
-
-    // Keyboard shortcuts
-    window.addEventListener("keydown", (e) => {
-      if (e.code === "Enter") { if (!inRun) startRun(); }
-      if (e.code === "Space") { e.preventDefault(); doForward(); }
-      if (e.code === "KeyC") { cashout(false); }
-      if (e.code === "ArrowLeft") { setSelectedLane(selectedLane - 1, false); }
-      if (e.code === "ArrowRight") { setSelectedLane(selectedLane + 1, false); }
-    });
-  }
-
-  // ======= Init =======
-  function init() {
-    // initial bet from input
-    bet = Math.max(1, Math.floor(Number(el.betInput?.value || 100) || 100));
-    if (el.betInput) el.betInput.value = String(bet);
-    if (el.betView) el.betView.textContent = String(bet);
-
-    mode = (el.difficulty?.value === "expert") ? "expert" : "low";
-    if (el.modeLabel) el.modeLabel.textContent = (mode === "expert" ? "Эксперт" : "Низкий");
-
-    buildManholes();
-    renderLadder();
-    updateMeta();
-    setButtons();
-    resetRun();
-
-    // position chicken after layout
-    requestAnimationFrame(() => {
-      const { x, y } = roadLocalXYFromHole(selectedLane);
-      setChickenPos(x, y + 120, true);
-      setTimeout(() => setChickenPos(x, y, false), 120);
-    });
-
-    bind();
-  }
-
-  window.addEventListener("load", init);
   window.addEventListener("resize", () => {
-    // rebuild row for correct center/coords
-    buildManholes();
-    const { x, y } = roadLocalXYFromHole(selectedLane);
-    setChickenPos(x, y, true);
+    if (!laneRoot) return;
+    // recompute hatch positions and barriers
+    const { cellW, rowY } = computeLayout();
+    for (let r = 0; r < LANES; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const h = hatchGrid[r][c];
+        h.style.left = `${LANE_PADDING_LEFT + c * (cellW)}px`;
+        h.style.top  = `${rowY(r)}px`;
+        h.style.width = `${cellW - 12}px`;
+      }
+    }
+    positionBarriers();
+    // reposition chicken to current
+    placeChickenAt(step, selectedCol ?? 0, true);
   });
+
+  // =========================
+  // Cars system (vertical)
+  // =========================
+  function spawnCars() {
+    cars = [];
+    trafficLayer.innerHTML = "";
+
+    // Create 4 cars with randomized lanes and speeds
+    const carCount = 4;
+    for (let i = 0; i < carCount; i++) {
+      const el = document.createElement("div");
+      el.className = "car " + (i % 2 === 0 ? "taxi" : "blue");
+
+      const laneIdx = Math.floor(Math.random() * COLS);
+      const speed = 70 + Math.random() * 90; // px/s
+      const y = -120 - Math.random() * 260;
+
+      trafficLayer.appendChild(el);
+
+      cars.push({ el, laneIdx, speed, y });
+    }
+  }
+
+  function updateCars(dt) {
+    if (!trafficLayer) return;
+    const rect = laneArea.getBoundingClientRect();
+    const { cellW } = computeLayout();
+    const maxY = rect.height + 120;
+
+    for (const car of cars) {
+      car.y += car.speed * dt;
+      if (car.y > maxY) {
+        car.y = -140 - Math.random() * 240;
+        // maybe change lane
+        if (Math.random() < 0.35) car.laneIdx = Math.floor(Math.random() * COLS);
+      }
+      const x = LANE_PADDING_LEFT + car.laneIdx * cellW + (cellW / 2) - 6;
+      car.el.style.left = `${x}px`;
+      car.el.style.top = `${car.y}px`;
+    }
+  }
+
+  // Collision check only with chosen target cell during landing moment
+  function carCollisionAtCell(r, c) {
+    // collision zone y equals hatch center
+    const { rowY, rowHeight, cellW } = computeLayout();
+    const hatchCenterY = rowY(r) + rowHeight / 2;
+    const hatchCenterX = LANE_PADDING_LEFT + c * cellW + (cellW / 2);
+
+    // if any car in same column and its y is near hatch y
+    for (const car of cars) {
+      if (car.laneIdx !== c) continue;
+      const carCenterY = car.y + 32;
+      if (Math.abs(carCenterY - hatchCenterY) < 34) return true;
+    }
+    return false;
+  }
+
+  // =========================
+  // Road visuals and chicken placement
+  // =========================
+  function placeChickenAt(r, c, instant = false) {
+    const { rowY, rowHeight, cellW } = computeLayout();
+    const x = 88 + LANE_PADDING_LEFT + c * cellW + (cellW / 2) - 20; // road offset + cell center - chicken half
+    const y = 28 + rowY(r) + rowHeight / 2 - 22;                    // road offset + row center - chicken half
+
+    // use CSS var based hop animation
+    chickenEl.style.setProperty("--x", `${x}px`);
+    chickenEl.style.setProperty("--y", `${y}px`);
+
+    if (instant) {
+      chickenEl.style.transition = "none";
+      chickenEl.style.transform = `translate(${x}px, ${y}px)`;
+      // restore transition
+      requestAnimationFrame(() => {
+        chickenEl.style.transition = "";
+      });
+      return;
+    }
+
+    chickenEl.classList.remove("hop");
+    // trigger hop (and move)
+    chickenEl.style.transform = `translate(${x}px, ${y}px)`;
+    chickenEl.classList.add("hop");
+    setTimeout(() => chickenEl.classList.remove("hop"), 320);
+  }
+
+  function resetRoadVisual() {
+    selectedCol = null;
+    lockedThroughLane = -1;
+
+    // clear selections & reveals
+    for (let r = 0; r < LANES; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const h = hatchGrid[r][c];
+        h.classList.remove("sel", "revealed", "ok", "bad");
+        const icon = h.querySelector(".icon");
+        icon.className = "icon";
+        icon.textContent = "";
+      }
+    }
+    barriers.forEach(b => b.classList.remove("on"));
+
+    // put chicken at "start" (lane 0, center)
+    placeChickenAt(0, Math.floor(COLS/2), true);
+  }
+
+  function setActiveLaneUI() {
+    // Only next lane (step) is clickable. Others are disabled
+    for (let r = 0; r < LANES; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const h = hatchGrid[r][c];
+        const clickable = running && !animating && r === step && r >= 0 && r < LANES;
+        h.style.pointerEvents = clickable ? "auto" : "none";
+        h.style.opacity = (r < step) ? 0.55 : 1;
+        h.style.filter = (r < step) ? "saturate(.9)" : "none";
+      }
+    }
+  }
+
+  // =========================
+  // Game flow
+  // =========================
+  function setDifficulty(val) {
+    difficulty = val;
+    ladder = (difficulty === "low") ? MULTI_LOW : MULTI_EXPERT;
+    buildLadder();
+    setModeUI();
+    // update labels on hatches
+    if (hatchGrid.length) {
+      for (let r = 0; r < LANES; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const lbl = hatchGrid[r][c].querySelector(".lbl");
+          lbl.textContent = `${ladder[r].toFixed(2)}x`;
+        }
+      }
+    }
+  }
+
+  function canStart() {
+    return !running && bet > 0 && bet <= balance;
+  }
+
+  function startGame() {
+    if (!canStart()) {
+      tip(bet > balance ? "Недостаточно баланса для ставки." : "Укажи ставку > 0.");
+      beep(220, .10, .04, "sawtooth");
+      return;
+    }
+
+    // take bet once
+    balance -= bet;
+    setBalanceUI();
+
+    running = true;
+    animating = false;
+    step = 0;
+    curX = 1.0;
+
+    setXUI();
+    setProfitUI(0);
+    setCashOutUI("—");
+
+    selectedCol = null;
+
+    // buttons
+    startBtn.disabled = true;
+    cashBtn.disabled = true;
+    goBtn.disabled = true;
+    betInput.disabled = true;
+    diffSelect.disabled = true;
+
+    // reset visuals
+    resetRoadVisual();
+    highlightLadder();
+    setActiveLaneUI();
+
+    tip("Выбери люк в <b>первом ряду</b> и нажми <b>Вперёд</b>.");
+    sStart();
+  }
+
+  function endGameLose(reasonText) {
+    running = false;
+    animating = false;
+
+    fxEl.classList.remove("win");
+    fxEl.classList.add("flash");
+    setTimeout(() => fxEl.classList.remove("flash"), 500);
+
+    tip(`<b>Поражение.</b> ${reasonText} Нажми <b>Ставка</b>, чтобы попробовать снова.`);
+    sLose();
+
+    // reset UI
+    startBtn.disabled = false;
+    cashBtn.disabled = true;
+    goBtn.disabled = true;
+    betInput.disabled = false;
+    diffSelect.disabled = false;
+
+    setCashOutUI("—");
+    setProfitUI(0);
+    setActiveLaneUI();
+  }
+
+  function endGameWinCashout() {
+    running = false;
+    animating = false;
+
+    const payout = Math.floor(bet * curX);
+    balance += payout;
+    setBalanceUI();
+
+    fxEl.classList.remove("flash");
+    fxEl.classList.add("win");
+    setTimeout(() => fxEl.classList.remove("win"), 650);
+
+    tip(`<b>Кэшаут!</b> Ты забрал <b>${fmt(payout)} ₽</b> (x${fmtX(curX)}).`);
+    sWin();
+
+    startBtn.disabled = false;
+    cashBtn.disabled = true;
+    goBtn.disabled = true;
+    betInput.disabled = false;
+    diffSelect.disabled = false;
+
+    setProfitUI(payout);
+    setCashOutUI(`${fmt(payout)} ₽`);
+    setActiveLaneUI();
+  }
+
+  function revealCell(r, c, kind) {
+    const h = hatchGrid[r][c];
+    h.classList.add("revealed");
+    const icon = h.querySelector(".icon");
+
+    if (kind === "egg") {
+      h.classList.add("ok");
+      icon.classList.add("egg");
+      icon.textContent = "🥚";
+    } else if (kind === "skull") {
+      h.classList.add("bad");
+      icon.classList.add("skull");
+      icon.textContent = "💀";
+    } else if (kind === "fire") {
+      h.classList.add("bad");
+      icon.classList.add("fire");
+      icon.textContent = "🔥";
+    } else if (kind === "hole") {
+      h.classList.add("bad");
+      icon.classList.add("hole");
+      icon.textContent = "🕳️";
+    }
+  }
+
+  function lockPreviousLane(prevLaneIdx) {
+    if (prevLaneIdx < 0 || prevLaneIdx >= LANES) return;
+    barriers[prevLaneIdx].classList.add("on");
+    lockedThroughLane = Math.max(lockedThroughLane, prevLaneIdx);
+  }
+
+  function resolveHazard(r, c) {
+    // Low: only car collision check and chance
+    // Expert: extra hazards
+    const cfg = HZ[difficulty];
+
+    // car collision - physical + chance weight
+    const hitByCar = carCollisionAtCell(r, c) && Math.random() < 0.75;
+    if (hitByCar) return { ok: false, kind: "skull", reason: "Машина сбила курочку." };
+
+    // base hazard chance based on mode
+    if (difficulty === "low") {
+      if (Math.random() < cfg.car) return { ok: false, kind: "skull", reason: "Неудача на люке (опасность)." };
+      return { ok: true, kind: "egg" };
+    }
+
+    // expert: roll for hole/fire after car
+    if (Math.random() < cfg.hole) return { ok: false, kind: "hole", reason: "Провал — люк оказался пустым." };
+    if (Math.random() < cfg.fire) return { ok: false, kind: "fire", reason: "Огонь! Курочка обожглась." };
+    if (Math.random() < cfg.car) return { ok: false, kind: "skull", reason: "Опасность на люке." };
+
+    return { ok: true, kind: "egg" };
+  }
+
+  async function goForward() {
+    if (!running || animating) return;
+    if (selectedCol === null) {
+      tip("Сначала <b>выбери люк</b> в текущем ряду.");
+      beep(240, .06, .03, "sawtooth");
+      return;
+    }
+
+    const r = step;
+    const c = selectedCol;
+
+    animating = true;
+    setActiveLaneUI();
+    goBtn.disabled = true;
+
+    // hop
+    sHop();
+    placeChickenAt(r, c, false);
+
+    // Wait landing moment
+    await wait(280);
+
+    // Resolve outcome
+    const out = resolveHazard(r, c);
+    revealCell(r, c, out.kind);
+
+    if (!out.ok) {
+      // lose
+      animating = false;
+      cashBtn.disabled = true;
+      setActiveLaneUI();
+      endGameLose(out.reason);
+      return;
+    }
+
+    // success
+    step += 1;
+    curX = ladder[Math.max(0, step - 1)];
+    setXUI();
+    highlightLadder();
+
+    const potential = Math.floor(bet * curX);
+    setProfitUI(potential);
+    setCashOutUI(`${fmt(potential)} ₽`);
+
+    // lock previous lane with barrier (r)
+    lockPreviousLane(r);
+
+    // prepare next lane
+    selectedCol = null;
+
+    // enable cashout after 1 success
+    cashBtn.disabled = step < 1;
+    goBtn.disabled = step >= LANES; // no more steps
+
+    // if completed all lanes => auto cashout (optional)
+    if (step >= LANES) {
+      animating = false;
+      setActiveLaneUI();
+      tip(`<b>Максимум!</b> Достигнут конец дороги. Авто-кэшаут: <b>${fmt(potential)} ₽</b>.`);
+      sWin();
+      // finish with payout
+      running = false;
+      balance += potential;
+      setBalanceUI();
+
+      startBtn.disabled = false;
+      betInput.disabled = false;
+      diffSelect.disabled = false;
+      cashBtn.disabled = true;
+      goBtn.disabled = true;
+      return;
+    }
+
+    animating = false;
+    setActiveLaneUI();
+    tip("Выбери люк в <b>следующем ряду</b> и жми <b>Вперёд</b> — или забирай кэшаут.");
+  }
+
+  function cashout() {
+    if (!running || animating) return;
+    if (step < 1) return;
+    endGameWinCashout();
+  }
+
+  function onHatchClick(e) {
+    if (!running || animating) return;
+    const h = e.currentTarget;
+    const r = Number(h.dataset.r);
+    const c = Number(h.dataset.c);
+
+    if (r !== step) return;
+
+    // select only one
+    if (selectedCol !== null) {
+      hatchGrid[r][selectedCol].classList.remove("sel");
+    }
+    selectedCol = c;
+    h.classList.add("sel");
+    goBtn.disabled = false;
+
+    tip("Ок. Теперь жми <b>Вперёд</b>.");
+    beep(520, .03, .02, "sine");
+  }
+
+  function wait(ms) {
+    return new Promise(res => setTimeout(res, ms));
+  }
+
+  // =========================
+  // UI bindings
+  // =========================
+  function readBet() {
+    const v = Number(String(betInput.value).replace(/[^\d]/g, ""));
+    bet = clamp(Number.isFinite(v) ? v : 0, 1, 1_000_000);
+    setBetUI();
+  }
+
+  betInput.addEventListener("input", () => {
+    if (betInput.disabled) return;
+    readBet();
+  });
+
+  betMinus.addEventListener("click", () => {
+    if (betInput.disabled) return;
+    readBet();
+    bet = clamp(bet - 10, 1, 1_000_000);
+    setBetUI();
+  });
+
+  betPlus.addEventListener("click", () => {
+    if (betInput.disabled) return;
+    readBet();
+    bet = clamp(bet + 10, 1, 1_000_000);
+    setBetUI();
+  });
+
+  chips.forEach(ch => ch.addEventListener("click", () => {
+    if (betInput.disabled) return;
+    const v = ch.dataset.chip;
+    if (v === "max") {
+      bet = clamp(balance, 1, 1_000_000);
+    } else {
+      bet = clamp(Number(v), 1, 1_000_000);
+    }
+    setBetUI();
+    beep(520, .03, .02, "sine");
+  }));
+
+  diffSelect.addEventListener("change", () => {
+    if (diffSelect.disabled) return;
+    setDifficulty(diffSelect.value);
+    tip("Сложность изменена. Нажми <b>Ставка</b>, чтобы начать.");
+  });
+
+  startBtn.addEventListener("click", () => startGame());
+  goBtn.addEventListener("click", () => goForward());
+  cashBtn.addEventListener("click", () => cashout());
+
+  soundBtn.addEventListener("click", async () => {
+    soundOn = !soundOn;
+    soundLabel.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+    soundBtn.querySelector(".dot").style.background = soundOn ? "var(--green)" : "rgba(255,255,255,.25)";
+    soundBtn.querySelector(".dot").style.boxShadow = soundOn ? "0 0 0 4px rgba(39,214,127,.12)" : "none";
+    if (soundOn) {
+      ensureAudio();
+      try { await audioCtx.resume(); } catch {}
+      beep(650, .05, .03, "triangle");
+    }
+  });
+
+  // =========================
+  // Traffic light animation
+  // =========================
+  const tLight = $("tLight");
+  let tPhase = 0; // 0=y,1=g,2=r
+  function tickTrafficLight(dt) {
+    // change every ~2.2s
+    tAccum += dt;
+    if (tAccum > 2.2) {
+      tAccum = 0;
+      tPhase = (tPhase + 1) % 3;
+      const lamps = tLight.querySelectorAll(".lamp");
+      lamps.forEach(l => l.classList.remove("on"));
+      if (tPhase === 0) tLight.querySelector(".lamp.y").classList.add("on");
+      if (tPhase === 1) tLight.querySelector(".lamp.g").classList.add("on");
+      if (tPhase === 2) tLight.querySelector(".lamp.r").classList.add("on");
+    }
+  }
+  let tAccum = 0;
+
+  // =========================
+  // Main loop
+  // =========================
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+
+    updateCars(dt);
+    tickTrafficLight(dt);
+
+    requestAnimationFrame(loop);
+  }
+
+  // =========================
+  // Init
+  // =========================
+  function init() {
+    // UI init
+    setBalanceUI();
+    setDifficulty(diffSelect.value);
+    setBetUI();
+    setModeUI();
+    setXUI();
+    setProfitUI(0);
+    setCashOutUI("—");
+
+    soundLabel.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+
+    // Build
+    buildLadder();
+    buildRoad();
+
+    // initial tip
+    tip("Нажми <b>Ставка</b>, затем выбери люк и жми <b>Вперёд</b>.");
+
+    // loop
+    requestAnimationFrame(loop);
+  }
+
+  init();
 })();
