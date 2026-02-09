@@ -1,646 +1,430 @@
-/* =========================
-   Penalty — app.js (v1)
-   15 zones (5x3), ball trajectory, gloves move, series/cashout
-   Works on GitHub Pages + localStorage
-========================= */
-
 (() => {
-  // ---------- helpers ----------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  // ===== Helpers =====
+  const $ = (s) => document.querySelector(s);
+  const fmtRub = (n) => `${Math.max(0, Math.floor(n))} ₽`;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const fmt = (n) => `${Math.round(n)} ₽`;
 
-  // ---------- storage ----------
+  // ===== Local balance =====
   const LS_BAL = "penalty_balance_v1";
-  const LS_SND = "penalty_sound_v1";
-  const LS_MULT = "penalty_mult_v1";
-  const LS_SER = "penalty_series_v1";
+  const LS_SOUND = "penalty_sound_v1";
 
-  // ---------- DOM (ids expected; has fallbacks) ----------
-  const el = {
-    balance: $("#balance") || $("#balanceText") || $("[data-balance]"),
-    soundBtn: $("#soundBtn") || $("#soundToggle") || $("[data-sound]"),
-    betInput: $("#betInput") || $("#stakeInput") || $("#bet"),
-    betMinus: $("#betMinus") || $("#stakeMinus"),
-    betPlus: $("#betPlus") || $("#stakePlus"),
-    chipBtns: $$("[data-chip]"),
-    halfBtn: $("#halfBtn") || $("[data-half]"),
-    dblBtn: $("#dblBtn") || $("[data-double]"),
-    betBtn: $("#btnBet") || $("#betBtn") || $("[data-bet]"),
-    cashoutBtn: $("#btnCashout") || $("#cashoutBtn") || $("[data-cashout]"),
-    resetBtn: $("#btnReset") || $("#resetBtn") || $("[data-reset]"),
+  let balance = Number(localStorage.getItem(LS_BAL) || 1000);
+  let soundOn = (localStorage.getItem(LS_SOUND) ?? "1") === "1";
 
-    multBtns: $$("[data-mult]"),
-    seriesToggle: $("#seriesToggle") || $("#series") || $("[data-series]"),
+  // ===== Game state =====
+  const MULTIS = [1.76, 3.30, 7.08, 15.17, 45.52];
+  let selectedMulti = MULTIS[0];
 
-    status: $("#statusText") || $("#status") || $("[data-status]"),
-    last: $("#lastText") || $("#last") || $("[data-last]"),
-    step: $("#stepText") || $("#step") || $("[data-step]"),
-    xText: $("#xText") || $("#x") || $("[data-x]"),
-    potential: $("#potentialText") || $("#potential") || $("[data-potential]"),
+  let inRound = false;      // ставка поставлена, игра активна
+  let shotLock = false;     // блок на время анимации
+  let bet = 100;
+  let step = 0;
+  let streak = 0;
+  let bank = 0;             // банк для кэшаута
+  let canCashout = false;
 
-    goalWrap: $(".goalwrap") || $("#goalwrap") || $(".stage"),
-    targets: $(".targets") || $("#targets"),
-    ball: $(".ball") || $("#ball"),
-    keeper: $(".keeper") || $("#keeper"),
-    gloveL: $(".leftglove") || $("#gloveL"),
-    gloveR: $(".rightglove") || $("#gloveR"),
+  // Series logic:
+  // - series ON: каждый гол умножает банк на X (компаунд)
+  // - series OFF: первый гол = bet * X, дальше можно бить ради фана (банк не растёт)
+  const seriesToggle = $("#seriesToggle");
 
-    flash: $(".flash") || $("#flash"),
-    flashTitle: $(".flash-title") || $("#flashTitle"),
-    flashSub: $(".flash-sub") || $("#flashSub"),
-  };
+  // ===== UI =====
+  const balanceText = $("#balanceText");
+  const soundLed = $("#soundLed");
+  const soundText = $("#soundText");
+  const hintText = $("#hintText");
 
-  // ---------- create targets if missing ----------
-  function ensureTargets() {
-    if (!el.goalWrap) return;
-    if (!el.targets) {
-      const t = document.createElement("div");
-      t.className = "targets";
-      el.goalWrap.appendChild(t);
-      el.targets = t;
-    }
-    if ($$(".zone", el.targets).length !== 15) {
-      el.targets.innerHTML = "";
-      for (let i = 0; i < 15; i++) {
-        const z = document.createElement("div");
-        z.className = "zone";
-        z.dataset.zone = String(i);
-        z.title = `Зона ${i + 1}`;
-        el.targets.appendChild(z);
-      }
-    }
-  }
+  const betInput = $("#betInput");
+  const uiBetText = $("#uiBetText");
+  const uiCashText = $("#uiCashText");
 
-  ensureTargets();
+  const statusText = $("#statusText");
+  const lastText = $("#lastText");
+  const xText = $("#xText");
+  const potentialText = $("#potentialText");
+  const streakText = $("#streakText");
+  const stepText = $("#stepText");
+  const hudXText = $("#hudXText");
 
-  // ---------- state ----------
-  const MULTS_DEFAULT = [1.76, 3.30, 7.08, 15.17, 45.52];
+  const stakeBtn = $("#stakeBtn");
+  const cashoutBtn = $("#cashoutBtn");
 
-  const MATCH_PROB_BY_MULT = {
-    1.76: 0.35,
-    3.30: 0.25,
-    7.08: 0.18,
-    15.17: 0.12,
-    45.52: 0.07,
-  };
+  const multiList = $("#multiList");
 
-  const state = {
-    balance: 1000,
-    sound: true,
+  const goalBox = $("#goalBox");
+  const targets = $("#targets");
+  const keeper = $("#keeper");
+  const ball = $("#ball");
+  const badge = $("#badge");
+  const badgeTitle = $("#badgeTitle");
+  const badgeSub = $("#badgeSub");
 
-    stake: 100,
-    mult: 1.76,
-    series: false,
-
-    inPlay: false,        // round started (stake deducted)
-    canShoot: false,      // waiting for zone click
-    lockedStake: 0,
-    streak: 0,            // goals in current round
-    step: 0,              // shots taken in current round
-
-    chosenZone: null,
-    animating: false,
-  };
-
-  // ---------- init from LS ----------
-  const balLS = Number(localStorage.getItem(LS_BAL));
-  if (Number.isFinite(balLS) && balLS >= 0) state.balance = balLS;
-
-  const sndLS = localStorage.getItem(LS_SND);
-  if (sndLS === "0" || sndLS === "1") state.sound = sndLS === "1";
-
-  const multLS = Number(localStorage.getItem(LS_MULT));
-  if (Number.isFinite(multLS) && multLS > 1) state.mult = multLS;
-
-  const serLS = localStorage.getItem(LS_SER);
-  if (serLS === "0" || serLS === "1") state.series = serLS === "1";
-
-  // ---------- audio (simple webaudio beeps) ----------
+  // ===== Sounds (tiny synth) =====
   let audioCtx = null;
-  function beep(freq, dur = 0.08, type = "sine", gain = 0.06) {
-    if (!state.sound) return;
-    try {
-      audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
-      const t0 = audioCtx.currentTime;
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(freq, t0);
-      g.gain.setValueAtTime(gain, t0);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g);
-      g.connect(audioCtx.destination);
-      o.start(t0);
-      o.stop(t0 + dur);
-    } catch {}
+  function beep(freq = 440, dur = 0.07, type = "sine", gain = 0.04) {
+    if (!soundOn) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(gain, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start(t0);
+    o.stop(t0 + dur);
   }
-  const sfx = {
-    click: () => beep(520, 0.05, "triangle", 0.05),
-    kick: () => beep(180, 0.10, "sine", 0.08),
-    goal: () => { beep(740, 0.08, "square", 0.06); setTimeout(() => beep(980, 0.10, "square", 0.05), 80); },
-    save: () => { beep(220, 0.10, "sawtooth", 0.07); setTimeout(() => beep(140, 0.10, "sawtooth", 0.05), 90); },
-    cashout: () => { beep(600, 0.07, "triangle", 0.05); setTimeout(() => beep(820, 0.12, "triangle", 0.05), 70); },
-  };
+  const sClick = () => beep(520, 0.05, "triangle", 0.035);
+  const sKick  = () => { beep(180, 0.06, "sine", 0.06); setTimeout(()=>beep(120,0.05,"sine",0.05), 30); };
+  const sGoal  = () => { beep(740,0.08,"square",0.05); setTimeout(()=>beep(980,0.10,"square",0.05), 90); };
+  const sSave  = () => { beep(220,0.10,"sawtooth",0.06); setTimeout(()=>beep(160,0.12,"sawtooth",0.05), 70); };
 
-  // ---------- UI update ----------
-  function setText(node, text) {
-    if (!node) return;
-    node.textContent = text;
+  // ===== Render =====
+  function setBalance(n) {
+    balance = Math.max(0, Math.floor(n));
+    localStorage.setItem(LS_BAL, String(balance));
+    balanceText.textContent = fmtRub(balance);
   }
 
-  function setSoundUI() {
-    if (!el.soundBtn) return;
-    const led = $(".led", el.soundBtn) || $(".led");
-    if (led) led.style.background = state.sound ? "#3cff77" : "#ff4d4d";
-    el.soundBtn.classList.toggle("muted", !state.sound);
-    // if the button has text:
-    const txt = el.soundBtn.querySelector(".txt");
-    if (txt) txt.textContent = state.sound ? "Звук: on" : "Звук: off";
+  function setSound(on) {
+    soundOn = !!on;
+    localStorage.setItem(LS_SOUND, soundOn ? "1" : "0");
+    soundLed.style.background = soundOn ? "var(--green)" : "var(--red)";
+    soundLed.style.boxShadow = soundOn ? "0 0 12px rgba(54,211,154,.6)" : "0 0 12px rgba(255,59,87,.45)";
+    soundText.textContent = soundOn ? "Звук: on" : "Звук: off";
   }
 
-  function getPotential() {
-    if (!state.inPlay) return 0;
-    if (!state.series) {
-      // single-shot mode: potential after successful shot
-      return state.lockedStake * state.mult;
+  function parseBetInput() {
+    const raw = String(betInput.value || "").replace(/[^\d]/g, "");
+    const n = clamp(Number(raw || 0), 1, 1_000_000);
+    bet = n;
+    betInput.value = String(n);
+    uiBetText.textContent = fmtRub(bet);
+  }
+
+  function calcPotential() {
+    if (!inRound) {
+      potentialText.textContent = fmtRub(0);
+      uiCashText.textContent = "—";
+      return;
     }
-    // series: grows per goal
-    // (геометрия, но мы держим умеренно тем, что вероятность сейва растёт с низкими множителями)
-    return state.lockedStake * Math.pow(state.mult, Math.max(1, state.streak));
+    potentialText.textContent = fmtRub(bank);
+    uiCashText.textContent = canCashout ? fmtRub(bank) : "—";
   }
 
-  function updateUI() {
-    // balance
-    if (el.balance) setText(el.balance, fmt(state.balance));
+  function setStatus(text, last = null) {
+    statusText.textContent = text;
+    if (last !== null) lastText.textContent = last;
+  }
 
-    // bet input
-    if (el.betInput) el.betInput.value = String(state.stake);
+  function updateHud() {
+    stepText.textContent = String(step);
+    streakText.textContent = String(streak);
+    xText.textContent = `x${selectedMulti.toFixed(2)}`;
+    hudXText.textContent = `x${selectedMulti.toFixed(2)}`;
+    calcPotential();
+  }
 
-    // series toggle
-    if (el.seriesToggle && "checked" in el.seriesToggle) el.seriesToggle.checked = state.series;
+  function showBadge(title, sub) {
+    badgeTitle.textContent = title;
+    badgeSub.textContent = sub;
+    badge.hidden = false;
+    badge.style.opacity = "0";
+    badge.style.transform = "translate(-50%,-50%) scale(0.96)";
+    requestAnimationFrame(() => {
+      badge.style.transition = "opacity 180ms ease, transform 180ms ease";
+      badge.style.opacity = "1";
+      badge.style.transform = "translate(-50%,-50%) scale(1)";
+    });
+    setTimeout(() => {
+      badge.style.transition = "opacity 220ms ease, transform 220ms ease";
+      badge.style.opacity = "0";
+      badge.style.transform = "translate(-50%,-50%) scale(0.98)";
+      setTimeout(() => (badge.hidden = true), 230);
+    }, 650);
+  }
 
-    // x & step
-    setText(el.step, String(state.step));
-    setText(el.xText, `x${state.mult.toFixed(2)}`);
-
-    // potential
-    const pot = state.inPlay ? getPotential() : 0;
-    setText(el.potential, state.inPlay ? fmt(pot) : "—");
-
-    // status
-    if (!state.inPlay) {
-      setText(el.status, "Ожидание");
-      setText(el.last, "—");
-    } else if (state.canShoot) {
-      setText(el.status, "Выбери точку удара");
-    } else if (state.animating) {
-      setText(el.status, "Удар...");
-    }
-
-    // buttons enable
-    if (el.betBtn) el.betBtn.disabled = state.inPlay; // ставка только до старта
-    if (el.cashoutBtn) el.cashoutBtn.disabled = !(state.inPlay && state.series && state.streak > 0 && !state.animating);
-    if (el.resetBtn) el.resetBtn.disabled = false;
-
-    // multiplier buttons active
-    if (el.multBtns?.length) {
-      el.multBtns.forEach(b => {
-        const m = Number(b.dataset.mult);
-        b.classList.toggle("active", Math.abs(m - state.mult) < 1e-9);
+  // ===== Build multiplier buttons =====
+  function renderMultis() {
+    multiList.innerHTML = "";
+    MULTIS.forEach((m) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "multi";
+      b.textContent = `${m.toFixed(2)}x`;
+      if (m === selectedMulti) b.classList.add("on");
+      b.addEventListener("click", () => {
+        if (shotLock) return;
+        sClick();
+        selectedMulti = m;
+        [...multiList.querySelectorAll(".multi")].forEach(x => x.classList.remove("on"));
+        b.classList.add("on");
+        updateHud();
       });
+      multiList.appendChild(b);
+    });
+    updateHud();
+  }
+
+  // ===== Build 15 target zones (5x3) =====
+  function buildTargets() {
+    targets.innerHTML = "";
+    for (let i = 0; i < 15; i++) {
+      const z = document.createElement("div");
+      z.className = "zone";
+      z.dataset.idx = String(i);
+      z.title = "Удар";
+      z.addEventListener("click", () => onZoneClick(i, z));
+      targets.appendChild(z);
     }
-
-    // zones active state
-    if (el.targets) {
-      $$(".zone", el.targets).forEach(z => {
-        z.classList.toggle("disabled", !state.canShoot || state.animating);
-      });
-    }
-
-    setSoundUI();
   }
 
-  // ---------- geometry ----------
-  function zoneCenter(zoneEl) {
-    const wrapRect = el.goalWrap.getBoundingClientRect();
-    const zr = zoneEl.getBoundingClientRect();
-    return {
-      x: (zr.left + zr.width / 2) - wrapRect.left,
-      y: (zr.top + zr.height / 2) - wrapRect.top,
-    };
+  function clearZoneSelection() {
+    targets.querySelectorAll(".zone.sel").forEach(el => el.classList.remove("sel"));
   }
 
-  function ballHome() {
-    // bottom center relative to goalwrap
-    const wrapRect = el.goalWrap.getBoundingClientRect();
-    const bRect = el.ball.getBoundingClientRect();
-    const x = wrapRect.width / 2 - bRect.width / 2;
-    const y = wrapRect.height * 0.82 - bRect.height / 2;
-    return { x, y };
-  }
-
-  function placeBallHome() {
-    if (!el.ball || !el.goalWrap) return;
-    const home = ballHome();
-    el.ball.style.transform = `translate(${home.x}px, ${home.y}px)`;
-  }
-
-  function keeperHome() {
-    if (!el.keeper || !el.goalWrap) return { x: 0, y: 0 };
-    // center keeper above
-    return { x: 0, y: 0 };
-  }
-
-  function placeKeeperHome() {
-    if (!el.keeper) return;
-    el.keeper.style.transform = `translate(-50%, 0px)`;
-  }
-
-  // ---------- flash (no "OK", never blocks clicks) ----------
-  let flashTimer = null;
-  function flash(title, sub, ok = true) {
-    if (!el.flash) return;
-    if (flashTimer) clearTimeout(flashTimer);
-
-    el.flash.style.display = "flex";
-    el.flash.style.pointerEvents = "none"; // IMPORTANT: never blocks
-    if (el.flashTitle) el.flashTitle.textContent = title;
-    if (el.flashSub) el.flashSub.textContent = sub || "";
-
-    flashTimer = setTimeout(() => {
-      el.flash.style.display = "none";
-    }, 900);
-  }
-
-  // ---------- game logic ----------
-  function setStake(v) {
-    if (state.inPlay) return; // lock while in round
-    state.stake = clamp(Math.round(v), 1, 1_000_000);
-    updateUI();
-  }
-
-  function setMult(m) {
-    if (state.inPlay) return;
-    state.mult = m;
-    localStorage.setItem(LS_MULT, String(m));
-    updateUI();
-  }
-
-  function setSeries(on) {
-    state.series = !!on;
-    localStorage.setItem(LS_SER, state.series ? "1" : "0");
-    updateUI();
+  // ===== Game flow =====
+  function resetPositionsInstant() {
+    // keeper center
+    keeper.style.transition = "none";
+    keeper.style.transform = "translateX(-50%) translateY(0px)";
+    // ball start
+    ball.style.transition = "none";
+    ball.style.left = "50%";
+    ball.style.bottom = "42px";
+    ball.style.top = "auto";
+    ball.style.transform = "translateX(-50%)";
+    // force reflow
+    keeper.offsetHeight; ball.offsetHeight;
+    keeper.style.transition = "transform 260ms cubic-bezier(.2,.9,.2,1)";
+    ball.style.transition =
+      "transform 480ms cubic-bezier(.2,.9,.2,1), left 480ms cubic-bezier(.2,.9,.2,1), top 480ms cubic-bezier(.2,.9,.2,1), bottom 480ms cubic-bezier(.2,.9,.2,1)";
   }
 
   function startRound() {
-    if (state.inPlay) return;
-    const s = state.stake;
-    if (!Number.isFinite(s) || s <= 0) return;
+    parseBetInput();
 
-    if (state.balance < s) {
-      setText(el.status, "Недостаточно баланса");
-      sfx.save();
+    if (bet <= 0) {
+      hintText.innerHTML = "Введите ставку больше 0.";
+      return;
+    }
+    if (balance < bet) {
+      hintText.innerHTML = "Недостаточно баланса для ставки.";
+      sSave();
       return;
     }
 
-    state.balance -= s;
-    localStorage.setItem(LS_BAL, String(state.balance));
+    // списываем 1 раз
+    setBalance(balance - bet);
 
-    state.inPlay = true;
-    state.canShoot = true;
-    state.lockedStake = s;
-    state.streak = 0;
-    state.step = 0;
-    state.chosenZone = null;
+    inRound = true;
+    shotLock = false;
+    step = 0;
+    streak = 0;
+    bank = bet;             // база
+    canCashout = false;
+    cashoutBtn.disabled = true;
 
-    setText(el.last, "—");
-    setText(el.status, "Выбери точку удара");
+    clearZoneSelection();
+    resetPositionsInstant();
 
-    placeBallHome();
-    placeKeeperHome();
-    updateUI();
-    sfx.click();
+    setStatus("Выбери точку удара", "—");
+    hintText.innerHTML = "Кликни по зоне (5×3) — мяч полетит туда.";
+    updateHud();
   }
 
   function endRoundLose() {
-    state.inPlay = false;
-    state.canShoot = false;
-    state.animating = false;
-    state.lockedStake = 0;
-    state.streak = 0;
-    state.step = 0;
-    state.chosenZone = null;
-    updateUI();
+    inRound = false;
+    shotLock = false;
+    canCashout = false;
+    cashoutBtn.disabled = true;
+
+    setStatus("Проигрыш (сэйв)", "Сэйв");
+    hintText.innerHTML = "Сэйв. Нажми <b>Ставка</b>, чтобы начать заново.";
+    bank = 0;
+    streak = 0;
+    step = 0;
+    updateHud();
   }
 
   function cashout() {
-    if (!(state.inPlay && state.series && state.streak > 0) || state.animating) return;
-    const win = getPotential();
-    state.balance += win;
-    localStorage.setItem(LS_BAL, String(state.balance));
-    setText(el.last, `Кэшаут ${fmt(win)}`);
-    setText(el.status, "Кэшаут");
-    flash("КЭШАУТ", `+${fmt(win)}`);
-    sfx.cashout();
-    // finish round
-    state.inPlay = false;
-    state.canShoot = false;
-    state.animating = false;
-    state.lockedStake = 0;
-    state.streak = 0;
-    state.step = 0;
-    state.chosenZone = null;
-    placeBallHome();
-    placeKeeperHome();
-    updateUI();
+    if (!inRound || !canCashout) return;
+    sGoal();
+    setBalance(balance + bank);
+    inRound = false;
+    canCashout = false;
+    cashoutBtn.disabled = true;
+
+    setStatus("Кэшаут", `+${fmtRub(bank)}`);
+    hintText.innerHTML = "Кэшаут успешен. Нажми <b>Ставка</b>, чтобы начать заново.";
+    bank = 0;
+    updateHud();
   }
 
-  function resetAll() {
-    // doesn't refund stake; it's just UI reset
-    state.inPlay = false;
-    state.canShoot = false;
-    state.animating = false;
-    state.lockedStake = 0;
-    state.streak = 0;
-    state.step = 0;
-    state.chosenZone = null;
-    setText(el.status, "Ожидание");
-    setText(el.last, "—");
-    placeBallHome();
-    placeKeeperHome();
-    updateUI();
-    sfx.click();
+  function keeperMoveToZone(zoneEl) {
+    const wrap = goalBox.getBoundingClientRect();
+    const zr = zoneEl.getBoundingClientRect();
+
+    // target point near top-mid of zone
+    const tx = (zr.left + zr.width / 2) - (wrap.left + wrap.width / 2);
+    const ty = (zr.top + zr.height / 2) - (wrap.top + 70); // keeper base y around 60px
+
+    keeper.style.transform = `translateX(calc(-50% + ${tx}px)) translateY(${ty}px)`;
   }
 
-  // decide keeper zone & outcome
-  function pickKeeperZone(mult) {
-    const pMatch = MATCH_PROB_BY_MULT[mult] ?? 0.18;
-    // If match, keeper guesses the same zone; else random different zone
-    if (Math.random() < pMatch && state.chosenZone != null) return state.chosenZone;
+  function ballFlyToZone(zoneEl) {
+    const wrap = goalBox.getBoundingClientRect();
+    const zr = zoneEl.getBoundingClientRect();
 
-    // choose random zone different
-    const r = Math.floor(Math.random() * 15);
-    if (state.chosenZone == null) return r;
-    return r === state.chosenZone ? (r + 1) % 15 : r;
+    const targetX = (zr.left + zr.width / 2) - wrap.left;
+    const targetY = (zr.top + zr.height / 2) - wrap.top;
+
+    // move ball by setting left/top (switch from bottom to top)
+    ball.style.left = `${targetX}px`;
+    ball.style.top = `${targetY}px`;
+    ball.style.bottom = "auto";
+    ball.style.transform = "translate(-50%,-50%) scale(0.92)";
   }
 
-  function moveKeeperToZone(zoneIndex) {
-    if (!el.keeper || !el.targets) return;
-    const zones = $$(".zone", el.targets);
-    const z = zones[zoneIndex];
-    if (!z) return;
-
-    // move keeper horizontally/vertically slightly based on zone position
-    const col = zoneIndex % 5;     // 0..4
-    const row = Math.floor(zoneIndex / 5); // 0..2
-
-    // tuning offsets (unique but close to stake)
-    const x = (col - 2) * 34;      // -68..+68
-    const y = (row - 1) * 18;      // -18..+18
-
-    el.keeper.animate(
-      [
-        { transform: `translate(-50%, 0px)` },
-        { transform: `translate(calc(-50% + ${x}px), ${y}px)` }
-      ],
-      { duration: 260, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" }
-    );
+  function ballResetBack() {
+    // back to start
+    ball.style.left = "50%";
+    ball.style.top = "auto";
+    ball.style.bottom = "42px";
+    ball.style.transform = "translateX(-50%) scale(1)";
+    // keeper back to center
+    keeper.style.transform = "translateX(-50%) translateY(0px)";
   }
 
-  function animateBallTo(zoneEl, onDone) {
-    if (!el.ball || !el.goalWrap) return;
-    const center = zoneCenter(zoneEl);
-    const wrapRect = el.goalWrap.getBoundingClientRect();
-    const bRect = el.ball.getBoundingClientRect();
+  function onZoneClick(idx, zoneEl) {
+    if (!inRound) {
+      hintText.innerHTML = "Сначала нажми <b>Ставка</b>.";
+      sSave();
+      return;
+    }
+    if (shotLock) return;
 
-    const home = ballHome();
-    const targetX = center.x - bRect.width / 2;
-    const targetY = center.y - bRect.height / 2;
+    clearZoneSelection();
+    zoneEl.classList.add("sel");
 
-    // arc control point (upwards a bit)
-    const midX = (home.x + targetX) / 2;
-    const midY = Math.min(home.y, targetY) - wrapRect.height * 0.18;
+    // lock during animation
+    shotLock = true;
+    step += 1;
+    updateHud();
 
-    // use WAAPI keyframes for smooth arc-like feel
-    const anim = el.ball.animate(
-      [
-        { transform: `translate(${home.x}px, ${home.y}px) scale(1)` },
-        { transform: `translate(${midX}px, ${midY}px) scale(0.92)` },
-        { transform: `translate(${targetX}px, ${targetY}px) scale(0.86)` }
-      ],
-      { duration: 520, easing: "cubic-bezier(.2,.85,.2,1)", fill: "forwards" }
-    );
+    // RNG keeper guess
+    const keeperGuess = Math.floor(Math.random() * 15);
+    const isSave = keeperGuess === idx;
 
-    anim.onfinish = () => onDone?.({ targetX, targetY, center });
-  }
+    // animate
+    sKick();
+    keeperMoveToZone(targets.children[keeperGuess]);
+    ballFlyToZone(zoneEl);
 
-  function animateBallBack() {
-    if (!el.ball) return;
-    const home = ballHome();
-    el.ball.animate(
-      [
-        { transform: el.ball.style.transform || `translate(${home.x}px, ${home.y}px)` },
-        { transform: `translate(${home.x}px, ${home.y}px) scale(1)` }
-      ],
-      { duration: 280, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" }
-    );
-  }
-
-  async function shoot(zoneIndex) {
-    if (!state.inPlay || !state.canShoot || state.animating) return;
-
-    const zones = $$(".zone", el.targets);
-    const zoneEl = zones[zoneIndex];
-    if (!zoneEl) return;
-
-    state.chosenZone = zoneIndex;
-    state.canShoot = false;
-    state.animating = true;
-    state.step += 1;
-
-    setText(el.status, "Удар...");
-    updateUI();
-    sfx.kick();
-
-    // keeper choice & move
-    const keeperZone = pickKeeperZone(state.mult);
-    moveKeeperToZone(keeperZone);
-
-    // ball anim
-    animateBallTo(zoneEl, () => {
-      const saved = keeperZone === zoneIndex;
-
-      if (saved) {
-        // SAVE
-        sfx.save();
-        setText(el.last, "Сейв");
-        setText(el.status, "Поражение");
-        flash("СЕЙВ", "Ставка сгорела");
-        // end round (loss)
+    setTimeout(() => {
+      if (isSave) {
+        sSave();
+        showBadge("СЭЙВ", "ставка сгорела");
         setTimeout(() => {
-          animateBallBack();
-          placeKeeperHome();
+          resetPositionsInstant();
           endRoundLose();
-        }, 450);
+        }, 220);
         return;
       }
 
       // GOAL
-      sfx.goal();
-      state.streak += 1;
-      setText(el.last, "Гол");
+      sGoal();
 
-      if (!state.series) {
-        // single-shot payout immediately
-        const win = state.lockedStake * state.mult;
-        state.balance += win;
-        localStorage.setItem(LS_BAL, String(state.balance));
-        flash("ГОЛ!", `+${fmt(win)}`);
-        setText(el.status, "Выигрыш");
-        state.inPlay = false;
-        state.lockedStake = 0;
-        state.streak = 0;
-        state.step = 0;
-        state.chosenZone = null;
-
-        setTimeout(() => {
-          animateBallBack();
-          placeKeeperHome();
-          state.animating = false;
-          state.canShoot = false;
-          updateUI();
-        }, 520);
-
-        return;
+      // bank logic
+      // series ON => compounding bank *= X
+      // series OFF => only first goal sets bank = bet*X, дальше банк не растёт
+      if (seriesToggle.checked) {
+        bank = Math.floor(bank * selectedMulti);
+        streak += 1;
+      } else {
+        if (streak === 0) bank = Math.floor(bet * selectedMulti);
+        streak = streak + 1; // чисто чтобы видно было голы подряд
       }
 
-      // series mode: continue until save or cashout
-      const pot = getPotential();
-      flash("ГОЛ!", `Потенциал: ${fmt(pot)}`);
-      setText(el.status, "Гол! Можно продолжать или кэшаут");
+      canCashout = true;
+      cashoutBtn.disabled = false;
 
+      setStatus("Гол! Можно бить дальше", "Гол");
+      hintText.innerHTML = "Гол! Мяч вернётся — можешь бить дальше или нажать <b>Кэшаут</b>.";
+      showBadge("ГОЛ!", `банк: ${fmtRub(bank)}`);
+      updateHud();
+
+      // reset for next shot
       setTimeout(() => {
-        animateBallBack();
-        // keep keeper where it moved briefly, then reset
-        setTimeout(() => placeKeeperHome(), 180);
-        state.animating = false;
-        state.canShoot = true; // allow next shot
-        updateUI();
+        ballResetBack();
+        clearZoneSelection();
+        // unlock after ball returns
+        setTimeout(() => {
+          shotLock = false;
+        }, 520);
       }, 520);
-    });
+    }, 520);
   }
 
-  // ---------- events ----------
-  function bindEvents() {
-    // sound
-    if (el.soundBtn) {
-      el.soundBtn.addEventListener("click", () => {
-        state.sound = !state.sound;
-        localStorage.setItem(LS_SND, state.sound ? "1" : "0");
-        sfx.click();
-        updateUI();
-      });
-    }
-
-    // stake +/- input
-    if (el.betMinus) el.betMinus.addEventListener("click", () => (sfx.click(), setStake(state.stake - 10)));
-    if (el.betPlus) el.betPlus.addEventListener("click", () => (sfx.click(), setStake(state.stake + 10)));
-
-    if (el.betInput) {
-      el.betInput.addEventListener("input", () => {
-        const v = Number(el.betInput.value);
-        if (Number.isFinite(v)) setStake(v);
-      });
-    }
-
-    // chips
-    el.chipBtns.forEach(btn => {
-      btn.addEventListener("click", () => {
-        sfx.click();
-        const v = Number(btn.dataset.chip);
-        if (Number.isFinite(v)) setStake(v);
-      });
-    });
-
-    // half/double
-    if (el.halfBtn) el.halfBtn.addEventListener("click", () => (sfx.click(), setStake(Math.floor(state.stake / 2))));
-    if (el.dblBtn) el.dblBtn.addEventListener("click", () => (sfx.click(), setStake(state.stake * 2)));
-
-    // multipliers
-    if (el.multBtns?.length) {
-      el.multBtns.forEach(btn => {
-        btn.addEventListener("click", () => {
-          sfx.click();
-          const m = Number(btn.dataset.mult);
-          if (Number.isFinite(m)) setMult(m);
-        });
-      });
-    } else {
-      // fallback: if no buttons exist, keep defaults
-      state.mult = state.mult || 1.76;
-    }
-
-    // series
-    if (el.seriesToggle) {
-      el.seriesToggle.addEventListener("change", () => {
-        sfx.click();
-        setSeries(!!el.seriesToggle.checked);
-      });
-    }
-
-    // bet / cashout / reset
-    if (el.betBtn) el.betBtn.addEventListener("click", startRound);
-    if (el.cashoutBtn) el.cashoutBtn.addEventListener("click", cashout);
-    if (el.resetBtn) el.resetBtn.addEventListener("click", resetAll);
-
-    // zones click
-    if (el.targets) {
-      el.targets.addEventListener("click", (e) => {
-        const z = e.target.closest(".zone");
-        if (!z) return;
-        const idx = Number(z.dataset.zone);
-        if (!Number.isFinite(idx)) return;
-        shoot(idx);
-      });
-    }
-
-    // resize to place ball correctly
-    window.addEventListener("resize", () => {
-      placeBallHome();
-      placeKeeperHome();
-    });
-
-    // first place
-    requestAnimationFrame(() => {
-      placeBallHome();
-      placeKeeperHome();
-    });
+  // ===== Bet controls =====
+  function setBetSafe(n) {
+    bet = clamp(Math.floor(n), 1, 1_000_000);
+    betInput.value = String(bet);
+    uiBetText.textContent = fmtRub(bet);
   }
 
-  // ---------- initial setup ----------
-  function ensureMultiplierButtons() {
-    // If multiplier buttons exist but have no dataset, try to set from text
-    if (!el.multBtns?.length) return;
-    el.multBtns.forEach(btn => {
-      if (!btn.dataset.mult) {
-        const t = (btn.textContent || "").trim().replace("x", "");
-        const m = Number(t);
-        if (Number.isFinite(m)) btn.dataset.mult = String(m);
-      }
+  // ===== Events =====
+  $("#soundToggle").addEventListener("click", () => {
+    setSound(!soundOn);
+    sClick();
+  });
+
+  $("#addBalanceBtn").addEventListener("click", () => {
+    setBalance(balance + 1000);
+    sClick();
+  });
+
+  $("#betMinus").addEventListener("click", () => { sClick(); setBetSafe(bet - 10); });
+  $("#betPlus").addEventListener("click", () => { sClick(); setBetSafe(bet + 10); });
+
+  betInput.addEventListener("input", () => {
+    const raw = String(betInput.value || "").replace(/[^\d]/g, "");
+    betInput.value = raw;
+    setBetSafe(Number(raw || 1));
+  });
+
+  document.querySelectorAll(".chip[data-chip]").forEach((b) => {
+    b.addEventListener("click", () => {
+      sClick();
+      const v = b.dataset.chip;
+      if (v === "max") setBetSafe(Math.max(1, balance)); // MAX = весь баланс
+      else setBetSafe(Number(v));
     });
-  }
+  });
 
-  ensureMultiplierButtons();
+  $("#betHalf").addEventListener("click", () => { sClick(); setBetSafe(Math.max(1, Math.floor(bet / 2))); });
+  $("#betDouble").addEventListener("click", () => { sClick(); setBetSafe(Math.min(1_000_000, bet * 2)); });
 
-  // If there is a flash element, hide initially and make sure it never blocks clicks
-  if (el.flash) {
-    el.flash.style.display = "none";
-    el.flash.style.pointerEvents = "none";
-  }
+  stakeBtn.addEventListener("click", () => {
+    sClick();
+    startRound();
+  });
 
-  bindEvents();
-  updateUI();
+  cashoutBtn.addEventListener("click", () => {
+    cashout();
+  });
 
+  seriesToggle.addEventListener("change", () => {
+    sClick();
+  });
+
+  // ===== Init =====
+  setSound(soundOn);
+  setBalance(balance);
+  setBetSafe(bet);
+  renderMultis();
+  buildTargets();
+  resetPositionsInstant();
 })();
