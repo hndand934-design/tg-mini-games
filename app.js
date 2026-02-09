@@ -1,484 +1,542 @@
 (() => {
-  // ---------- RNG ----------
-  function rand() {
-    const a = new Uint32Array(1);
-    crypto.getRandomValues(a);
-    return a[0] / 2**32;
+  const $ = (s) => document.querySelector(s);
+
+  // ---------- STORAGE ----------
+  const LS_BAL = "penalty_balance_v1";
+  const LS_SOUND = "penalty_sound_v1";
+
+  // ---------- ELEMENTS ----------
+  const balEl = $("#bal");
+  const addBtn = $("#addBtn");
+  const soundBtn = $("#soundBtn");
+  const soundLed = $("#soundLed");
+  const soundText = $("#soundText");
+
+  const betInput = $("#betInput");
+  const betMinus = $("#betMinus");
+  const betPlus = $("#betPlus");
+  const chipBtns = document.querySelectorAll(".chip[data-chip]");
+  const halfBtn = $("#halfBtn");
+  const x2Btn = $("#x2Btn");
+
+  const multGrid = $("#multGrid");
+  const curXEl = $("#curX");
+  const xTopEl = $("#xTop");
+
+  const seriesToggle = $("#seriesToggle");
+  const streakEl = $("#streak");
+
+  const betBtn = $("#betBtn");
+  const cashBtn = $("#cashBtn");
+
+  const statusText = $("#statusText");
+  const lastText = $("#lastText");
+  const potentialEl = $("#potential");
+
+  const betView = $("#betView");
+  const cashView = $("#cashView");
+
+  const zonesEl = $("#zones");
+  const keeperEl = $("#keeper");
+  const ballEl = $("#ball");
+  const toastEl = $("#toast");
+
+  const stepEl = $("#step");
+
+  // ---------- AUDIO (WebAudio) ----------
+  let audioCtx = null;
+  let soundOn = true;
+
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  const rint = (n) => Math.floor(rand() * n);
 
-  // ---------- DOM ----------
-  const targetsEl = document.getElementById("targets");
-  const sceneEl   = document.getElementById("scene");
-  const keeperEl  = document.getElementById("keeper");
-  const glovesEl  = document.getElementById("gloves");
-  const ballEl    = document.getElementById("ball");
-  const fxEl      = document.getElementById("fx");
-  const bannerEl  = document.getElementById("banner");
-  const netEl     = document.getElementById("net");
+  function beep(type = "sine", freq = 440, dur = 0.08, gain = 0.06) {
+    if (!soundOn) return;
+    ensureAudio();
+    const t0 = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = 0;
 
-  const overlay = document.getElementById("overlay");
-  const overlayTitle = document.getElementById("overlayTitle");
-  const overlaySub = document.getElementById("overlaySub");
-  const overlayOk = document.getElementById("overlayOk");
+    o.connect(g);
+    g.connect(audioCtx.destination);
 
-  const soundBtn = document.getElementById("soundBtn");
-  const soundDot = document.getElementById("soundDot");
-  const soundText = document.getElementById("soundText");
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
-  const betMinus = document.getElementById("betMinus");
-  const betPlus  = document.getElementById("betPlus");
-  const betHalf  = document.getElementById("betHalf");
-  const betDouble= document.getElementById("betDouble");
-  const betMax   = document.getElementById("betMax");
-  const quickBtns= [...document.querySelectorAll(".pillBtn[data-add]")];
-
-  const multiRow = document.getElementById("multiRow");
-  const multiBtns= [...multiRow.querySelectorAll(".multiBtn")];
-
-  const seriesToggle = document.getElementById("seriesToggle");
-  const streakText = document.getElementById("streakText");
-
-  const startBtn = document.getElementById("startBtn");
-  const resetBtn = document.getElementById("resetBtn");
-  const addMoneyBtn = document.getElementById("addMoneyBtn");
-
-  const betText = document.getElementById("betText");
-  const statusText = document.getElementById("statusText");
-  const lastText = document.getElementById("lastText");
-  const xText = document.getElementById("xText");
-  const xTextTop = document.getElementById("xTextTop");
-  const stepText = document.getElementById("stepText");
-
-  const balTop = document.getElementById("balTop");
-  const balSide = document.getElementById("balSide");
-
-  const stateBet = document.getElementById("stateBet");
-  const stateStreak = document.getElementById("stateStreak");
-  const hintBox = document.getElementById("hintBox");
-
-  // ---------- Storage ----------
-  const LS_BAL = "mini_balance_penalty_v6";
-
-  // ---------- State ----------
-  const S = {
-    odds: 1.76,
-    bet: 100,
-    balance: 1000,
-    sound: true,
-
-    inRound: false,     // ставка сделана, ждём удар
-    animLock: false,    // идёт анимация
-    picked: null,
-    keeperPick: null,
-
-    step: 0,
-    streak: 0,
-  };
-
-  // ---------- Audio ----------
-  let ac = null;
-  function ensureAC(){ ac ||= new (window.AudioContext || window.webkitAudioContext)(); }
-  function tone({freq=440, dur=0.08, type="sine", gain=0.03, slide=0}){
-    if (!S.sound) return;
-    try{
-      ensureAC();
-      const t0 = ac.currentTime;
-      const o = ac.createOscillator();
-      const g = ac.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(freq, t0);
-      if (slide) o.frequency.linearRampToValueAtTime(freq + slide, t0 + dur);
-      g.gain.setValueAtTime(gain, t0);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g); g.connect(ac.destination);
-      o.start(t0); o.stop(t0 + dur);
-    }catch(e){}
+    o.start(t0);
+    o.stop(t0 + dur + 0.02);
   }
-  const clickSfx = () => tone({freq:520, dur:0.05, type:"triangle", gain:0.02});
-  const kickSfx  = () => { tone({freq:180, dur:0.05, type:"square", gain:0.02}); tone({freq:430, dur:0.08, type:"sine", gain:0.02, slide:-140}); };
-  const goalSfx  = () => { tone({freq:740, dur:0.11, type:"sine", gain:0.03}); setTimeout(()=>tone({freq:980, dur:0.12, type:"sine", gain:0.02}), 70); };
-  const saveSfx  = () => { tone({freq:150, dur:0.11, type:"square", gain:0.03}); setTimeout(()=>tone({freq:240, dur:0.09, type:"square", gain:0.02}), 80); };
 
-  // ---------- Helpers ----------
-  const fmtRub = (n) => `${Math.floor(n)} ₽`;
+  function sfxClick(){ beep("triangle", 520, 0.05, 0.05); }
+  function sfxKick(){ beep("sine", 160, 0.09, 0.08); setTimeout(()=>beep("sine", 120, 0.07, 0.05), 40); }
+  function sfxGoal(){ beep("square", 740, 0.07, 0.06); setTimeout(()=>beep("square", 980, 0.08, 0.05), 80); }
+  function sfxSave(){ beep("sawtooth", 210, 0.10, 0.06); setTimeout(()=>beep("sawtooth", 140, 0.10, 0.05), 90); }
+  function sfxCash(){ beep("triangle", 600, 0.07, 0.06); setTimeout(()=>beep("triangle", 820, 0.07, 0.05), 90); }
 
-  function render() {
-    betText.textContent = fmtRub(S.bet);
-    xText.textContent = `x${S.odds.toFixed(2)}`;
-    xTextTop.textContent = `x${S.odds.toFixed(2)}`;
-    stepText.textContent = String(S.step);
+  // ---------- GAME STATE ----------
+  const MULTS = [1.76, 3.30, 7.08, 15.17, 45.52];
 
-    balTop.textContent = fmtRub(S.balance);
-    balSide.textContent = fmtRub(S.balance);
+  let balance = 1000;
+  let bet = 100;
+  let selectedMult = MULTS[0];
 
-    streakText.textContent = String(S.streak);
-    stateBet.textContent = fmtRub(S.bet);
-    stateStreak.textContent = String(S.streak);
+  // round:
+  // idle -> betPlaced -> resolved (goal/save) (cashout allowed only after goal)
+  let phase = "idle";
+  let step = 0;
+  let streak = 0;
 
-    startBtn.disabled = S.animLock; // важно: кнопку “Ставка” не лочим навсегда
-  }
+  let awaitingShot = false;
+  let animLock = false;
+
+  // keeper rng: picks one of 15 zones, equals hit => save
+  // zones index: 0..14 (row-major)
+  let keeperPick = 0;
+
+  // ---------- HELPERS ----------
+  const clampInt = (n, min, max) => Math.max(min, Math.min(max, n|0));
+  const fmt = (n) => String(Math.round(n));
 
   function setBalance(n){
-    S.balance = Math.max(0, Math.floor(n));
-    localStorage.setItem(LS_BAL, String(S.balance));
-    render();
+    balance = Math.max(0, Math.floor(n));
+    balEl.textContent = fmt(balance);
+    localStorage.setItem(LS_BAL, String(balance));
   }
 
-  function setStatus(t){ statusText.textContent = t; }
-  function setLast(t){ lastText.textContent = t; }
-
-  function lockInputs(lock){
-    S.animLock = lock;
-
-    // ставки/настройки нельзя менять во время активного раунда или анимации
-    const blocked = lock || S.inRound;
-
-    betMinus.disabled = blocked;
-    betPlus.disabled = blocked;
-    betHalf.disabled = blocked;
-    betDouble.disabled = blocked;
-    betMax.disabled = blocked;
-    quickBtns.forEach(b => b.disabled = blocked);
-    multiBtns.forEach(b => b.disabled = blocked);
+  function setSound(on){
+    soundOn = !!on;
+    soundLed.style.background = soundOn ? "var(--green)" : "rgba(255,255,255,.25)";
+    soundLed.style.boxShadow = soundOn ? "0 0 10px rgba(31,224,138,.45)" : "none";
+    soundText.textContent = `Звук: ${soundOn ? "on" : "off"}`;
+    localStorage.setItem(LS_SOUND, soundOn ? "1" : "0");
   }
 
-  function clearTargets(){
-    [...targetsEl.querySelectorAll(".t")].forEach(t=>{
-      t.classList.remove("sel","kp","good","bad","lock");
+  function setStatus(s){ statusText.textContent = s; }
+  function setLast(s){ lastText.textContent = s; }
+
+  function setPotential(){
+    const pot = (phase === "betPlaced" || phase === "resolvedGoal") ? Math.floor(bet * selectedMult) : 0;
+    potentialEl.textContent = fmt(pot);
+    cashView.textContent = (phase === "resolvedGoal") ? `${fmt(pot)} ₽` : "—";
+  }
+
+  function showToast(title, subtitle){
+    toastEl.innerHTML = `<b>${title}</b>${subtitle ? `<span class="small">${subtitle}</span>` : ""}`;
+    toastEl.classList.add("show");
+    setTimeout(()=>toastEl.classList.remove("show"), 1100);
+  }
+
+  function setPhase(p){
+    phase = p;
+
+    if (phase === "idle"){
+      awaitingShot = false;
+      betBtn.disabled = false;
+      cashBtn.disabled = true;
+      setStatus("Ожидание");
+      setLast("—");
+      step = 0;
+      stepEl.textContent = String(step);
+    }
+
+    if (phase === "betPlaced"){
+      awaitingShot = true;
+      betBtn.disabled = true;
+      cashBtn.disabled = true;
+      setStatus("Выбери точку удара");
+      setLast("Ставка принята");
+    }
+
+    if (phase === "resolvedGoal"){
+      awaitingShot = false;
+      betBtn.disabled = true;
+      cashBtn.disabled = false;
+      setStatus("Гол! Можно кэшаут");
+      setLast("Гол");
+    }
+
+    if (phase === "resolvedSave"){
+      awaitingShot = false;
+      betBtn.disabled = false;
+      cashBtn.disabled = true;
+      setStatus("Сейв — попытка проиграна");
+      setLast("Сейв");
+    }
+
+    setPotential();
+    betView.textContent = fmt(bet);
+    curXEl.textContent = `x${selectedMult.toFixed(2)}`;
+    xTopEl.textContent = `x${selectedMult.toFixed(2)}`;
+  }
+
+  function enableZones(on){
+    document.querySelectorAll(".zone").forEach(z=>{
+      z.classList.toggle("disabled", !on);
     });
   }
 
-  function resetVisual(){
-    clearTargets();
-    fxEl.innerHTML = "";
-    hideBanner();
-    netEl.classList.remove("shake");
-
-    S.picked = null;
-    S.keeperPick = null;
-
-    ballEl.style.opacity = "1";
-    ballEl.style.transform = "translateX(-50%) translate(0px,0px) scale(1)";
-    keeperEl.style.transform = "translateX(-50%) translate(0px,0px)";
-    glovesEl.style.transform = "scale(1)";
+  function resetZoneMarks(){
+    document.querySelectorAll(".zone").forEach(z=>{
+      z.classList.remove("hitGoal", "hitSave");
+    });
   }
 
-  // banner (не блокирует клики)
-  function showBanner(text, good){
-    bannerEl.textContent = text;
-    bannerEl.classList.remove("good","bad","show");
-    bannerEl.classList.add(good ? "good" : "bad");
-    requestAnimationFrame(()=> bannerEl.classList.add("show"));
-    setTimeout(()=> hideBanner(), 900);
-  }
-  function hideBanner(){
-    bannerEl.classList.remove("show","good","bad");
-    bannerEl.textContent = "";
+  // Convert zone center to absolute px within .goal
+  function getZoneCenter(zoneEl){
+    const goalRect = zoneEl.closest(".goal").getBoundingClientRect();
+    const r = zoneEl.getBoundingClientRect();
+    const x = (r.left - goalRect.left) + r.width/2;
+    const y = (r.top - goalRect.top) + r.height/2;
+    return {x,y};
   }
 
-  // overlay
-  function openOverlay(title, sub){
-    overlayTitle.textContent = title;
-    overlaySub.textContent = sub;
-    overlay.hidden = false;
-  }
-  function closeOverlay(){
-    overlay.hidden = true;
-  }
-  overlayOk.addEventListener("click", ()=>{ clickSfx(); closeOverlay(); });
-  overlay.addEventListener("click", (e)=>{ if(e.target === overlay){ clickSfx(); closeOverlay(); } });
-  window.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && !overlay.hidden){ clickSfx(); closeOverlay(); } });
-
-  function centerOf(el){
-    const r = el.getBoundingClientRect();
-    return { x: r.left + r.width/2, y: r.top + r.height/2 };
-  }
-
-  function spawnSparks(x, y, good=true){
-    const count = good ? 10 : 7;
-    for(let i=0;i<count;i++){
-      const s = document.createElement("div");
-      s.className = "spark";
-      const ang = rand()*Math.PI*2;
-      const dist = (good ? 60 : 42) + rand()*24;
-      const dx = Math.cos(ang)*dist;
-      const dy = Math.sin(ang)*dist;
-
-      s.style.left = `${x}px`;
-      s.style.top = `${y}px`;
-      s.style.background = good ? "rgba(31,226,141,.95)" : "rgba(255,59,59,.95)";
-      s.style.boxShadow = good ? "0 0 18px rgba(31,226,141,.55)" : "0 0 18px rgba(255,59,59,.45)";
-      s.style.animation = "pop 520ms ease forwards";
-
-      s.animate([
-        { transform: "translate(0px,0px) scale(.6)", opacity: 0.2 },
-        { transform: `translate(${dx*0.6}px, ${dy*0.6}px) scale(1.05)`, opacity: 1 },
-        { transform: `translate(${dx}px, ${dy}px) scale(.9)`, opacity: 0 }
-      ], { duration: 520, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" });
-
-      fxEl.appendChild(s);
-      setTimeout(()=>s.remove(), 700);
-    }
-  }
-
-  // ---------- Build 15 targets ----------
-  function buildTargets(){
-    targetsEl.innerHTML = "";
-    for(let i=0;i<15;i++){
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "t";
-      b.dataset.i = String(i);
-      b.addEventListener("click", () => onTarget(i));
-      targetsEl.appendChild(b);
-    }
-  }
-
-  // ---------- Game flow ----------
-  function startRound(){
-    if (S.animLock) return;
-
-    // не даём зависнуть “итогу”
-    if (!overlay.hidden) closeOverlay();
-
-    clickSfx();
-
-    if (S.balance < S.bet){
-      setStatus("Недостаточно баланса");
-      hintBox.textContent = "Недостаточно баланса для ставки.";
-      saveSfx();
-      openOverlay("Недостаточно средств", `Нужно ${fmtRub(S.bet)}`);
-      return;
-    }
-
-    // списали 1 раз
-    setBalance(S.balance - S.bet);
-
-    S.inRound = true;
-    S.step += 1;
-
-    resetVisual();
-    lockInputs(false);
-
-    setStatus("Выбери точку удара");
-    setLast("—");
-    hintBox.textContent = "Кликни по зоне (5×3) — мяч сразу полетит туда.";
-
-    render();
-  }
-
-  // выбор вратаря: немного “умнее”, но без читов
-  function pickKeeper(){
-    // часть времени — рандом
-    if (rand() < 0.70) return rint(15);
-
-    // иногда “рядом”, чтобы выглядело живее
-    const p = S.picked;
-    const row = Math.floor(p / 5);
-    const col = p % 5;
-    const nr = Math.max(0, Math.min(2, row + (rint(3)-1)));
-    const nc = Math.max(0, Math.min(4, col + (rint(3)-1)));
-    return nr*5 + nc;
-  }
-
-  function onTarget(i){
-    if (!S.inRound || S.animLock) return;
-
-    // 1:1 — клик = сразу удар
-    S.picked = i;
-    shoot();
-  }
-
-  function shoot(){
-    if (!S.inRound || S.animLock || S.picked === null) return;
-
-    S.keeperPick = pickKeeper();
-
-    // lock UI
-    S.animLock = true;
-    const targets = [...targetsEl.querySelectorAll(".t")];
-    targets.forEach(t => t.classList.add("lock"));
-
-    // mark picked + keeper
-    clearTargets();
-    const pickedBtn = targetsEl.querySelector(`.t[data-i="${S.picked}"]`);
-    const keeperBtn = targetsEl.querySelector(`.t[data-i="${S.keeperPick}"]`);
-    pickedBtn?.classList.add("sel");
-    keeperBtn?.classList.add("kp");
-
-    setStatus("Удар...");
-    hintBox.textContent = "Удар!";
-
-    kickSfx();
-
-    // coords
-    const frame = sceneEl.getBoundingClientRect();
-    const from = centerOf(ballEl);
-    const to = centerOf(pickedBtn);
-
-    const keeperFrom = centerOf(keeperEl);
-    const keeperTo = centerOf(keeperBtn);
-
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-
-    // траектория дугой: выше если верхний ряд
-    const row = Math.floor(S.picked / 5);
-    const arcUp = row === 0 ? -200 : row === 1 ? -160 : -120;
-
-    // keeper jumps
-    const kdx = keeperTo.x - keeperFrom.x;
-    const kdy = keeperTo.y - keeperFrom.y;
-    keeperEl.style.transform = `translateX(-50%) translate(${kdx}px, ${kdy}px)`;
-    glovesEl.style.transform = "scale(1.10)";
-
-    // ball flight
-    const ballAnim = ballEl.animate([
-      { transform: "translateX(-50%) translate(0px,0px) scale(1)" },
-      { transform: `translateX(-50%) translate(${dx*0.55}px, ${dy*0.55 + arcUp}px) scale(0.92)` },
-      { transform: `translateX(-50%) translate(${dx}px, ${dy}px) scale(0.86)` }
-    ], { duration: 640, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" });
-
-    ballAnim.onfinish = () => {
-      const isSave = (S.keeperPick === S.picked);
-
-      const localX = (to.x - frame.left);
-      const localY = (to.y - frame.top);
-
-      if (isSave){
-        // SAVE
-        pickedBtn?.classList.add("bad");
-        saveSfx();
-        setStatus("Сейв");
-        setLast("Сейв");
-        hintBox.textContent = "Сейв! Ставка проиграна.";
-        showBanner("СЕЙВ", false);
-
-        spawnSparks(localX, localY, false);
-
-        ballEl.animate([
-          { opacity: 1, transform: `translateX(-50%) translate(${dx}px, ${dy}px) scale(0.86)` },
-          { opacity: 1, transform: `translateX(-50%) translate(${dx*0.55}px, ${dy + 150}px) scale(0.80)` },
-          { opacity: 0.0, transform: `translateX(-50%) translate(${dx*0.35}px, ${dy + 230}px) scale(0.72)` }
-        ], { duration: 420, easing:"cubic-bezier(.2,.9,.2,1)", fill:"forwards" });
-
-        if (seriesToggle.checked) S.streak = 0;
-
-        setTimeout(()=> openOverlay("СЕЙВ!", "Ставка проиграна"), 160);
-
-      } else {
-        // GOAL
-        pickedBtn?.classList.add("good");
-        goalSfx();
-        setStatus("Гол");
-        setLast("Гол");
-        hintBox.textContent = "ГОООЛ!";
-        showBanner("ГОЛ", true);
-
-        spawnSparks(localX, localY, true);
-
-        netEl.classList.add("shake");
-        setTimeout(()=> netEl.classList.remove("shake"), 420);
-
-        const win = Math.floor(S.bet * S.odds);
-        setBalance(S.balance + win);
-
-        ballEl.animate([
-          { opacity: 1, transform: `translateX(-50%) translate(${dx}px, ${dy}px) scale(0.86)` },
-          { opacity: 1, transform: `translateX(-50%) translate(${dx}px, ${dy + 75}px) scale(0.76)` },
-          { opacity: 0.0, transform: `translateX(-50%) translate(${dx}px, ${dy + 135}px) scale(0.68)` }
-        ], { duration: 420, easing:"ease-out", fill:"forwards" });
-
-        if (seriesToggle.checked) S.streak += 1;
-        else S.streak = 0;
-
-        setTimeout(()=> openOverlay("ГОЛ!", `+${fmtRub(win)}`), 160);
-      }
-
-      // end
-      setTimeout(() => {
-        S.inRound = false;
-        S.animLock = false;
-        glovesEl.style.transform = "scale(1)";
-        targets.forEach(t => t.classList.remove("lock"));
-        setStatus("Ожидание");
-        hintBox.textContent = "Нажми “Ставка”, чтобы начать ещё раз.";
-        render();
-      }, 520);
+  function setKeeperTo(x, y){
+    // keeper element is positioned with left:50%, top:170px; we move via translate
+    // Compute delta relative to its "home" center point
+    const goal = keeperEl.closest(".goal");
+    const goalRect = goal.getBoundingClientRect();
+    const keeperRect = keeperEl.getBoundingClientRect();
+    const home = {
+      x: (goalRect.width/2),
+      y: (170 + keeperRect.height/2)
     };
-
-    render();
+    const dx = x - home.x;
+    const dy = y - home.y;
+    keeperEl.style.transform = `translate(calc(-50% + ${dx}px), ${dy}px)`;
   }
 
-  function resetAll(){
-    clickSfx();
-    closeOverlay();
-    S.inRound = false;
-    S.animLock = false;
-    S.step = 0;
-    S.streak = 0;
-    setStatus("Ожидание");
-    setLast("—");
-    hintBox.textContent = "Нажми “Ставка”, чтобы начать.";
-    resetVisual();
-    lockInputs(false);
-    render();
+  function resetKeeper(){
+    keeperEl.style.transform = `translateX(-50%)`;
   }
 
-  // ---------- Events ----------
-  startBtn.addEventListener("click", startRound);
-  resetBtn.addEventListener("click", resetAll);
-  addMoneyBtn.addEventListener("click", ()=>{ clickSfx(); setBalance(S.balance + 1000); });
+  function setBallAt(x, y){
+    ballEl.style.left = `${x}px`;
+    ballEl.style.top = `${y}px`;
+  }
 
-  betMinus.addEventListener("click", ()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.max(1, S.bet-10); render(); });
-  betPlus.addEventListener("click",  ()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.min(1_000_000, S.bet+10); render(); });
-  betHalf.addEventListener("click",  ()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.max(1, Math.floor(S.bet/2)); render(); });
-  betDouble.addEventListener("click",()=>{ if(S.inRound||S.animLock) return; clickSfx(); S.bet = Math.min(1_000_000, S.bet*2); render(); });
+  function getBallPos(){
+    const goal = ballEl.closest(".goal").getBoundingClientRect();
+    const r = ballEl.getBoundingClientRect();
+    return {
+      x: (r.left - goal.left) + r.width/2,
+      y: (r.top - goal.top) + r.height/2
+    };
+  }
 
-  quickBtns.forEach(b=>{
-    b.addEventListener("click", ()=>{
-      if(S.inRound||S.animLock) return;
-      clickSfx();
-      S.bet = Math.min(1_000_000, S.bet + Number(b.dataset.add));
-      render();
+  function animateBallTo(target, ms=520){
+    return new Promise((resolve)=>{
+      const start = getBallPos();
+      const control = {
+        x: (start.x + target.x)/2,
+        y: Math.min(start.y, target.y) - 110
+      };
+
+      const t0 = performance.now();
+
+      function stepAnim(t){
+        const p = Math.min(1, (t - t0)/ms);
+        const ease = 1 - Math.pow(1 - p, 3);
+
+        // Quadratic bezier
+        const x = (1-ease)*(1-ease)*start.x + 2*(1-ease)*ease*control.x + ease*ease*target.x;
+        const y = (1-ease)*(1-ease)*start.y + 2*(1-ease)*ease*control.y + ease*ease*target.y;
+
+        setBallAt(x, y);
+
+        // scale for depth
+        const s = 1 - 0.22*ease;
+        ballEl.style.transform = `translate(-50%, -50%) scale(${s})`;
+
+        if (p < 1) requestAnimationFrame(stepAnim);
+        else resolve();
+      }
+      requestAnimationFrame(stepAnim);
     });
-  });
-  betMax.addEventListener("click", ()=>{
-    if(S.inRound||S.animLock) return;
-    clickSfx();
-    S.bet = Math.max(1, S.balance); // MAX = весь баланс
-    render();
+  }
+
+  function resetBallHome(){
+    // home position is center bottom
+    ballEl.style.transform = "translate(-50%, -50%) scale(1)";
+    ballEl.style.left = "50%";
+    ballEl.style.top = "390px";
+  }
+
+  function pickKeeper(){
+    keeperPick = Math.floor(Math.random()*15);
+  }
+
+  // ---------- UI WIRING ----------
+  function syncBetFromInput(){
+    bet = clampInt(parseInt(betInput.value || "1", 10), 1, 9999999);
+    betInput.value = String(bet);
+    betView.textContent = fmt(bet);
+    setPotential();
+  }
+
+  betMinus.addEventListener("click", ()=>{
+    sfxClick();
+    syncBetFromInput();
+    bet = Math.max(1, bet - 10);
+    betInput.value = String(bet);
+    syncBetFromInput();
   });
 
-  multiBtns.forEach(btn=>{
+  betPlus.addEventListener("click", ()=>{
+    sfxClick();
+    syncBetFromInput();
+    bet = bet + 10;
+    betInput.value = String(bet);
+    syncBetFromInput();
+  });
+
+  betInput.addEventListener("input", ()=>{
+    syncBetFromInput();
+  });
+
+  chipBtns.forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      if(S.inRound||S.animLock) return;
-      clickSfx();
-      multiBtns.forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active");
-      S.odds = Number(btn.dataset.m);
-      render();
+      sfxClick();
+      const v = btn.dataset.chip;
+      syncBetFromInput();
+      if (v === "max"){
+        bet = Math.max(1, balance);
+      } else {
+        bet = clampInt(parseInt(v,10), 1, 9999999);
+      }
+      betInput.value = String(bet);
+      syncBetFromInput();
     });
+  });
+
+  halfBtn.addEventListener("click", ()=>{
+    sfxClick();
+    syncBetFromInput();
+    bet = Math.max(1, Math.floor(bet/2));
+    betInput.value = String(bet);
+    syncBetFromInput();
+  });
+
+  x2Btn.addEventListener("click", ()=>{
+    sfxClick();
+    syncBetFromInput();
+    bet = Math.max(1, bet*2);
+    betInput.value = String(bet);
+    syncBetFromInput();
+  });
+
+  multGrid.addEventListener("click", (e)=>{
+    const b = e.target.closest(".mBtn");
+    if (!b) return;
+    sfxClick();
+    document.querySelectorAll(".mBtn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    selectedMult = parseFloat(b.dataset.mult);
+    curXEl.textContent = `x${selectedMult.toFixed(2)}`;
+    xTopEl.textContent = `x${selectedMult.toFixed(2)}`;
+    setPotential();
+  });
+
+  seriesToggle.addEventListener("change", ()=>{
+    sfxClick();
+    if (!seriesToggle.checked){
+      streak = 0;
+      streakEl.textContent = "0";
+    }
+  });
+
+  addBtn.addEventListener("click", ()=>{
+    sfxClick();
+    setBalance(balance + 1000);
+    showToast("+1000 ₽", "Пополнение баланса");
   });
 
   soundBtn.addEventListener("click", ()=>{
-    S.sound = !S.sound;
-    soundText.textContent = `Звук: ${S.sound ? "on" : "off"}`;
-    soundDot.style.background = S.sound ? "var(--good)" : "var(--bad)";
-    clickSfx();
+    setSound(!soundOn);
+    sfxClick();
   });
 
-  // ---------- Init ----------
-  const saved = Number(localStorage.getItem(LS_BAL) || "1000");
-  S.balance = Number.isFinite(saved) && saved >= 0 ? Math.floor(saved) : 1000;
+  // ---------- GAME ACTIONS ----------
+  betBtn.addEventListener("click", ()=>{
+    sfxClick();
+    syncBetFromInput();
 
-  buildTargets();
-  setStatus("Ожидание");
-  setLast("—");
-  hintBox.textContent = "Нажми “Ставка”, чтобы начать.";
-  overlay.hidden = true;
-  lockInputs(false);
-  render();
-  resetVisual();
+    if (animLock) return;
+    if (bet <= 0) return;
+
+    if (balance < bet){
+      showToast("Недостаточно средств", "Уменьши ставку или пополни баланс");
+      setStatus("Недостаточно баланса");
+      return;
+    }
+
+    // start round
+    setBalance(balance - bet);
+    resetZoneMarks();
+    resetKeeper();
+    resetBallHome();
+    pickKeeper();
+
+    step += 1;
+    stepEl.textContent = String(step);
+
+    setPhase("betPlaced");
+    enableZones(true);
+    showToast("Ставка принята", "Выбери зону удара (5×3)");
+  });
+
+  cashBtn.addEventListener("click", ()=>{
+    if (animLock) return;
+    if (phase !== "resolvedGoal") return;
+
+    const win = Math.floor(bet * selectedMult);
+    setBalance(balance + win);
+    sfxCash();
+    showToast("КЭШАУТ", `+${fmt(win)} ₽`);
+
+    // reset attempt
+    setLast(`Кэшаут +${fmt(win)} ₽`);
+    setStatus("Ожидание");
+    betBtn.disabled = false;
+    cashBtn.disabled = true;
+
+    enableZones(false);
+    resetKeeper();
+    resetBallHome();
+    resetZoneMarks();
+
+    // streak: cashout keeps streak as goal already counted (optional)
+    setPhase("idle");
+  });
+
+  // ---------- BUILD ZONES ----------
+  function buildZones(){
+    zonesEl.innerHTML = "";
+    for (let i=0;i<15;i++){
+      const z = document.createElement("div");
+      z.className = "zone disabled";
+      z.dataset.idx = String(i);
+      zonesEl.appendChild(z);
+    }
+
+    zonesEl.addEventListener("click", async (e)=>{
+      const z = e.target.closest(".zone");
+      if (!z) return;
+      if (!awaitingShot) return;
+      if (animLock) return;
+
+      const idx = parseInt(z.dataset.idx, 10);
+      await handleShot(idx, z);
+    });
+  }
+
+  async function handleShot(idx, zoneEl){
+    animLock = true;
+    awaitingShot = false;
+    enableZones(false);
+
+    sfxKick();
+
+    // compute target
+    const target = getZoneCenter(zoneEl);
+
+    // keeper decides if save
+    const isSave = (idx === keeperPick);
+
+    if (isSave){
+      // move keeper to that zone slightly before ball arrives
+      setTimeout(()=> setKeeperTo(target.x, target.y), 70);
+    } else {
+      // keeper goes somewhere else (near miss)
+      const missIdx = (keeperPick + (Math.random() < 0.5 ? 1 : -1) + 15) % 15;
+      const missZone = zonesEl.querySelector(`.zone[data-idx="${missIdx}"]`);
+      if (missZone){
+        const missTarget = getZoneCenter(missZone);
+        setTimeout(()=> setKeeperTo(missTarget.x, missTarget.y), 70);
+      }
+    }
+
+    // animate ball
+    await animateBallTo(target, 520);
+
+    // resolve
+    if (isSave){
+      zoneEl.classList.add("hitSave");
+      sfxSave();
+      showToast("СЕЙВ!", "Попробуй ещё раз");
+      setLast("Сейв");
+      setStatus("Сейв — ставка сгорела");
+
+      if (seriesToggle.checked){
+        streak = 0;
+        streakEl.textContent = "0";
+      }
+
+      // reset to idle after short delay
+      setTimeout(()=>{
+        resetKeeper();
+        resetBallHome();
+        setPhase("idle");
+        enableZones(false);
+        animLock = false;
+      }, 650);
+
+      setPhase("resolvedSave");
+      animLock = false;
+      return;
+    } else {
+      zoneEl.classList.add("hitGoal");
+      sfxGoal();
+      showToast("ГОЛ!", `Потенциал: ${fmt(Math.floor(bet*selectedMult))} ₽`);
+
+      setLast("Гол");
+      setStatus("Гол — можно кэшаут");
+      setPhase("resolvedGoal");
+
+      if (seriesToggle.checked){
+        streak += 1;
+        streakEl.textContent = String(streak);
+      }
+
+      // small “net shake” feel: micro keeper bounce back
+      setTimeout(()=> resetKeeper(), 420);
+
+      animLock = false;
+      return;
+    }
+  }
+
+  // ---------- INIT ----------
+  function init(){
+    // load
+    const b = parseInt(localStorage.getItem(LS_BAL) || "1000", 10);
+    const s = localStorage.getItem(LS_SOUND);
+    setBalance(Number.isFinite(b) ? b : 1000);
+    setSound(s === null ? true : s === "1");
+
+    syncBetFromInput();
+
+    // set default multiplier button UI
+    selectedMult = 1.76;
+    curXEl.textContent = `x${selectedMult.toFixed(2)}`;
+    xTopEl.textContent = `x${selectedMult.toFixed(2)}`;
+    setPotential();
+
+    buildZones();
+    setPhase("idle");
+    enableZones(false);
+
+    // ensure audio unlock on first gesture
+    document.addEventListener("pointerdown", () => {
+      if (!soundOn) return;
+      ensureAudio();
+      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    }, { once: true });
+  }
+
+  init();
 })();
