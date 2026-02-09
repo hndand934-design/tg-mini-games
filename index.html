@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!doctype html>
 <html lang="ru">
 <head>
@@ -13,39 +12,35 @@
   <header class="topbar">
     <div class="brand">
       <div class="dot"></div>
-      <div class="brandText">
-        <div class="brandTitle">Penalty</div>
-        <div class="brandSub">Открой это в Telegram</div>
-      </div>
+      <div class="title">Penalty</div>
+      <div class="sub">Открой это в Telegram</div>
     </div>
 
-    <div class="topRight">
-      <button id="soundBtn" class="pill" type="button" aria-pressed="true">
-        <span class="pillDot on" id="soundDot"></span>
+    <div class="top-actions">
+      <button id="soundBtn" class="pill" type="button">
+        <span class="led on" id="soundLed"></span>
         <span id="soundText">Звук: on</span>
       </button>
-
-      <button id="giftBtn" class="pill ghost" type="button">+1000 ₽</button>
-
-      <div class="pill balance">
-        <span class="muted">Баланс</span>
-        <span id="balanceText" class="strong">0 ₽</span>
+      <button id="addBalanceBtn" class="pill" type="button">+1000 ₽</button>
+      <div class="pill">
+        Баланс&nbsp;<b id="balanceText">0 ₽</b>
       </div>
     </div>
   </header>
 
-  <main class="wrap">
-    <!-- LEFT: controls -->
-    <aside class="panel left">
-      <div class="panelTitle">Ручной режим</div>
+  <main class="layout">
+    <!-- LEFT -->
+    <section class="card left">
+      <h3>Ручной режим</h3>
 
       <div class="block">
-        <div class="blockTitle">Сумма ставки</div>
-
-        <div class="stakeRow">
-          <button class="stepBtn" id="betMinus" type="button">–</button>
-          <input id="betInput" class="stakeInput" inputmode="numeric" value="100" />
-          <button class="stepBtn" id="betPlus" type="button">+</button>
+        <div class="block-title">Сумма ставки</div>
+        <div class="bet-row">
+          <button class="mini" id="betMinus" type="button">−</button>
+          <div class="bet-input">
+            <span id="betValue">100</span> ₽
+          </div>
+          <button class="mini" id="betPlus" type="button">+</button>
         </div>
 
         <div class="chips">
@@ -57,145 +52,143 @@
           <button class="chip" data-chip="max" type="button">MAX</button>
         </div>
 
-        <div class="miniRow">
-          <button class="miniBtn" id="halfBtn" type="button">/2</button>
-          <button class="miniBtn" id="doubleBtn" type="button">x2</button>
+        <div class="half2x">
+          <button class="chip ghost" id="halfBtn" type="button">/2</button>
+          <button class="chip ghost" id="doubleBtn" type="button">x2</button>
         </div>
       </div>
 
       <div class="block">
-        <div class="blockTitleRow">
-          <div class="blockTitle">Множитель</div>
-          <div class="hint muted">выбери риск</div>
+        <div class="row-between">
+          <div class="block-title">Множитель</div>
+          <div class="muted">выбери риск</div>
         </div>
 
-        <div class="multGrid" id="multGrid">
-          <!-- в JS: кнопки 1.35x / 1.76x / 2.30x / 3.30x / 5.50x (пример) -->
+        <div class="risk-grid" id="riskGrid">
+          <button class="risk active" data-risk="0" type="button">1.35x</button>
+          <button class="risk" data-risk="1" type="button">1.75x</button>
+          <button class="risk" data-risk="2" type="button">2.30x</button>
+          <button class="risk" data-risk="3" type="button">3.10x</button>
+          <button class="risk" data-risk="4" type="button">4.20x</button>
         </div>
 
-        <div class="seriesRow">
-          <div>
-            <div class="muted small">Серия</div>
-            <div class="muted small">если ON — банк растёт (компаунд)</div>
-          </div>
+        <div class="series">
+          <div class="label">Серия</div>
           <label class="switch">
             <input id="seriesToggle" type="checkbox" />
             <span class="slider"></span>
           </label>
+          <div class="muted">если ON — банк растёт</div>
         </div>
 
-        <div class="statLine">
-          <span class="muted">Голов подряд:</span>
-          <span id="streakText" class="strong">0</span>
+        <div class="row-between small">
+          <div class="muted">Голов подряд:</div>
+          <b id="streakText">0</b>
         </div>
       </div>
 
-      <div class="actionRow">
-        <button id="betBtn" class="primary" type="button">
-          <span>Ставка</span>
-          <span class="ballIcon" aria-hidden="true"></span>
+      <div class="actions">
+        <button id="stakeBtn" class="btn primary" type="button">
+          Ставка <span class="ballIcon">⚽</span>
         </button>
-        <button id="cashoutBtn" class="danger" type="button" disabled>Кэшаут</button>
+        <button id="cashoutBtn" class="btn danger" type="button" disabled>Кэшаут</button>
+        <button id="resetBtn" class="btn ghost" type="button">Сброс</button>
       </div>
 
-      <div class="statusGrid">
-        <div class="statusBox">
-          <div class="muted small">Статус</div>
-          <div id="statusText" class="strong">Ожидание</div>
+      <div class="mini-stats">
+        <div class="stat">
+          <div class="muted">Статус</div>
+          <div id="statusText" class="value">Ожидание</div>
         </div>
-        <div class="statusBox">
-          <div class="muted small">Последнее</div>
-          <div id="lastText" class="strong">—</div>
+        <div class="stat">
+          <div class="muted">Текущий X</div>
+          <div id="xText" class="value">x1.00</div>
         </div>
-        <div class="statusBox">
-          <div class="muted small">Текущий X</div>
-          <div id="xText" class="strong">x1.00</div>
-        </div>
-        <div class="statusBox">
-          <div class="muted small">Потенциал</div>
-          <div id="potentialText" class="strong">0 ₽</div>
+        <div class="stat">
+          <div class="muted">Потенциал</div>
+          <div id="potentialText" class="value">0 ₽</div>
         </div>
       </div>
 
-      <div class="block">
-        <div class="blockTitle">Правила</div>
-        <ul class="rules">
+      <div class="block rules">
+        <div class="block-title">Правила</div>
+        <ul>
           <li>Нажми <b>Ставка</b> — ставка списывается 1 раз.</li>
-          <li>Клик по зоне в воротах (5×3) — мяч летит туда по траектории.</li>
+          <li>Клик по зоне ворот (5×3) — мяч летит туда по траектории.</li>
           <li>Если вратарь угадал зону — <b>сейв</b>, ставка сгорает.</li>
-          <li>Если не угадал — <b>гол</b>, мяч возвращается и можно бить дальше.</li>
+          <li>Если не угадал — <b>гол</b>, мяч возвращается, можно бить дальше.</li>
           <li><b>Кэшаут</b> доступен после первого гола.</li>
-          <li>Множитель нельзя менять после нажатия <b>Ставка</b> (до сброса).</li>
+          <li>Риск (множитель) нельзя менять после ставки (до сброса).</li>
         </ul>
       </div>
-    </aside>
+    </section>
 
-    <!-- CENTER: game -->
-    <section class="panel center">
-      <div class="centerHead">
+    <!-- CENTER -->
+    <section class="card center">
+      <div class="center-head">
         <div>
-          <div class="panelTitle">Пенальти</div>
-          <div class="muted small">Нажми “Ставка”, затем кликай по зоне удара</div>
+          <h3>Пенальти</h3>
+          <div class="muted">Нажми “Ставка”, затем кликай по зоне удара</div>
         </div>
-        <div class="miniStats">
-          <div class="miniPill">
-            <div class="muted small">Шаг</div>
-            <div id="stepText" class="strong">0</div>
-          </div>
-          <div class="miniPill">
-            <div class="muted small">X</div>
-            <div id="xTextTop" class="strong">x1.00</div>
-          </div>
+        <div class="pill-group">
+          <div class="pill small">Шаг&nbsp;<b id="stepText">0</b></div>
+          <div class="pill small">X&nbsp;<b id="xTopText">x1.00</b></div>
         </div>
       </div>
 
-      <div class="arena">
-        <div class="goalFrame">
-          <div class="net"></div>
+      <div class="fieldWrap">
+        <div class="field" id="field">
+          <!-- GOAL -->
+          <div class="goal">
+            <div class="crossbar"></div>
+            <div class="post left"></div>
+            <div class="post right"></div>
+            <div class="net"></div>
 
-          <!-- 15 зон (5x3) кликабельные -->
-          <div class="zones" id="zones" aria-label="Зоны удара (5 на 3)"></div>
+            <!-- clickable zones 5x3 -->
+            <div class="zones" id="zones"></div>
 
-          <!-- “руки” (оставляем белые, как ты просил) -->
-          <div class="keeper" id="keeper">
-            <div class="hand handL"></div>
-            <div class="hand handR"></div>
+            <!-- gloves (goalkeeper hands) -->
+            <div class="gloves" id="gloves">
+              <div class="glove g1"></div>
+              <div class="glove g2"></div>
+            </div>
           </div>
 
-          <!-- мяч -->
-          <div class="ball" id="ball" aria-hidden="true"></div>
+          <!-- ball -->
+          <div class="ball" id="ball"></div>
 
-          <!-- короткая вспышка результата -->
-          <div class="flash" id="flash" aria-hidden="true"></div>
+          <!-- fx overlay -->
+          <div class="fx" id="fx"></div>
         </div>
 
         <div class="legend">
-          <span class="dotLegend goal"></span><span class="muted small">гол</span>
-          <span class="dotLegend save"></span><span class="muted small">сейв</span>
-          <span class="muted small right">Локально • RNG</span>
+          <span class="dot ok"></span><span>гол</span>
+          <span class="dot bad"></span><span>сейв</span>
+          <span class="muted right">Локально • RNG</span>
         </div>
       </div>
     </section>
 
-    <!-- RIGHT: hint/state -->
-    <aside class="panel right">
-      <div class="panelTitle">Подсказка</div>
-      <div class="hintBox" id="hintBox">
+    <!-- RIGHT -->
+    <section class="card right">
+      <h3>Подсказка</h3>
+      <div class="hint" id="hintText">
         Нажми <b>Ставка</b> чтобы начать. Затем кликай по зоне в воротах.
       </div>
 
       <div class="block">
-        <div class="blockTitle">Состояние</div>
+        <div class="block-title">Состояние</div>
         <div class="kv">
           <div class="k">Режим</div><div class="v">Penalty</div>
-          <div class="k">Ставка</div><div id="uiBet" class="v">100 ₽</div>
-          <div class="k">Кэшаут</div><div id="uiCash" class="v">—</div>
+          <div class="k">Ставка</div><div class="v"><b id="betRightText">100 ₽</b></div>
+          <div class="k">Кэшаут</div><div class="v"><b id="cashoutRightText">—</b></div>
         </div>
         <div class="muted tiny">v1 — Penalty (локально • RNG)</div>
       </div>
-    </aside>
+    </section>
   </main>
 
-  <script src="app.js"></script>
+  <script defer src="app.js"></script>
 </body>
 </html>
