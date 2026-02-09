@@ -1,542 +1,646 @@
+/* =========================
+   Penalty — app.js (v1)
+   15 zones (5x3), ball trajectory, gloves move, series/cashout
+   Works on GitHub Pages + localStorage
+========================= */
+
 (() => {
-  const $ = (s) => document.querySelector(s);
+  // ---------- helpers ----------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const fmt = (n) => `${Math.round(n)} ₽`;
 
-  // ---------- STORAGE ----------
+  // ---------- storage ----------
   const LS_BAL = "penalty_balance_v1";
-  const LS_SOUND = "penalty_sound_v1";
+  const LS_SND = "penalty_sound_v1";
+  const LS_MULT = "penalty_mult_v1";
+  const LS_SER = "penalty_series_v1";
 
-  // ---------- ELEMENTS ----------
-  const balEl = $("#bal");
-  const addBtn = $("#addBtn");
-  const soundBtn = $("#soundBtn");
-  const soundLed = $("#soundLed");
-  const soundText = $("#soundText");
+  // ---------- DOM (ids expected; has fallbacks) ----------
+  const el = {
+    balance: $("#balance") || $("#balanceText") || $("[data-balance]"),
+    soundBtn: $("#soundBtn") || $("#soundToggle") || $("[data-sound]"),
+    betInput: $("#betInput") || $("#stakeInput") || $("#bet"),
+    betMinus: $("#betMinus") || $("#stakeMinus"),
+    betPlus: $("#betPlus") || $("#stakePlus"),
+    chipBtns: $$("[data-chip]"),
+    halfBtn: $("#halfBtn") || $("[data-half]"),
+    dblBtn: $("#dblBtn") || $("[data-double]"),
+    betBtn: $("#btnBet") || $("#betBtn") || $("[data-bet]"),
+    cashoutBtn: $("#btnCashout") || $("#cashoutBtn") || $("[data-cashout]"),
+    resetBtn: $("#btnReset") || $("#resetBtn") || $("[data-reset]"),
 
-  const betInput = $("#betInput");
-  const betMinus = $("#betMinus");
-  const betPlus = $("#betPlus");
-  const chipBtns = document.querySelectorAll(".chip[data-chip]");
-  const halfBtn = $("#halfBtn");
-  const x2Btn = $("#x2Btn");
+    multBtns: $$("[data-mult]"),
+    seriesToggle: $("#seriesToggle") || $("#series") || $("[data-series]"),
 
-  const multGrid = $("#multGrid");
-  const curXEl = $("#curX");
-  const xTopEl = $("#xTop");
+    status: $("#statusText") || $("#status") || $("[data-status]"),
+    last: $("#lastText") || $("#last") || $("[data-last]"),
+    step: $("#stepText") || $("#step") || $("[data-step]"),
+    xText: $("#xText") || $("#x") || $("[data-x]"),
+    potential: $("#potentialText") || $("#potential") || $("[data-potential]"),
 
-  const seriesToggle = $("#seriesToggle");
-  const streakEl = $("#streak");
+    goalWrap: $(".goalwrap") || $("#goalwrap") || $(".stage"),
+    targets: $(".targets") || $("#targets"),
+    ball: $(".ball") || $("#ball"),
+    keeper: $(".keeper") || $("#keeper"),
+    gloveL: $(".leftglove") || $("#gloveL"),
+    gloveR: $(".rightglove") || $("#gloveR"),
 
-  const betBtn = $("#betBtn");
-  const cashBtn = $("#cashBtn");
+    flash: $(".flash") || $("#flash"),
+    flashTitle: $(".flash-title") || $("#flashTitle"),
+    flashSub: $(".flash-sub") || $("#flashSub"),
+  };
 
-  const statusText = $("#statusText");
-  const lastText = $("#lastText");
-  const potentialEl = $("#potential");
+  // ---------- create targets if missing ----------
+  function ensureTargets() {
+    if (!el.goalWrap) return;
+    if (!el.targets) {
+      const t = document.createElement("div");
+      t.className = "targets";
+      el.goalWrap.appendChild(t);
+      el.targets = t;
+    }
+    if ($$(".zone", el.targets).length !== 15) {
+      el.targets.innerHTML = "";
+      for (let i = 0; i < 15; i++) {
+        const z = document.createElement("div");
+        z.className = "zone";
+        z.dataset.zone = String(i);
+        z.title = `Зона ${i + 1}`;
+        el.targets.appendChild(z);
+      }
+    }
+  }
 
-  const betView = $("#betView");
-  const cashView = $("#cashView");
+  ensureTargets();
 
-  const zonesEl = $("#zones");
-  const keeperEl = $("#keeper");
-  const ballEl = $("#ball");
-  const toastEl = $("#toast");
+  // ---------- state ----------
+  const MULTS_DEFAULT = [1.76, 3.30, 7.08, 15.17, 45.52];
 
-  const stepEl = $("#step");
+  const MATCH_PROB_BY_MULT = {
+    1.76: 0.35,
+    3.30: 0.25,
+    7.08: 0.18,
+    15.17: 0.12,
+    45.52: 0.07,
+  };
 
-  // ---------- AUDIO (WebAudio) ----------
+  const state = {
+    balance: 1000,
+    sound: true,
+
+    stake: 100,
+    mult: 1.76,
+    series: false,
+
+    inPlay: false,        // round started (stake deducted)
+    canShoot: false,      // waiting for zone click
+    lockedStake: 0,
+    streak: 0,            // goals in current round
+    step: 0,              // shots taken in current round
+
+    chosenZone: null,
+    animating: false,
+  };
+
+  // ---------- init from LS ----------
+  const balLS = Number(localStorage.getItem(LS_BAL));
+  if (Number.isFinite(balLS) && balLS >= 0) state.balance = balLS;
+
+  const sndLS = localStorage.getItem(LS_SND);
+  if (sndLS === "0" || sndLS === "1") state.sound = sndLS === "1";
+
+  const multLS = Number(localStorage.getItem(LS_MULT));
+  if (Number.isFinite(multLS) && multLS > 1) state.mult = multLS;
+
+  const serLS = localStorage.getItem(LS_SER);
+  if (serLS === "0" || serLS === "1") state.series = serLS === "1";
+
+  // ---------- audio (simple webaudio beeps) ----------
   let audioCtx = null;
-  let soundOn = true;
+  function beep(freq, dur = 0.08, type = "sine", gain = 0.06) {
+    if (!state.sound) return;
+    try {
+      audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      g.gain.setValueAtTime(gain, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      o.start(t0);
+      o.stop(t0 + dur);
+    } catch {}
+  }
+  const sfx = {
+    click: () => beep(520, 0.05, "triangle", 0.05),
+    kick: () => beep(180, 0.10, "sine", 0.08),
+    goal: () => { beep(740, 0.08, "square", 0.06); setTimeout(() => beep(980, 0.10, "square", 0.05), 80); },
+    save: () => { beep(220, 0.10, "sawtooth", 0.07); setTimeout(() => beep(140, 0.10, "sawtooth", 0.05), 90); },
+    cashout: () => { beep(600, 0.07, "triangle", 0.05); setTimeout(() => beep(820, 0.12, "triangle", 0.05), 70); },
+  };
 
-  function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // ---------- UI update ----------
+  function setText(node, text) {
+    if (!node) return;
+    node.textContent = text;
   }
 
-  function beep(type = "sine", freq = 440, dur = 0.08, gain = 0.06) {
-    if (!soundOn) return;
-    ensureAudio();
-    const t0 = audioCtx.currentTime;
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = type;
-    o.frequency.value = freq;
-    g.gain.value = 0;
-
-    o.connect(g);
-    g.connect(audioCtx.destination);
-
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-    o.start(t0);
-    o.stop(t0 + dur + 0.02);
+  function setSoundUI() {
+    if (!el.soundBtn) return;
+    const led = $(".led", el.soundBtn) || $(".led");
+    if (led) led.style.background = state.sound ? "#3cff77" : "#ff4d4d";
+    el.soundBtn.classList.toggle("muted", !state.sound);
+    // if the button has text:
+    const txt = el.soundBtn.querySelector(".txt");
+    if (txt) txt.textContent = state.sound ? "Звук: on" : "Звук: off";
   }
 
-  function sfxClick(){ beep("triangle", 520, 0.05, 0.05); }
-  function sfxKick(){ beep("sine", 160, 0.09, 0.08); setTimeout(()=>beep("sine", 120, 0.07, 0.05), 40); }
-  function sfxGoal(){ beep("square", 740, 0.07, 0.06); setTimeout(()=>beep("square", 980, 0.08, 0.05), 80); }
-  function sfxSave(){ beep("sawtooth", 210, 0.10, 0.06); setTimeout(()=>beep("sawtooth", 140, 0.10, 0.05), 90); }
-  function sfxCash(){ beep("triangle", 600, 0.07, 0.06); setTimeout(()=>beep("triangle", 820, 0.07, 0.05), 90); }
-
-  // ---------- GAME STATE ----------
-  const MULTS = [1.76, 3.30, 7.08, 15.17, 45.52];
-
-  let balance = 1000;
-  let bet = 100;
-  let selectedMult = MULTS[0];
-
-  // round:
-  // idle -> betPlaced -> resolved (goal/save) (cashout allowed only after goal)
-  let phase = "idle";
-  let step = 0;
-  let streak = 0;
-
-  let awaitingShot = false;
-  let animLock = false;
-
-  // keeper rng: picks one of 15 zones, equals hit => save
-  // zones index: 0..14 (row-major)
-  let keeperPick = 0;
-
-  // ---------- HELPERS ----------
-  const clampInt = (n, min, max) => Math.max(min, Math.min(max, n|0));
-  const fmt = (n) => String(Math.round(n));
-
-  function setBalance(n){
-    balance = Math.max(0, Math.floor(n));
-    balEl.textContent = fmt(balance);
-    localStorage.setItem(LS_BAL, String(balance));
+  function getPotential() {
+    if (!state.inPlay) return 0;
+    if (!state.series) {
+      // single-shot mode: potential after successful shot
+      return state.lockedStake * state.mult;
+    }
+    // series: grows per goal
+    // (геометрия, но мы держим умеренно тем, что вероятность сейва растёт с низкими множителями)
+    return state.lockedStake * Math.pow(state.mult, Math.max(1, state.streak));
   }
 
-  function setSound(on){
-    soundOn = !!on;
-    soundLed.style.background = soundOn ? "var(--green)" : "rgba(255,255,255,.25)";
-    soundLed.style.boxShadow = soundOn ? "0 0 10px rgba(31,224,138,.45)" : "none";
-    soundText.textContent = `Звук: ${soundOn ? "on" : "off"}`;
-    localStorage.setItem(LS_SOUND, soundOn ? "1" : "0");
-  }
+  function updateUI() {
+    // balance
+    if (el.balance) setText(el.balance, fmt(state.balance));
 
-  function setStatus(s){ statusText.textContent = s; }
-  function setLast(s){ lastText.textContent = s; }
+    // bet input
+    if (el.betInput) el.betInput.value = String(state.stake);
 
-  function setPotential(){
-    const pot = (phase === "betPlaced" || phase === "resolvedGoal") ? Math.floor(bet * selectedMult) : 0;
-    potentialEl.textContent = fmt(pot);
-    cashView.textContent = (phase === "resolvedGoal") ? `${fmt(pot)} ₽` : "—";
-  }
+    // series toggle
+    if (el.seriesToggle && "checked" in el.seriesToggle) el.seriesToggle.checked = state.series;
 
-  function showToast(title, subtitle){
-    toastEl.innerHTML = `<b>${title}</b>${subtitle ? `<span class="small">${subtitle}</span>` : ""}`;
-    toastEl.classList.add("show");
-    setTimeout(()=>toastEl.classList.remove("show"), 1100);
-  }
+    // x & step
+    setText(el.step, String(state.step));
+    setText(el.xText, `x${state.mult.toFixed(2)}`);
 
-  function setPhase(p){
-    phase = p;
+    // potential
+    const pot = state.inPlay ? getPotential() : 0;
+    setText(el.potential, state.inPlay ? fmt(pot) : "—");
 
-    if (phase === "idle"){
-      awaitingShot = false;
-      betBtn.disabled = false;
-      cashBtn.disabled = true;
-      setStatus("Ожидание");
-      setLast("—");
-      step = 0;
-      stepEl.textContent = String(step);
+    // status
+    if (!state.inPlay) {
+      setText(el.status, "Ожидание");
+      setText(el.last, "—");
+    } else if (state.canShoot) {
+      setText(el.status, "Выбери точку удара");
+    } else if (state.animating) {
+      setText(el.status, "Удар...");
     }
 
-    if (phase === "betPlaced"){
-      awaitingShot = true;
-      betBtn.disabled = true;
-      cashBtn.disabled = true;
-      setStatus("Выбери точку удара");
-      setLast("Ставка принята");
+    // buttons enable
+    if (el.betBtn) el.betBtn.disabled = state.inPlay; // ставка только до старта
+    if (el.cashoutBtn) el.cashoutBtn.disabled = !(state.inPlay && state.series && state.streak > 0 && !state.animating);
+    if (el.resetBtn) el.resetBtn.disabled = false;
+
+    // multiplier buttons active
+    if (el.multBtns?.length) {
+      el.multBtns.forEach(b => {
+        const m = Number(b.dataset.mult);
+        b.classList.toggle("active", Math.abs(m - state.mult) < 1e-9);
+      });
     }
 
-    if (phase === "resolvedGoal"){
-      awaitingShot = false;
-      betBtn.disabled = true;
-      cashBtn.disabled = false;
-      setStatus("Гол! Можно кэшаут");
-      setLast("Гол");
+    // zones active state
+    if (el.targets) {
+      $$(".zone", el.targets).forEach(z => {
+        z.classList.toggle("disabled", !state.canShoot || state.animating);
+      });
     }
 
-    if (phase === "resolvedSave"){
-      awaitingShot = false;
-      betBtn.disabled = false;
-      cashBtn.disabled = true;
-      setStatus("Сейв — попытка проиграна");
-      setLast("Сейв");
-    }
-
-    setPotential();
-    betView.textContent = fmt(bet);
-    curXEl.textContent = `x${selectedMult.toFixed(2)}`;
-    xTopEl.textContent = `x${selectedMult.toFixed(2)}`;
+    setSoundUI();
   }
 
-  function enableZones(on){
-    document.querySelectorAll(".zone").forEach(z=>{
-      z.classList.toggle("disabled", !on);
-    });
-  }
-
-  function resetZoneMarks(){
-    document.querySelectorAll(".zone").forEach(z=>{
-      z.classList.remove("hitGoal", "hitSave");
-    });
-  }
-
-  // Convert zone center to absolute px within .goal
-  function getZoneCenter(zoneEl){
-    const goalRect = zoneEl.closest(".goal").getBoundingClientRect();
-    const r = zoneEl.getBoundingClientRect();
-    const x = (r.left - goalRect.left) + r.width/2;
-    const y = (r.top - goalRect.top) + r.height/2;
-    return {x,y};
-  }
-
-  function setKeeperTo(x, y){
-    // keeper element is positioned with left:50%, top:170px; we move via translate
-    // Compute delta relative to its "home" center point
-    const goal = keeperEl.closest(".goal");
-    const goalRect = goal.getBoundingClientRect();
-    const keeperRect = keeperEl.getBoundingClientRect();
-    const home = {
-      x: (goalRect.width/2),
-      y: (170 + keeperRect.height/2)
-    };
-    const dx = x - home.x;
-    const dy = y - home.y;
-    keeperEl.style.transform = `translate(calc(-50% + ${dx}px), ${dy}px)`;
-  }
-
-  function resetKeeper(){
-    keeperEl.style.transform = `translateX(-50%)`;
-  }
-
-  function setBallAt(x, y){
-    ballEl.style.left = `${x}px`;
-    ballEl.style.top = `${y}px`;
-  }
-
-  function getBallPos(){
-    const goal = ballEl.closest(".goal").getBoundingClientRect();
-    const r = ballEl.getBoundingClientRect();
+  // ---------- geometry ----------
+  function zoneCenter(zoneEl) {
+    const wrapRect = el.goalWrap.getBoundingClientRect();
+    const zr = zoneEl.getBoundingClientRect();
     return {
-      x: (r.left - goal.left) + r.width/2,
-      y: (r.top - goal.top) + r.height/2
+      x: (zr.left + zr.width / 2) - wrapRect.left,
+      y: (zr.top + zr.height / 2) - wrapRect.top,
     };
   }
 
-  function animateBallTo(target, ms=520){
-    return new Promise((resolve)=>{
-      const start = getBallPos();
-      const control = {
-        x: (start.x + target.x)/2,
-        y: Math.min(start.y, target.y) - 110
-      };
-
-      const t0 = performance.now();
-
-      function stepAnim(t){
-        const p = Math.min(1, (t - t0)/ms);
-        const ease = 1 - Math.pow(1 - p, 3);
-
-        // Quadratic bezier
-        const x = (1-ease)*(1-ease)*start.x + 2*(1-ease)*ease*control.x + ease*ease*target.x;
-        const y = (1-ease)*(1-ease)*start.y + 2*(1-ease)*ease*control.y + ease*ease*target.y;
-
-        setBallAt(x, y);
-
-        // scale for depth
-        const s = 1 - 0.22*ease;
-        ballEl.style.transform = `translate(-50%, -50%) scale(${s})`;
-
-        if (p < 1) requestAnimationFrame(stepAnim);
-        else resolve();
-      }
-      requestAnimationFrame(stepAnim);
-    });
+  function ballHome() {
+    // bottom center relative to goalwrap
+    const wrapRect = el.goalWrap.getBoundingClientRect();
+    const bRect = el.ball.getBoundingClientRect();
+    const x = wrapRect.width / 2 - bRect.width / 2;
+    const y = wrapRect.height * 0.82 - bRect.height / 2;
+    return { x, y };
   }
 
-  function resetBallHome(){
-    // home position is center bottom
-    ballEl.style.transform = "translate(-50%, -50%) scale(1)";
-    ballEl.style.left = "50%";
-    ballEl.style.top = "390px";
+  function placeBallHome() {
+    if (!el.ball || !el.goalWrap) return;
+    const home = ballHome();
+    el.ball.style.transform = `translate(${home.x}px, ${home.y}px)`;
   }
 
-  function pickKeeper(){
-    keeperPick = Math.floor(Math.random()*15);
+  function keeperHome() {
+    if (!el.keeper || !el.goalWrap) return { x: 0, y: 0 };
+    // center keeper above
+    return { x: 0, y: 0 };
   }
 
-  // ---------- UI WIRING ----------
-  function syncBetFromInput(){
-    bet = clampInt(parseInt(betInput.value || "1", 10), 1, 9999999);
-    betInput.value = String(bet);
-    betView.textContent = fmt(bet);
-    setPotential();
+  function placeKeeperHome() {
+    if (!el.keeper) return;
+    el.keeper.style.transform = `translate(-50%, 0px)`;
   }
 
-  betMinus.addEventListener("click", ()=>{
-    sfxClick();
-    syncBetFromInput();
-    bet = Math.max(1, bet - 10);
-    betInput.value = String(bet);
-    syncBetFromInput();
-  });
+  // ---------- flash (no "OK", never blocks clicks) ----------
+  let flashTimer = null;
+  function flash(title, sub, ok = true) {
+    if (!el.flash) return;
+    if (flashTimer) clearTimeout(flashTimer);
 
-  betPlus.addEventListener("click", ()=>{
-    sfxClick();
-    syncBetFromInput();
-    bet = bet + 10;
-    betInput.value = String(bet);
-    syncBetFromInput();
-  });
+    el.flash.style.display = "flex";
+    el.flash.style.pointerEvents = "none"; // IMPORTANT: never blocks
+    if (el.flashTitle) el.flashTitle.textContent = title;
+    if (el.flashSub) el.flashSub.textContent = sub || "";
 
-  betInput.addEventListener("input", ()=>{
-    syncBetFromInput();
-  });
+    flashTimer = setTimeout(() => {
+      el.flash.style.display = "none";
+    }, 900);
+  }
 
-  chipBtns.forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      sfxClick();
-      const v = btn.dataset.chip;
-      syncBetFromInput();
-      if (v === "max"){
-        bet = Math.max(1, balance);
-      } else {
-        bet = clampInt(parseInt(v,10), 1, 9999999);
-      }
-      betInput.value = String(bet);
-      syncBetFromInput();
-    });
-  });
+  // ---------- game logic ----------
+  function setStake(v) {
+    if (state.inPlay) return; // lock while in round
+    state.stake = clamp(Math.round(v), 1, 1_000_000);
+    updateUI();
+  }
 
-  halfBtn.addEventListener("click", ()=>{
-    sfxClick();
-    syncBetFromInput();
-    bet = Math.max(1, Math.floor(bet/2));
-    betInput.value = String(bet);
-    syncBetFromInput();
-  });
+  function setMult(m) {
+    if (state.inPlay) return;
+    state.mult = m;
+    localStorage.setItem(LS_MULT, String(m));
+    updateUI();
+  }
 
-  x2Btn.addEventListener("click", ()=>{
-    sfxClick();
-    syncBetFromInput();
-    bet = Math.max(1, bet*2);
-    betInput.value = String(bet);
-    syncBetFromInput();
-  });
+  function setSeries(on) {
+    state.series = !!on;
+    localStorage.setItem(LS_SER, state.series ? "1" : "0");
+    updateUI();
+  }
 
-  multGrid.addEventListener("click", (e)=>{
-    const b = e.target.closest(".mBtn");
-    if (!b) return;
-    sfxClick();
-    document.querySelectorAll(".mBtn").forEach(x=>x.classList.remove("active"));
-    b.classList.add("active");
-    selectedMult = parseFloat(b.dataset.mult);
-    curXEl.textContent = `x${selectedMult.toFixed(2)}`;
-    xTopEl.textContent = `x${selectedMult.toFixed(2)}`;
-    setPotential();
-  });
+  function startRound() {
+    if (state.inPlay) return;
+    const s = state.stake;
+    if (!Number.isFinite(s) || s <= 0) return;
 
-  seriesToggle.addEventListener("change", ()=>{
-    sfxClick();
-    if (!seriesToggle.checked){
-      streak = 0;
-      streakEl.textContent = "0";
-    }
-  });
-
-  addBtn.addEventListener("click", ()=>{
-    sfxClick();
-    setBalance(balance + 1000);
-    showToast("+1000 ₽", "Пополнение баланса");
-  });
-
-  soundBtn.addEventListener("click", ()=>{
-    setSound(!soundOn);
-    sfxClick();
-  });
-
-  // ---------- GAME ACTIONS ----------
-  betBtn.addEventListener("click", ()=>{
-    sfxClick();
-    syncBetFromInput();
-
-    if (animLock) return;
-    if (bet <= 0) return;
-
-    if (balance < bet){
-      showToast("Недостаточно средств", "Уменьши ставку или пополни баланс");
-      setStatus("Недостаточно баланса");
+    if (state.balance < s) {
+      setText(el.status, "Недостаточно баланса");
+      sfx.save();
       return;
     }
 
-    // start round
-    setBalance(balance - bet);
-    resetZoneMarks();
-    resetKeeper();
-    resetBallHome();
-    pickKeeper();
+    state.balance -= s;
+    localStorage.setItem(LS_BAL, String(state.balance));
 
-    step += 1;
-    stepEl.textContent = String(step);
+    state.inPlay = true;
+    state.canShoot = true;
+    state.lockedStake = s;
+    state.streak = 0;
+    state.step = 0;
+    state.chosenZone = null;
 
-    setPhase("betPlaced");
-    enableZones(true);
-    showToast("Ставка принята", "Выбери зону удара (5×3)");
-  });
+    setText(el.last, "—");
+    setText(el.status, "Выбери точку удара");
 
-  cashBtn.addEventListener("click", ()=>{
-    if (animLock) return;
-    if (phase !== "resolvedGoal") return;
+    placeBallHome();
+    placeKeeperHome();
+    updateUI();
+    sfx.click();
+  }
 
-    const win = Math.floor(bet * selectedMult);
-    setBalance(balance + win);
-    sfxCash();
-    showToast("КЭШАУТ", `+${fmt(win)} ₽`);
+  function endRoundLose() {
+    state.inPlay = false;
+    state.canShoot = false;
+    state.animating = false;
+    state.lockedStake = 0;
+    state.streak = 0;
+    state.step = 0;
+    state.chosenZone = null;
+    updateUI();
+  }
 
-    // reset attempt
-    setLast(`Кэшаут +${fmt(win)} ₽`);
-    setStatus("Ожидание");
-    betBtn.disabled = false;
-    cashBtn.disabled = true;
+  function cashout() {
+    if (!(state.inPlay && state.series && state.streak > 0) || state.animating) return;
+    const win = getPotential();
+    state.balance += win;
+    localStorage.setItem(LS_BAL, String(state.balance));
+    setText(el.last, `Кэшаут ${fmt(win)}`);
+    setText(el.status, "Кэшаут");
+    flash("КЭШАУТ", `+${fmt(win)}`);
+    sfx.cashout();
+    // finish round
+    state.inPlay = false;
+    state.canShoot = false;
+    state.animating = false;
+    state.lockedStake = 0;
+    state.streak = 0;
+    state.step = 0;
+    state.chosenZone = null;
+    placeBallHome();
+    placeKeeperHome();
+    updateUI();
+  }
 
-    enableZones(false);
-    resetKeeper();
-    resetBallHome();
-    resetZoneMarks();
+  function resetAll() {
+    // doesn't refund stake; it's just UI reset
+    state.inPlay = false;
+    state.canShoot = false;
+    state.animating = false;
+    state.lockedStake = 0;
+    state.streak = 0;
+    state.step = 0;
+    state.chosenZone = null;
+    setText(el.status, "Ожидание");
+    setText(el.last, "—");
+    placeBallHome();
+    placeKeeperHome();
+    updateUI();
+    sfx.click();
+  }
 
-    // streak: cashout keeps streak as goal already counted (optional)
-    setPhase("idle");
-  });
+  // decide keeper zone & outcome
+  function pickKeeperZone(mult) {
+    const pMatch = MATCH_PROB_BY_MULT[mult] ?? 0.18;
+    // If match, keeper guesses the same zone; else random different zone
+    if (Math.random() < pMatch && state.chosenZone != null) return state.chosenZone;
 
-  // ---------- BUILD ZONES ----------
-  function buildZones(){
-    zonesEl.innerHTML = "";
-    for (let i=0;i<15;i++){
-      const z = document.createElement("div");
-      z.className = "zone disabled";
-      z.dataset.idx = String(i);
-      zonesEl.appendChild(z);
-    }
+    // choose random zone different
+    const r = Math.floor(Math.random() * 15);
+    if (state.chosenZone == null) return r;
+    return r === state.chosenZone ? (r + 1) % 15 : r;
+  }
 
-    zonesEl.addEventListener("click", async (e)=>{
-      const z = e.target.closest(".zone");
-      if (!z) return;
-      if (!awaitingShot) return;
-      if (animLock) return;
+  function moveKeeperToZone(zoneIndex) {
+    if (!el.keeper || !el.targets) return;
+    const zones = $$(".zone", el.targets);
+    const z = zones[zoneIndex];
+    if (!z) return;
 
-      const idx = parseInt(z.dataset.idx, 10);
-      await handleShot(idx, z);
+    // move keeper horizontally/vertically slightly based on zone position
+    const col = zoneIndex % 5;     // 0..4
+    const row = Math.floor(zoneIndex / 5); // 0..2
+
+    // tuning offsets (unique but close to stake)
+    const x = (col - 2) * 34;      // -68..+68
+    const y = (row - 1) * 18;      // -18..+18
+
+    el.keeper.animate(
+      [
+        { transform: `translate(-50%, 0px)` },
+        { transform: `translate(calc(-50% + ${x}px), ${y}px)` }
+      ],
+      { duration: 260, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" }
+    );
+  }
+
+  function animateBallTo(zoneEl, onDone) {
+    if (!el.ball || !el.goalWrap) return;
+    const center = zoneCenter(zoneEl);
+    const wrapRect = el.goalWrap.getBoundingClientRect();
+    const bRect = el.ball.getBoundingClientRect();
+
+    const home = ballHome();
+    const targetX = center.x - bRect.width / 2;
+    const targetY = center.y - bRect.height / 2;
+
+    // arc control point (upwards a bit)
+    const midX = (home.x + targetX) / 2;
+    const midY = Math.min(home.y, targetY) - wrapRect.height * 0.18;
+
+    // use WAAPI keyframes for smooth arc-like feel
+    const anim = el.ball.animate(
+      [
+        { transform: `translate(${home.x}px, ${home.y}px) scale(1)` },
+        { transform: `translate(${midX}px, ${midY}px) scale(0.92)` },
+        { transform: `translate(${targetX}px, ${targetY}px) scale(0.86)` }
+      ],
+      { duration: 520, easing: "cubic-bezier(.2,.85,.2,1)", fill: "forwards" }
+    );
+
+    anim.onfinish = () => onDone?.({ targetX, targetY, center });
+  }
+
+  function animateBallBack() {
+    if (!el.ball) return;
+    const home = ballHome();
+    el.ball.animate(
+      [
+        { transform: el.ball.style.transform || `translate(${home.x}px, ${home.y}px)` },
+        { transform: `translate(${home.x}px, ${home.y}px) scale(1)` }
+      ],
+      { duration: 280, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" }
+    );
+  }
+
+  async function shoot(zoneIndex) {
+    if (!state.inPlay || !state.canShoot || state.animating) return;
+
+    const zones = $$(".zone", el.targets);
+    const zoneEl = zones[zoneIndex];
+    if (!zoneEl) return;
+
+    state.chosenZone = zoneIndex;
+    state.canShoot = false;
+    state.animating = true;
+    state.step += 1;
+
+    setText(el.status, "Удар...");
+    updateUI();
+    sfx.kick();
+
+    // keeper choice & move
+    const keeperZone = pickKeeperZone(state.mult);
+    moveKeeperToZone(keeperZone);
+
+    // ball anim
+    animateBallTo(zoneEl, () => {
+      const saved = keeperZone === zoneIndex;
+
+      if (saved) {
+        // SAVE
+        sfx.save();
+        setText(el.last, "Сейв");
+        setText(el.status, "Поражение");
+        flash("СЕЙВ", "Ставка сгорела");
+        // end round (loss)
+        setTimeout(() => {
+          animateBallBack();
+          placeKeeperHome();
+          endRoundLose();
+        }, 450);
+        return;
+      }
+
+      // GOAL
+      sfx.goal();
+      state.streak += 1;
+      setText(el.last, "Гол");
+
+      if (!state.series) {
+        // single-shot payout immediately
+        const win = state.lockedStake * state.mult;
+        state.balance += win;
+        localStorage.setItem(LS_BAL, String(state.balance));
+        flash("ГОЛ!", `+${fmt(win)}`);
+        setText(el.status, "Выигрыш");
+        state.inPlay = false;
+        state.lockedStake = 0;
+        state.streak = 0;
+        state.step = 0;
+        state.chosenZone = null;
+
+        setTimeout(() => {
+          animateBallBack();
+          placeKeeperHome();
+          state.animating = false;
+          state.canShoot = false;
+          updateUI();
+        }, 520);
+
+        return;
+      }
+
+      // series mode: continue until save or cashout
+      const pot = getPotential();
+      flash("ГОЛ!", `Потенциал: ${fmt(pot)}`);
+      setText(el.status, "Гол! Можно продолжать или кэшаут");
+
+      setTimeout(() => {
+        animateBallBack();
+        // keep keeper where it moved briefly, then reset
+        setTimeout(() => placeKeeperHome(), 180);
+        state.animating = false;
+        state.canShoot = true; // allow next shot
+        updateUI();
+      }, 520);
     });
   }
 
-  async function handleShot(idx, zoneEl){
-    animLock = true;
-    awaitingShot = false;
-    enableZones(false);
+  // ---------- events ----------
+  function bindEvents() {
+    // sound
+    if (el.soundBtn) {
+      el.soundBtn.addEventListener("click", () => {
+        state.sound = !state.sound;
+        localStorage.setItem(LS_SND, state.sound ? "1" : "0");
+        sfx.click();
+        updateUI();
+      });
+    }
 
-    sfxKick();
+    // stake +/- input
+    if (el.betMinus) el.betMinus.addEventListener("click", () => (sfx.click(), setStake(state.stake - 10)));
+    if (el.betPlus) el.betPlus.addEventListener("click", () => (sfx.click(), setStake(state.stake + 10)));
 
-    // compute target
-    const target = getZoneCenter(zoneEl);
+    if (el.betInput) {
+      el.betInput.addEventListener("input", () => {
+        const v = Number(el.betInput.value);
+        if (Number.isFinite(v)) setStake(v);
+      });
+    }
 
-    // keeper decides if save
-    const isSave = (idx === keeperPick);
+    // chips
+    el.chipBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        sfx.click();
+        const v = Number(btn.dataset.chip);
+        if (Number.isFinite(v)) setStake(v);
+      });
+    });
 
-    if (isSave){
-      // move keeper to that zone slightly before ball arrives
-      setTimeout(()=> setKeeperTo(target.x, target.y), 70);
+    // half/double
+    if (el.halfBtn) el.halfBtn.addEventListener("click", () => (sfx.click(), setStake(Math.floor(state.stake / 2))));
+    if (el.dblBtn) el.dblBtn.addEventListener("click", () => (sfx.click(), setStake(state.stake * 2)));
+
+    // multipliers
+    if (el.multBtns?.length) {
+      el.multBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          sfx.click();
+          const m = Number(btn.dataset.mult);
+          if (Number.isFinite(m)) setMult(m);
+        });
+      });
     } else {
-      // keeper goes somewhere else (near miss)
-      const missIdx = (keeperPick + (Math.random() < 0.5 ? 1 : -1) + 15) % 15;
-      const missZone = zonesEl.querySelector(`.zone[data-idx="${missIdx}"]`);
-      if (missZone){
-        const missTarget = getZoneCenter(missZone);
-        setTimeout(()=> setKeeperTo(missTarget.x, missTarget.y), 70);
-      }
+      // fallback: if no buttons exist, keep defaults
+      state.mult = state.mult || 1.76;
     }
 
-    // animate ball
-    await animateBallTo(target, 520);
-
-    // resolve
-    if (isSave){
-      zoneEl.classList.add("hitSave");
-      sfxSave();
-      showToast("СЕЙВ!", "Попробуй ещё раз");
-      setLast("Сейв");
-      setStatus("Сейв — ставка сгорела");
-
-      if (seriesToggle.checked){
-        streak = 0;
-        streakEl.textContent = "0";
-      }
-
-      // reset to idle after short delay
-      setTimeout(()=>{
-        resetKeeper();
-        resetBallHome();
-        setPhase("idle");
-        enableZones(false);
-        animLock = false;
-      }, 650);
-
-      setPhase("resolvedSave");
-      animLock = false;
-      return;
-    } else {
-      zoneEl.classList.add("hitGoal");
-      sfxGoal();
-      showToast("ГОЛ!", `Потенциал: ${fmt(Math.floor(bet*selectedMult))} ₽`);
-
-      setLast("Гол");
-      setStatus("Гол — можно кэшаут");
-      setPhase("resolvedGoal");
-
-      if (seriesToggle.checked){
-        streak += 1;
-        streakEl.textContent = String(streak);
-      }
-
-      // small “net shake” feel: micro keeper bounce back
-      setTimeout(()=> resetKeeper(), 420);
-
-      animLock = false;
-      return;
+    // series
+    if (el.seriesToggle) {
+      el.seriesToggle.addEventListener("change", () => {
+        sfx.click();
+        setSeries(!!el.seriesToggle.checked);
+      });
     }
+
+    // bet / cashout / reset
+    if (el.betBtn) el.betBtn.addEventListener("click", startRound);
+    if (el.cashoutBtn) el.cashoutBtn.addEventListener("click", cashout);
+    if (el.resetBtn) el.resetBtn.addEventListener("click", resetAll);
+
+    // zones click
+    if (el.targets) {
+      el.targets.addEventListener("click", (e) => {
+        const z = e.target.closest(".zone");
+        if (!z) return;
+        const idx = Number(z.dataset.zone);
+        if (!Number.isFinite(idx)) return;
+        shoot(idx);
+      });
+    }
+
+    // resize to place ball correctly
+    window.addEventListener("resize", () => {
+      placeBallHome();
+      placeKeeperHome();
+    });
+
+    // first place
+    requestAnimationFrame(() => {
+      placeBallHome();
+      placeKeeperHome();
+    });
   }
 
-  // ---------- INIT ----------
-  function init(){
-    // load
-    const b = parseInt(localStorage.getItem(LS_BAL) || "1000", 10);
-    const s = localStorage.getItem(LS_SOUND);
-    setBalance(Number.isFinite(b) ? b : 1000);
-    setSound(s === null ? true : s === "1");
-
-    syncBetFromInput();
-
-    // set default multiplier button UI
-    selectedMult = 1.76;
-    curXEl.textContent = `x${selectedMult.toFixed(2)}`;
-    xTopEl.textContent = `x${selectedMult.toFixed(2)}`;
-    setPotential();
-
-    buildZones();
-    setPhase("idle");
-    enableZones(false);
-
-    // ensure audio unlock on first gesture
-    document.addEventListener("pointerdown", () => {
-      if (!soundOn) return;
-      ensureAudio();
-      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
-    }, { once: true });
+  // ---------- initial setup ----------
+  function ensureMultiplierButtons() {
+    // If multiplier buttons exist but have no dataset, try to set from text
+    if (!el.multBtns?.length) return;
+    el.multBtns.forEach(btn => {
+      if (!btn.dataset.mult) {
+        const t = (btn.textContent || "").trim().replace("x", "");
+        const m = Number(t);
+        if (Number.isFinite(m)) btn.dataset.mult = String(m);
+      }
+    });
   }
 
-  init();
+  ensureMultiplierButtons();
+
+  // If there is a flash element, hide initially and make sure it never blocks clicks
+  if (el.flash) {
+    el.flash.style.display = "none";
+    el.flash.style.pointerEvents = "none";
+  }
+
+  bindEvents();
+  updateUI();
+
 })();
