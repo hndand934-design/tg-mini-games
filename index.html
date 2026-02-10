@@ -8,7 +8,6 @@
 </head>
 <body>
   <div class="app">
-    <!-- TOP BAR -->
     <header class="topbar">
       <div class="brand">
         <div class="dot"></div>
@@ -19,12 +18,12 @@
       </div>
 
       <div class="top-actions">
-        <button id="soundBtn" class="pill">
+        <button id="soundBtn" class="pill" type="button">
           <span id="soundLed" class="led on"></span>
-          <span>Звук: on</span>
+          <span id="soundText">Звук: on</span>
         </button>
 
-        <button id="addFundsBtn" class="pill ghost">+1000 ₽</button>
+        <button id="addFundsBtn" class="pill ghost" type="button">+1000 ₽</button>
 
         <div class="pill ghost">
           <span class="muted">Баланс</span>
@@ -33,42 +32,41 @@
       </div>
     </header>
 
-    <!-- MAIN GRID -->
     <main class="grid">
-      <!-- LEFT PANEL -->
+      <!-- LEFT -->
       <section class="panel left">
         <div class="panel-title">Ручной режим</div>
 
         <div class="card">
           <div class="card-title">Сумма ставки</div>
           <div class="bet-row">
-            <button id="betMinus" class="mini-btn">−</button>
+            <button id="betMinus" class="mini-btn" type="button">−</button>
             <div id="betValue" class="bet-value">100 ₽</div>
-            <button id="betPlus" class="mini-btn">+</button>
+            <button id="betPlus" class="mini-btn" type="button">+</button>
           </div>
 
           <div class="chips">
-            <button class="chip" data-chip="10">10</button>
-            <button class="chip" data-chip="50">50</button>
-            <button class="chip" data-chip="100">100</button>
-            <button class="chip" data-chip="250">250</button>
-            <button class="chip" data-chip="500">500</button>
-            <button id="maxBtn" class="chip ghost">MAX</button>
+            <button class="chip" data-chip="10" type="button">10</button>
+            <button class="chip" data-chip="50" type="button">50</button>
+            <button class="chip" data-chip="100" type="button">100</button>
+            <button class="chip" data-chip="250" type="button">250</button>
+            <button class="chip" data-chip="500" type="button">500</button>
+            <button id="maxBtn" class="chip ghost" type="button">MAX</button>
           </div>
 
           <div class="split">
-            <button id="halfBtn" class="chip ghost">/2</button>
-            <button id="doubleBtn" class="chip ghost">x2</button>
+            <button id="halfBtn" class="chip ghost" type="button">/2</button>
+            <button id="doubleBtn" class="chip ghost" type="button">x2</button>
           </div>
         </div>
 
         <div class="card">
           <div class="card-title">Уровень сложности</div>
           <div class="difficulty">
-            <button class="diff active" data-diff="easy">Низкий</button>
-            <button class="diff" data-diff="mid">Средний</button>
-            <button class="diff" data-diff="hard">Сложный</button>
-            <button class="diff" data-diff="pro">Эксперт</button>
+            <button class="diff active" data-diff="easy" type="button">Низкий</button>
+            <button class="diff" data-diff="mid" type="button">Средний</button>
+            <button class="diff" data-diff="hard" type="button">Сложный</button>
+            <button class="diff" data-diff="pro" type="button">Эксперт</button>
           </div>
           <div class="hint small" id="diffHint">Низкий: меньше сейвов, X ниже.</div>
         </div>
@@ -83,13 +81,14 @@
           <div class="toggle-row">
             <div>
               <div class="card-title" style="margin:0">Серия</div>
-              <div class="hint small">если ON — при голах подряд растёт серия</div>
+              <div class="hint small">если ON — серия растёт при голах подряд</div>
             </div>
             <label class="switch">
               <input id="seriesToggle" type="checkbox" />
               <span class="slider"></span>
             </label>
           </div>
+
           <div class="kv">
             <div class="k">Голов подряд</div>
             <div class="v" id="streakVal">0</div>
@@ -97,28 +96,16 @@
         </div>
 
         <div class="actions">
-          <button id="betBtn" class="btn primary">Ставка ⚽</button>
-          <button id="cashoutBtn" class="btn danger">Кэшаут</button>
-          <button id="resetBtn" class="btn ghost">Сброс</button>
+          <button id="betBtn" class="btn primary" type="button">Ставка ⚽</button>
+          <button id="cashoutBtn" class="btn danger" type="button">Кэшаут</button>
+          <button id="resetBtn" class="btn ghost" type="button">Сброс</button>
         </div>
 
         <div class="card mini-stats">
-          <div class="kv">
-            <div class="k">Статус</div>
-            <div class="v" id="statusText">Ожидание</div>
-          </div>
-          <div class="kv">
-            <div class="k">Последнее</div>
-            <div class="v" id="lastText">—</div>
-          </div>
-          <div class="kv">
-            <div class="k">Текущий X</div>
-            <div class="v" id="currentXText">x1.00</div>
-          </div>
-          <div class="kv">
-            <div class="k">Потенциал</div>
-            <div class="v" id="potentialText">0 ₽</div>
-          </div>
+          <div class="kv"><div class="k">Статус</div><div class="v" id="statusText">Ожидание</div></div>
+          <div class="kv"><div class="k">Последнее</div><div class="v" id="lastText">—</div></div>
+          <div class="kv"><div class="k">Текущий X</div><div class="v" id="currentXText">x1.00</div></div>
+          <div class="kv"><div class="k">Потенциал</div><div class="v" id="potentialText">0 ₽</div></div>
         </div>
 
         <div class="card rules">
@@ -126,15 +113,15 @@
           <ul>
             <li>Нажми <b>Ставка</b> — ставка списывается 1 раз.</li>
             <li>Клик по зоне в воротах (5×3) — мяч летит туда.</li>
-            <li>Вратарь занимает <b>2 секции</b>. Если попал в одну из них — <b>сейв</b>.</li>
-            <li>Если не попал — <b>гол</b>. Мяч возвращается и можно бить дальше.</li>
+            <li>Вратарь перекрывает <b>2 зоны</b>. Если попал в одну — <b>сейв</b>.</li>
+            <li>Если не попал — <b>гол</b>, мяч возвращается, можно бить дальше.</li>
             <li><b>Кэшаут</b> доступен после 1 гола.</li>
             <li>Сложность нельзя менять после ставки (до сброса).</li>
           </ul>
         </div>
       </section>
 
-      <!-- CENTER / GAME -->
+      <!-- CENTER -->
       <section class="panel center">
         <div class="panel-head">
           <div>
@@ -152,9 +139,9 @@
             <div class="goal-frame"></div>
             <div class="net"></div>
 
-            <div id="zonesWrap" class="zones" aria-label="Зоны удара"></div>
+            <div id="zonesWrap" class="zones"></div>
 
-            <div id="hands" class="hands center" aria-hidden="true">
+            <div id="hands" class="hands" aria-hidden="true">
               <div class="hand"></div>
               <div class="hand"></div>
             </div>
@@ -171,13 +158,11 @@
         </div>
       </section>
 
-      <!-- RIGHT PANEL -->
+      <!-- RIGHT -->
       <section class="panel right">
         <div class="panel-title">Подсказка</div>
         <div class="card">
-          <div id="hintText" class="hint">
-            Нажми Ставка чтобы начать. Затем кликай по зоне в воротах.
-          </div>
+          <div id="hintText" class="hint">Нажми Ставка чтобы начать. Затем кликай по зоне в воротах.</div>
         </div>
 
         <div class="panel-title">Состояние</div>
