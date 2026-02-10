@@ -54,12 +54,12 @@
   const LS_BAL = "penalty_balance_v4";
   const LS_SOUND = "penalty_sound_v4";
 
+  // Сложности оставляем (как было). ЛЕСЕНКУ делаем вкуснее через формулу X ниже.
   const DIFF = {
-    // чуть сложнее, чтобы не дюпали: X ниже, сейв чаще, и растёт с голами
-    easy: { name: "Низкий",  saveBase: 0.40, smart: 0.45, xStart: 1.14, xStep: 0.085, xCap: 2.45 },
-    mid:  { name: "Средний", saveBase: 0.50, smart: 0.55, xStart: 1.16, xStep: 0.080, xCap: 2.35 },
-    hard: { name: "Сложный", saveBase: 0.60, smart: 0.65, xStart: 1.18, xStep: 0.075, xCap: 2.25 },
-    pro:  { name: "Эксперт", saveBase: 0.70, smart: 0.75, xStart: 1.20, xStep: 0.070, xCap: 2.15 },
+    easy: { name: "Низкий",  saveBase: 0.40, smart: 0.45, xCap: 12.0 },
+    mid:  { name: "Средний", saveBase: 0.50, smart: 0.55, xCap: 10.0 },
+    hard: { name: "Сложный", saveBase: 0.60, smart: 0.65, xCap: 8.5 },
+    pro:  { name: "Эксперт", saveBase: 0.70, smart: 0.75, xCap: 7.0 },
   };
 
   const LADDER_STEPS = 12;
@@ -82,7 +82,7 @@
     last: "—",
     currentX: 1.0,
 
-    keeperPair: null,  // [a,b]
+    keeperPair: null,
     memory: new Array(15).fill(0),
 
     idleTimer: null,
@@ -107,7 +107,7 @@
   function saveBalance(){ localStorage.setItem(LS_BAL, String(Math.floor(state.balance))); }
   function saveSound(){ localStorage.setItem(LS_SOUND, state.soundOn ? "1" : "0"); }
 
-  /* ---------------- audio (простые) ---------------- */
+  /* ---------------- audio ---------------- */
   let audioCtx = null;
   function beep(freq=440, dur=0.06, type="sine", gain=0.04){
     if(!state.soundOn) return;
@@ -155,7 +155,24 @@
     pair.forEach(i=> zones[i]?.classList.add("cover"));
   }
 
-  /* ---------------- ladder ---------------- */
+  /* ---------------- LADDER X (ВКУСНАЯ) ---------------- */
+  // Требование: первые 2-3 до 2x, потом быстрее: 2x -> 3x -> 5x ...
+  // Делает "азарт": быстрый старт + экспоненциальный рост после разгона.
+  // goals: 1..N (число голов в текущей попытке)
+  function tastyLadder(goals, cap){
+    // фиксируем первые шаги (приятные)
+    // 1 гол: 1.35x, 2: 1.70x, 3: 2.00x
+    if(goals <= 1) return 1.35;
+    if(goals === 2) return 1.70;
+    if(goals === 3) return 2.00;
+
+    // дальше ускоряемся: 3x, 5x, 8x, 13x... (похоже на ускоряющийся рост)
+    // базовая точка = 2.00 на 3-м, затем множитель растёт примерно в 1.55 раза за шаг
+    const k = goals - 3; // 1.. (после 3-го гола)
+    const x = 2.0 * Math.pow(1.55, k); // 4-й ~3.10, 5-й ~4.81, 6-й ~7.46, 7-й ~11.56...
+    return clamp(x, 1.0, cap);
+  }
+
   function buildLadder(){
     el.ladder.innerHTML = "";
     for(let i=0;i<LADDER_STEPS;i++){
@@ -165,19 +182,17 @@
       el.ladder.appendChild(d);
     }
   }
-  function calcXForGoals(goals, cfg){
-    const x = cfg.xStart + cfg.xStep * (goals - 1);
-    return clamp(x, 1.0, cfg.xCap);
-  }
+
   function recalcX(){
-    const cfg = DIFF[state.diffKey];
-    state.currentX = state.goals === 0 ? 1.0 : calcXForGoals(state.goals, cfg);
+    const cap = DIFF[state.diffKey].xCap;
+    state.currentX = state.goals === 0 ? 1.0 : tastyLadder(state.goals, cap);
   }
+
   function updateLadder(){
-    const cfg = DIFF[state.diffKey];
+    const cap = DIFF[state.diffKey].xCap;
     const nodes = Array.from(el.ladder.children);
     for(let i=0;i<nodes.length;i++){
-      const x = calcXForGoals(i+1, cfg);
+      const x = tastyLadder(i+1, cap);
       nodes[i].textContent = fmtX(x);
       nodes[i].classList.toggle("active", state.goals === i+1);
       nodes[i].classList.toggle("done", state.goals > i+1);
@@ -205,7 +220,7 @@
     };
   }
 
-  /* ---------------- keeper pair logic (2 zones) ---------------- */
+  /* ---------------- keeper pair logic ---------------- */
   function idxRC(idx){ return { r: Math.floor(idx/5), c: idx%5 }; }
   function rcIdx(r,c){ return r*5 + c; }
   function normalizePair(a,b){ return a<b ? [a,b] : [b,a]; }
@@ -234,14 +249,11 @@
     return best;
   }
 
-  // ВАЖНО: если saveWanted=true => пара обязана включать shotIdx
-  //         если false => пара гарантированно НЕ включает shotIdx
   function chooseKeeperPair(shotIdx, saveWanted){
     const cfg = DIFF[state.diffKey];
     state.memory[shotIdx] += 1;
 
     if(saveWanted){
-      // “умнее”: иногда тянется к самым частым зонам, но shotIdx всё равно включён
       const anchor = shotIdx;
 
       if(Math.random() < cfg.smart){
@@ -268,7 +280,6 @@
       return normalizePair(anchor, neighborFor(anchor));
     }
 
-    // saveWanted=false: выбери любую пару, но не включай shotIdx
     let a = Math.floor(Math.random()*15);
     if(a===shotIdx) a=(a+1)%15;
 
@@ -284,8 +295,7 @@
     return normalizePair(a,b);
   }
 
-  /* ---------------- hands exact animation (15 zones) ---------------- */
-  // ставим руки в среднюю точку пары (по центрам зон)
+  /* ---------------- hands exact animation ---------------- */
   function setHandsToPair(pair, immediate=false){
     if(!pair) return;
 
@@ -293,7 +303,6 @@
     const b = zoneCenter(pair[1]);
     const mid = { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
 
-    // перевод в проценты относительно stage (так стабильнее на ресайзе)
     const sr = stageRect();
     const px = clamp((mid.x / sr.width) * 100, 0, 100);
     const py = clamp((mid.y / sr.height) * 100, 0, 100);
@@ -302,7 +311,6 @@
       el.hands.style.transition = "none";
       el.hands.style.setProperty("--hx", String(px));
       el.hands.style.setProperty("--hy", String(py));
-      // вернуть transition
       requestAnimationFrame(()=>{ el.hands.style.transition = ""; });
       return;
     }
@@ -311,7 +319,6 @@
     el.hands.style.setProperty("--hy", String(py));
   }
 
-  // “хаотичное движение” в простое
   function startIdleHands(){
     stopIdleHands();
     state.idleLocked = false;
@@ -320,16 +327,14 @@
       if(state.idleLocked) return;
       if(!state.inRound || state.animating) return;
 
-      // гуляем по случайной паре
       const a = Math.floor(Math.random()*15);
       const b = neighborFor(a);
       const pair = normalizePair(a,b);
 
-      state.keeperPair = pair; // только визуально
+      state.keeperPair = pair;
       setCoverPair(pair);
       setHandsToPair(pair);
 
-      // следующий шаг
       state.idleTimer = setTimeout(tick, 380 + Math.random()*380);
     };
 
@@ -410,9 +415,8 @@
 
   function computeSaveWanted(){
     const cfg = DIFF[state.diffKey];
-    // анти-дюп: каждый гол чуть повышает шанс сейва
-    const anti = clamp(state.goals * 0.05, 0, 0.28);
-    const p = clamp(cfg.saveBase + anti, 0.10, 0.92);
+    const anti = clamp(state.goals * 0.06, 0, 0.30); // чуть жестче при серии
+    const p = clamp(cfg.saveBase + anti, 0.12, 0.92);
     return Math.random() < p;
   }
 
@@ -450,9 +454,7 @@
     setHint("Кликни по зоне в воротах (5×3) — мяч полетит туда.");
     sfx.bet();
 
-    // стартуем idle-движение рук
     startIdleHands();
-
     updateUI();
   }
 
@@ -530,7 +532,6 @@
       return;
     }
 
-    // блокируем idle на время удара
     state.idleLocked = true;
     stopIdleHands();
 
@@ -545,10 +546,8 @@
     setCoverPair(pair);
     zones[idx].classList.add("pick");
 
-    // Руки ВСЕГДА едут на реальную пару, которая и определяет сейв
     setHandsToPair(pair);
 
-    // небольшая задержка, чтобы игрок видел движение рук “в момент удара”
     const target = zoneCenter(idx);
     sfx.kick();
 
@@ -556,7 +555,7 @@
       animateKick(target, () => {
         zones[idx].classList.remove("pick");
 
-        const saved = pair.includes(idx); // <= ИСТИНА: сейв только если попал в одну из 2 перекрытых зон
+        const saved = pair.includes(idx);
 
         if(saved){
           zones[idx].classList.add("save");
@@ -569,7 +568,6 @@
           return;
         }
 
-        // GOAL
         zones[idx].classList.add("hit");
         state.goals += 1;
         if(el.seriesToggle.checked) state.streak += 1;
@@ -582,11 +580,8 @@
 
         setTimeout(() => {
           animateReturnBall();
-
-          // после гола снова включаем хаотичное движение
           state.idleLocked = false;
           startIdleHands();
-
           updateUI();
         }, 160);
       });
@@ -610,10 +605,10 @@
     el.diffBtns.forEach(b => b.classList.toggle("active", b.dataset.diff === key));
 
     el.diffHint.textContent =
-      key==="easy" ? "Низкий: меньше сейвов, X ниже."
+      key==="easy" ? "Низкий: меньше сейвов, X вкуснее."
       : key==="mid" ? "Средний: баланс риска."
       : key==="hard" ? "Сложный: сейвов больше, X ниже."
-      : "Эксперт: максимум сейвов, X самый низкий.";
+      : "Эксперт: максимум сейвов, X минимальный.";
 
     state.goals = 0;
     recalcX();
@@ -710,12 +705,10 @@
       sfx.click();
     });
 
-    // КНОПКИ 100% кликаются
     el.betBtn.addEventListener("click", (e)=>{ e.preventDefault(); startBet(); });
     el.cashoutBtn.addEventListener("click", (e)=>{ e.preventDefault(); cashout(); });
     el.resetBtn.addEventListener("click", (e)=>{ e.preventDefault(); resetAll(); });
 
-    // ресайз: чтобы руки не “съезжали” при изменении размеров — мгновенно пересчитать позицию
     window.addEventListener("resize", ()=>{
       if(state.keeperPair){
         setHandsToPair(state.keeperPair, true);
@@ -735,12 +728,9 @@
     setDiff("easy");
     recalcX();
 
-    // стартовые позиции
     requestAnimationFrame(()=>{
       const h = ballHome();
       setBall(h.x,h.y);
-
-      // центр руками (проценты)
       el.hands.style.setProperty("--hx", "50");
       el.hands.style.setProperty("--hy", "34");
     });
