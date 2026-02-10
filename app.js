@@ -51,18 +51,49 @@
     fx: $("#fx"),
   };
 
-  const LS_BAL = "penalty_balance_v4";
-  const LS_SOUND = "penalty_sound_v4";
+  const LS_BAL = "penalty_balance_v5";
+  const LS_SOUND = "penalty_sound_v5";
 
-  // Сложности оставляем (как было). ЛЕСЕНКУ делаем вкуснее через формулу X ниже.
+  // Сложности (чем сложнее — тем выше шанс сейва)
   const DIFF = {
-    easy: { name: "Низкий",  saveBase: 0.40, smart: 0.45, xCap: 12.0 },
-    mid:  { name: "Средний", saveBase: 0.50, smart: 0.55, xCap: 10.0 },
-    hard: { name: "Сложный", saveBase: 0.60, smart: 0.65, xCap: 8.5 },
-    pro:  { name: "Эксперт", saveBase: 0.70, smart: 0.75, xCap: 7.0 },
+    easy: { name: "Низкий",  saveBase: 0.40, smart: 0.45 },
+    mid:  { name: "Средний", saveBase: 0.52, smart: 0.58 },
+    hard: { name: "Сложный", saveBase: 0.64, smart: 0.70 },
+    pro:  { name: "Эксперт", saveBase: 0.74, smart: 0.80 },
   };
 
-  const LADDER_STEPS = 12;
+  // ФИКСИРОВАННЫЕ ЛЕСТНИЦЫ X (20 шагов)
+  // Логика: на Expert X выше, но и сейвов больше (выше сложность).
+  // Если хочешь "ещё азартнее" — увеличим значения или добавим шагов.
+  const LADDER_BY_DIFF = {
+    easy: [
+      1.25, 1.45, 1.70, 2.00, 2.35,
+      2.75, 3.25, 3.85, 4.55, 5.35,
+      6.30, 7.40, 8.70, 10.20, 11.90,
+      13.90, 16.20, 18.90, 22.00, 25.60
+    ],
+    mid: [
+      1.30, 1.55, 1.85, 2.20, 2.65,
+      3.15, 3.75, 4.45, 5.25, 6.20,
+      7.35, 8.70, 10.30, 12.20, 14.40,
+      17.00, 20.10, 23.70, 28.00, 33.00
+    ],
+    hard: [
+      1.35, 1.65, 2.00, 2.45, 3.00,
+      3.60, 4.30, 5.15, 6.15, 7.40,
+      8.90, 10.70, 12.90, 15.50, 18.70,
+      22.60, 27.30, 33.00, 39.80, 48.00
+    ],
+    pro: [
+      1.40, 1.75, 2.20, 2.80, 3.50,
+      4.25, 5.20, 6.35, 7.80, 9.60,
+      11.80, 14.50, 17.80, 21.80, 26.70,
+      32.70, 40.00, 49.00, 60.00, 73.00
+    ],
+  };
+
+  // Сколько элементов отображаем в UI одновременно (чтобы не "вылазило")
+  const LADDER_VIEW = 12;
 
   const state = {
     soundOn: true,
@@ -155,27 +186,24 @@
     pair.forEach(i=> zones[i]?.classList.add("cover"));
   }
 
-  /* ---------------- LADDER X (ВКУСНАЯ) ---------------- */
-  // Требование: первые 2-3 до 2x, потом быстрее: 2x -> 3x -> 5x ...
-  // Делает "азарт": быстрый старт + экспоненциальный рост после разгона.
-  // goals: 1..N (число голов в текущей попытке)
-  function tastyLadder(goals, cap){
-    // фиксируем первые шаги (приятные)
-    // 1 гол: 1.35x, 2: 1.70x, 3: 2.00x
-    if(goals <= 1) return 1.35;
-    if(goals === 2) return 1.70;
-    if(goals === 3) return 2.00;
+  /* ---------------- FIXED LADDER ---------------- */
+  function currentLadder(){
+    return LADDER_BY_DIFF[state.diffKey] || LADDER_BY_DIFF.easy;
+  }
 
-    // дальше ускоряемся: 3x, 5x, 8x, 13x... (похоже на ускоряющийся рост)
-    // базовая точка = 2.00 на 3-м, затем множитель растёт примерно в 1.55 раза за шаг
-    const k = goals - 3; // 1.. (после 3-го гола)
-    const x = 2.0 * Math.pow(1.55, k); // 4-й ~3.10, 5-й ~4.81, 6-й ~7.46, 7-й ~11.56...
-    return clamp(x, 1.0, cap);
+  function recalcX(){
+    if(state.goals <= 0){
+      state.currentX = 1.0;
+      return;
+    }
+    const ladder = currentLadder();
+    const idx = Math.min(state.goals - 1, ladder.length - 1);
+    state.currentX = ladder[idx];
   }
 
   function buildLadder(){
     el.ladder.innerHTML = "";
-    for(let i=0;i<LADDER_STEPS;i++){
+    for(let i=0;i<LADDER_VIEW;i++){
       const d = document.createElement("div");
       d.className = "lstep";
       d.textContent = "x1.00";
@@ -183,19 +211,23 @@
     }
   }
 
-  function recalcX(){
-    const cap = DIFF[state.diffKey].xCap;
-    state.currentX = state.goals === 0 ? 1.0 : tastyLadder(state.goals, cap);
-  }
-
   function updateLadder(){
-    const cap = DIFF[state.diffKey].xCap;
+    const ladder = currentLadder();
     const nodes = Array.from(el.ladder.children);
+
+    // окно так, чтобы "активный" шаг всегда был виден, и ничего не вылезало
+    const g = state.goals;
+    const start = Math.max(0, Math.min((g - 1) - Math.floor(LADDER_VIEW/2), ladder.length - LADDER_VIEW));
+    const safeStart = Number.isFinite(start) ? Math.max(0, start) : 0;
+
     for(let i=0;i<nodes.length;i++){
-      const x = tastyLadder(i+1, cap);
+      const stepIndex = safeStart + i;          // 0-based
+      const x = ladder[Math.min(stepIndex, ladder.length - 1)];
       nodes[i].textContent = fmtX(x);
-      nodes[i].classList.toggle("active", state.goals === i+1);
-      nodes[i].classList.toggle("done", state.goals > i+1);
+
+      const stepNumber = stepIndex + 1;         // 1-based
+      nodes[i].classList.toggle("active", g === stepNumber);
+      nodes[i].classList.toggle("done", g > stepNumber);
     }
   }
 
@@ -295,7 +327,7 @@
     return normalizePair(a,b);
   }
 
-  /* ---------------- hands exact animation ---------------- */
+  /* ---------------- hands animation (pair-accurate) ---------------- */
   function setHandsToPair(pair, immediate=false){
     if(!pair) return;
 
@@ -415,8 +447,9 @@
 
   function computeSaveWanted(){
     const cfg = DIFF[state.diffKey];
-    const anti = clamp(state.goals * 0.06, 0, 0.30); // чуть жестче при серии
-    const p = clamp(cfg.saveBase + anti, 0.12, 0.92);
+    // чем больше голов подряд — тем больше шанс сейва (анти-дюп)
+    const anti = clamp(state.goals * 0.07, 0, 0.34);
+    const p = clamp(cfg.saveBase + anti, 0.10, 0.93);
     return Math.random() < p;
   }
 
@@ -605,10 +638,10 @@
     el.diffBtns.forEach(b => b.classList.toggle("active", b.dataset.diff === key));
 
     el.diffHint.textContent =
-      key==="easy" ? "Низкий: меньше сейвов, X вкуснее."
+      key==="easy" ? "Низкий: меньше сейвов, X ниже."
       : key==="mid" ? "Средний: баланс риска."
-      : key==="hard" ? "Сложный: сейвов больше, X ниже."
-      : "Эксперт: максимум сейвов, X минимальный.";
+      : key==="hard" ? "Сложный: сейвов больше, X выше."
+      : "Эксперт: максимум сейвов, X самый высокий.";
 
     state.goals = 0;
     recalcX();
