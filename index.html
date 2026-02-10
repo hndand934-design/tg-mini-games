@@ -126,8 +126,8 @@
           <ul>
             <li>Нажми <b>Ставка</b> — ставка списывается 1 раз.</li>
             <li>Клик по зоне в воротах (5×3) — мяч летит туда.</li>
-            <li>Если вратарь угадал зону — <b>сейв</b> (проигрыш).</li>
-            <li>Если не угадал — <b>гол</b>. Мяч возвращается и можно бить дальше.</li>
+            <li>Вратарь занимает <b>2 секции</b>. Если попал в одну из них — <b>сейв</b>.</li>
+            <li>Если не попал — <b>гол</b>. Мяч возвращается и можно бить дальше.</li>
             <li><b>Кэшаут</b> доступен после 1 гола.</li>
             <li>Сложность нельзя менять после ставки (до сброса).</li>
           </ul>
@@ -149,24 +149,17 @@
 
         <div class="stage">
           <div class="goal-stage">
-            <!-- GOAL FRAME -->
             <div class="goal-frame"></div>
-            <!-- NET -->
             <div class="net"></div>
 
-            <!-- 15 ZONES OVERLAY -->
             <div id="zonesWrap" class="zones" aria-label="Зоны удара"></div>
 
-            <!-- KEEPER HANDS -->
             <div id="hands" class="hands center" aria-hidden="true">
               <div class="hand"></div>
               <div class="hand"></div>
             </div>
 
-            <!-- BALL -->
             <div id="ball" class="ball" aria-hidden="true"></div>
-
-            <!-- FX LAYER -->
             <div id="fx" class="fx" aria-hidden="true"></div>
 
             <div class="legend">
