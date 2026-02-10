@@ -51,18 +51,17 @@
     fx: $("#fx"),
   };
 
-  const LS_BAL = "penalty_balance_v2";
-  const LS_SOUND = "penalty_sound_v2";
+  const LS_BAL = "penalty_balance_v3";
+  const LS_SOUND = "penalty_sound_v3";
 
-  // Сложность: чем выше, тем чаще сейв и медленнее рост X
+  // Сложность: выше = чаще сейв + X ниже
   const DIFF = {
-    easy: { name: "Низкий",   saveBase: 0.33, smart: 0.35, xStart: 1.15, xStep: 0.10, xCap: 3.40 },
-    mid:  { name: "Средний",  saveBase: 0.42, smart: 0.45, xStart: 1.18, xStep: 0.09, xCap: 3.10 },
-    hard: { name: "Сложный",  saveBase: 0.52, smart: 0.55, xStart: 1.22, xStep: 0.08, xCap: 2.85 },
-    pro:  { name: "Эксперт",  saveBase: 0.62, smart: 0.68, xStart: 1.26, xStep: 0.07, xCap: 2.60 },
+    easy: { name: "Низкий",   saveBase: 0.35, smart: 0.40, xStart: 1.15, xStep: 0.10, xCap: 3.10 },
+    mid:  { name: "Средний",  saveBase: 0.45, smart: 0.50, xStart: 1.18, xStep: 0.09, xCap: 2.90 },
+    hard: { name: "Сложный",  saveBase: 0.56, smart: 0.60, xStart: 1.22, xStep: 0.08, xCap: 2.70 },
+    pro:  { name: "Эксперт",  saveBase: 0.66, smart: 0.72, xStart: 1.26, xStep: 0.07, xCap: 2.55 },
   };
 
-  // Лесенка X (12 шагов) — красиво и гармонично
   const LADDER_STEPS = 12;
 
   const state = {
@@ -84,9 +83,9 @@
     currentX: 1.0,
 
     selectedIdx: null,
-    keeperIdx: null,
 
-    // чтобы вратарь "учился" (чуть умнее)
+    // ДВЕ секции куда “руки перекрывают”
+    keeperPair: null, // [a,b]
     memory: new Array(15).fill(0),
   };
 
@@ -108,7 +107,7 @@
   function saveBalance(){ localStorage.setItem(LS_BAL, String(Math.floor(state.balance))); }
   function saveSound(){ localStorage.setItem(LS_SOUND, state.soundOn ? "1":"0"); }
 
-  /* ---------- audio (tiny) ---------- */
+  /* ---------- audio ---------- */
   let audioCtx=null;
   function beep(freq=440,dur=0.06,type="sine",gain=0.04){
     if(!state.soundOn) return;
@@ -147,8 +146,17 @@
       zones.push(z);
     }
   }
+
   function clearZoneClasses(){
-    zones.forEach(z=>z.classList.remove("pick","hit","save"));
+    zones.forEach(z=>z.classList.remove("pick","hit","save","cover"));
+  }
+
+  function setCoverPair(pair){
+    zones.forEach(z=>z.classList.remove("cover"));
+    if(!pair) return;
+    pair.forEach(i=>{
+      if (zones[i]) zones[i].classList.add("cover");
+    });
   }
 
   /* ---------- ladder ---------- */
@@ -161,20 +169,7 @@
       el.ladder.appendChild(d);
     }
   }
-  function updateLadder(){
-    const cfg=DIFF[state.diffKey];
-    const nodes=Array.from(el.ladder.children);
-    for(let i=0;i<nodes.length;i++){
-      const x = calcXForGoals(i+1, cfg); // шаг = (i+1) голов
-      nodes[i].textContent = fmtX(x);
-      nodes[i].classList.toggle("active", state.goals === i+1);
-      nodes[i].classList.toggle("done", state.goals > i+1);
-    }
-  }
-
-  /* ---------- math ---------- */
   function calcXForGoals(goals, cfg){
-    // старт + шаги, ограничение (чтобы не “дюпали”)
     const x = cfg.xStart + cfg.xStep * (goals-1);
     return clamp(x, 1.0, cfg.xCap);
   }
@@ -182,54 +177,136 @@
     const cfg=DIFF[state.diffKey];
     state.currentX = state.goals === 0 ? 1.0 : calcXForGoals(state.goals, cfg);
   }
+  function updateLadder(){
+    const cfg=DIFF[state.diffKey];
+    const nodes=Array.from(el.ladder.children);
+    for(let i=0;i<nodes.length;i++){
+      const x = calcXForGoals(i+1, cfg);
+      nodes[i].textContent = fmtX(x);
+      nodes[i].classList.toggle("active", state.goals === i+1);
+      nodes[i].classList.toggle("done", state.goals > i+1);
+    }
+  }
 
-  /* ---------- keeper AI (умнее) ---------- */
-  function chooseKeeper(playerIdx){
+  /* ---------- keeper pair logic (2 секции) ---------- */
+  function idxRC(idx){ return { r: Math.floor(idx/5), c: idx%5 }; }
+  function rcIdx(r,c){ return r*5+c; }
+
+  // выбираем “соседа” так, чтобы пара была логичной: чаще по горизонтали, иногда вертикаль
+  function neighborFor(idx){
+    const {r,c} = idxRC(idx);
+    const choices = [];
+
+    // горизонтальные соседи приоритет
+    if(c>0) choices.push(rcIdx(r,c-1));
+    if(c<4) choices.push(rcIdx(r,c+1));
+
+    // вертикальные тоже возможны (реализм)
+    if(r>0) choices.push(rcIdx(r-1,c));
+    if(r<2) choices.push(rcIdx(r+1,c));
+
+    // лёгкий вес: горизонталь чаще
+    // сделаем простой выбор: если есть горизонталь — 70% берём её
+    const horiz = [];
+    if(c>0) horiz.push(rcIdx(r,c-1));
+    if(c<4) horiz.push(rcIdx(r,c+1));
+    if(horiz.length && Math.random() < 0.70){
+      return horiz[Math.floor(Math.random()*horiz.length)];
+    }
+    return choices[Math.floor(Math.random()*choices.length)];
+  }
+
+  function normalizePair(a,b){
+    if(a===b) return [a,b];
+    return a<b ? [a,b] : [b,a];
+  }
+
+  // “умный” выбор: иногда “тянется” к часто выбираемым зонам игрока
+  function bestIdxFromMemory(){
+    let best=0, bestV=-1;
+    for(let i=0;i<15;i++){
+      const v = state.memory[i];
+      if(v>bestV){bestV=v; best=i;}
+    }
+    return best;
+  }
+
+  // выбираем пару: если saveWanted=true => пара ОБЯЗАТЕЛЬНО включает shotIdx
+  // если false => пара гарантированно НЕ включает shotIdx (чтобы не было “хаотичных” сейвов)
+  function chooseKeeperPair(shotIdx, saveWanted){
     const cfg=DIFF[state.diffKey];
 
-    // повышаем шанс сейва с ростом голов подряд (анти-дюп)
-    const anti = clamp(state.goals * 0.03, 0, 0.18);
-    const saveChance = clamp(cfg.saveBase + anti, 0.10, 0.88);
+    // обновляем память ударов
+    state.memory[shotIdx] += 1;
 
-    // "ум": часть времени угадывает чаще именно популярные зоны игрока
-    // + память по зонам
-    state.memory[playerIdx] += 1;
+    if(saveWanted){
+      // иногда “умный сейв” — вратарь заранее стоит в популярных зонах, но всё равно включает удар
+      // (то есть если он “умный” — чаще перекрывает популярные пары, но всё равно в этих 2 будет удар)
+      let anchor = shotIdx;
 
-    const r = Math.random();
-    if (r < saveChance){
-      // сейв: либо точное угадывание, либо "умный" выбор
-      if (Math.random() < cfg.smart){
-        // выбираем наиболее часто бьющуюся зону (из памяти)
-        let best=0, bestV=-1;
-        for(let i=0;i<15;i++){
-          const v = state.memory[i] + (i===playerIdx?0.5:0);
-          if(v>bestV){bestV=v; best=i;}
-        }
-        return best;
+      if(Math.random() < cfg.smart){
+        const best = bestIdxFromMemory();
+        // если лучшая зона рядом — “сдвинем” anchor ближе к ней (но не ломаем include shot)
+        // проще: оставим anchor=shotIdx, но соседа выберем к направлению best
+        const {r,c} = idxRC(shotIdx);
+        const {r:br,c:bc} = idxRC(best);
+
+        // попробуем подобрать соседа в сторону best
+        let neighbor = null;
+        const candidates = [];
+        if(c>0) candidates.push(rcIdx(r,c-1));
+        if(c<4) candidates.push(rcIdx(r,c+1));
+        if(r>0) candidates.push(rcIdx(r-1,c));
+        if(r<2) candidates.push(rcIdx(r+1,c));
+
+        candidates.sort((i1,i2)=>{
+          const a=idxRC(i1), b=idxRC(i2);
+          const d1 = Math.abs(a.r-br)+Math.abs(a.c-bc);
+          const d2 = Math.abs(b.r-br)+Math.abs(b.c-bc);
+          return d1-d2;
+        });
+
+        neighbor = candidates[0] ?? neighborFor(anchor);
+        return normalizePair(anchor, neighbor);
+      } else {
+        return normalizePair(anchor, neighborFor(anchor));
       }
-      return playerIdx;
     }
 
-    // если не сейвим — прыгаем рядом (реализм)
-    const row=Math.floor(playerIdx/5), col=playerIdx%5;
-    const cand=[];
-    for(let rr=Math.max(0,row-1); rr<=Math.min(2,row+1); rr++){
-      for(let cc=Math.max(0,col-1); cc<=Math.min(4,col+1); cc++){
-        const idx=rr*5+cc;
-        if(idx!==playerIdx) cand.push(idx);
-      }
+    // saveWanted=false: выбрать любую пару, но чтобы shotIdx НЕ входил
+    // берём случайный anchor, который не shotIdx
+    let anchor = Math.floor(Math.random()*15);
+    if(anchor===shotIdx) anchor = (anchor+1)%15;
+
+    let nb = neighborFor(anchor);
+
+    // гарантируем, что shotIdx не попал ни в anchor, ни в neighbor
+    let guard = 0;
+    while((anchor===shotIdx || nb===shotIdx) && guard<30){
+      anchor = Math.floor(Math.random()*15);
+      if(anchor===shotIdx) anchor=(anchor+2)%15;
+      nb = neighborFor(anchor);
+      guard++;
     }
-    return cand.length ? cand[Math.floor(Math.random()*cand.length)] : (playerIdx+1)%15;
+    return normalizePair(anchor, nb);
+  }
+
+  function keeperDiveClassForPair(pair){
+    // ориентируем “прыжок” по центру пары
+    const a=pair[0], b=pair[1];
+    const ca=idxRC(a), cb=idxRC(b);
+    const c = (ca.c+cb.c)/2;
+    const r = (ca.r+cb.r)/2;
+
+    if(r <= 0.35) return "dive-up";
+    if(c <= 1.6) return "dive-left";
+    if(c >= 2.9) return "dive-right";
+    return "center";
   }
 
   /* ---------- geometry ---------- */
   function stageRect(){
     return document.querySelector(".goal-stage").getBoundingClientRect();
-  }
-  function zoneCenter(idx){
-    const zr = zones[idx].getBoundingClientRect();
-    const sr = stageRect();
-    return { x:(zr.left-sr.left)+zr.width/2, y:(zr.top-sr.top)+zr.height/2 };
   }
   function ballHome(){
     const sr = stageRect();
@@ -240,17 +317,19 @@
     el.ball.style.top  = `${y}px`;
     el.ball.style.transform = "translate(-50%,-50%)";
   }
+  function zoneCenter(idx){
+    const zr = zones[idx].getBoundingClientRect();
+    const sr = stageRect();
+    return { x:(zr.left-sr.left)+zr.width/2, y:(zr.top-sr.top)+zr.height/2 };
+  }
 
   /* ---------- hands ---------- */
   function resetHands(){
     el.hands.classList.remove("dive-left","dive-right","dive-up","center");
   }
-  function handsDive(idx){
-    const col=idx%5, row=Math.floor(idx/5);
-    if(row===0) el.hands.classList.add("dive-up");
-    else if(col<=1) el.hands.classList.add("dive-left");
-    else if(col>=3) el.hands.classList.add("dive-right");
-    else el.hands.classList.add("center");
+  function applyHandsForPair(pair){
+    resetHands();
+    el.hands.classList.add(keeperDiveClassForPair(pair));
   }
 
   /* ---------- fx ---------- */
@@ -320,6 +399,15 @@
     return state.inRound && !state.animating;
   }
 
+  function computeSaveWanted(){
+    const cfg=DIFF[state.diffKey];
+
+    // анти-дюп: чем больше голов в раунде, тем выше шанс сейва
+    const anti = clamp(state.goals * 0.035, 0, 0.22);
+    const p = clamp(cfg.saveBase + anti, 0.12, 0.90);
+    return Math.random() < p;
+  }
+
   function startBet(){
     if(state.inRound) return;
 
@@ -328,6 +416,7 @@
       sfx.err();
       setHint("Недостаточно баланса для ставки.");
       setStatus("Недостаточно баланса");
+      updateUI();
       return;
     }
 
@@ -339,11 +428,13 @@
     state.step=0;
     state.goals=0;
     state.selectedIdx=null;
-    state.keeperIdx=null;
+    state.keeperPair=null;
     state.last="Ставка принята";
     recalcX();
 
     clearZoneClasses();
+    setCoverPair(null);
+
     resetHands(); el.hands.classList.add("center");
 
     setStatus("Выбери точку удара");
@@ -356,7 +447,7 @@
     state.inRound=false;
     state.lockedDiff=false;
     state.selectedIdx=null;
-    state.keeperIdx=null;
+    state.keeperPair=null;
     state.step=0;
     state.goals=0;
     recalcX();
@@ -364,6 +455,7 @@
     if(el.seriesToggle.checked) state.streak=0;
 
     clearZoneClasses();
+    setCoverPair(null);
     resetHands(); el.hands.classList.add("center");
 
     setStatus("Проигрыш");
@@ -389,6 +481,7 @@
 
     state.step=0; state.goals=0; recalcX();
     clearZoneClasses();
+    setCoverPair(null);
     resetHands(); el.hands.classList.add("center");
     updateUI();
   }
@@ -399,14 +492,16 @@
     state.step=0;
     state.goals=0;
     state.selectedIdx=null;
-    state.keeperIdx=null;
+    state.keeperPair=null;
     state.last="Сброс";
     recalcX();
 
     if(el.seriesToggle.checked) state.streak=0;
 
     clearZoneClasses();
+    setCoverPair(null);
     resetHands(); el.hands.classList.add("center");
+
     setStatus("Ожидание");
     setHint("Нажми «Ставка», чтобы начать.");
     sfx.click();
@@ -414,33 +509,43 @@
   }
 
   function shoot(idx){
-    if(!canShoot()){ sfx.err(); setHint("Сначала нажми «Ставка»."); return; }
+    if(!canShoot()){
+      sfx.err();
+      setHint(state.inRound ? "Подожди завершения анимации." : "Сначала нажми «Ставка».");
+      return;
+    }
 
     state.step += 1;
     state.selectedIdx = idx;
 
+    // выбираем: хотим сейв или нет
+    const saveWanted = computeSaveWanted();
+
+    // выбираем пару рук по правилам:
+    // saveWanted=true => пара включает idx
+    // saveWanted=false => пара исключает idx
+    const pair = chooseKeeperPair(idx, saveWanted);
+    state.keeperPair = pair;
+
     clearZoneClasses();
+    setCoverPair(pair);
     zones[idx].classList.add("pick");
 
-    const keeper = chooseKeeper(idx);
-    state.keeperIdx = keeper;
-
-    resetHands();
-    handsDive(keeper);
+    applyHandsForPair(pair);
 
     const target = zoneCenter(idx);
     sfx.kick();
 
     animateKick(target, ()=>{
-      const saved = keeper === idx;
+      const saved = pair.includes(idx); // ВАЖНО: проигрыш строго если мяч в одной из 2 секций
+
+      zones[idx].classList.remove("pick");
 
       if(saved){
-        zones[idx].classList.remove("pick");
         zones[idx].classList.add("save");
-
-        state.last = `Сейв (зона ${idx+1})`;
+        state.last = `Сейв (зоны ${pair[0]+1}-${pair[1]+1})`;
         setStatus("Сейв");
-        setHint("Сейв. Раунд завершён.");
+        setHint(`Сейв! Вратарь перекрыл зоны ${pair[0]+1} и ${pair[1]+1}.`);
         sfx.save();
 
         setTimeout(finishLoss, 220);
@@ -448,23 +553,24 @@
       }
 
       // GOAL
-      zones[idx].classList.remove("pick");
       zones[idx].classList.add("hit");
 
       state.goals += 1;
       if(el.seriesToggle.checked) state.streak += 1;
 
       recalcX();
-      state.last = `Гол (зона ${idx+1})`;
+      state.last = `Гол (руки: ${pair[0]+1}-${pair[1]+1})`;
       setStatus("Гол! Можно бить дальше");
       setHint("Гол! Мяч возвращается. Можешь бить дальше или нажать «Кэшаут».");
       sfx.goal();
 
-      // возврат мяча + руки в центр, продолжаем
       setTimeout(()=>{
         animateReturnBall();
+        // руки возвращаем в центр после гола
+        setCoverPair(null);
         resetHands(); el.hands.classList.add("center");
         state.selectedIdx=null;
+        state.keeperPair=null;
         updateUI();
       }, 160);
     });
@@ -473,7 +579,6 @@
   }
 
   function onZone(idx){
-    // сразу удар по клику — как ты просил
     shoot(idx);
   }
 
@@ -494,8 +599,8 @@
       : key==="hard" ? "Сложный: сейвов больше, X ниже."
       : "Эксперт: максимум сейвов, самый низкий X.";
 
-    // пересоберём X/лесенку
-    state.goals=0; recalcX();
+    state.goals=0;
+    recalcX();
     updateUI();
     sfx.click();
   }
@@ -504,9 +609,7 @@
   function updateUI(){
     el.balanceTop.textContent = fmtRub(state.balance);
 
-    el.soundLed.classList.toggle("on", state.soundOn);
     el.soundBtn.innerHTML = `<span id="soundLed" class="led ${state.soundOn ? "on":""}"></span><span>Звук: ${state.soundOn ? "on":"off"}</span>`;
-    // перепривязка led после innerHTML
     el.soundLed = $("#soundLed");
 
     el.betValue.textContent = fmtRub(state.bet);
@@ -525,19 +628,16 @@
 
     el.streakVal.textContent = el.seriesToggle.checked ? String(state.streak) : "0";
 
-    // кнопки
-    el.betBtn.disabled = state.inRound; // ставка 1 раз на раунд
+    el.betBtn.disabled = state.inRound;
     el.cashoutBtn.disabled = !(state.inRound && state.goals>=1) || state.animating;
     el.resetBtn.disabled = state.animating;
 
-    // сложность
     el.diffBtns.forEach(b=>{
       b.disabled = state.lockedDiff;
       b.style.pointerEvents = state.lockedDiff ? "none":"auto";
       b.style.opacity = state.lockedDiff ? ".55":"1";
     });
 
-    // зоны слегка приглушены до старта
     el.zonesWrap.style.opacity = state.inRound ? "1" : "0.78";
 
     updateLadder();
@@ -548,19 +648,16 @@
     state.bet = Math.max(1, Math.floor(v));
     updateUI();
   }
-
   function changeBet(d){
     setBet(state.bet + d);
     sfx.click();
   }
-
   function addFunds(n=1000){
     state.balance += n;
     saveBalance();
     sfx.cash();
     updateUI();
   }
-
   function toggleSound(){
     state.soundOn = !state.soundOn;
     saveSound();
@@ -570,9 +667,6 @@
 
   /* ---------- bind ---------- */
   function bind(){
-    // IMPORTANT: чтобы “Ставка” точно нажималась — никаких оверлеев поверх
-    // Вся интерактивность на кнопках/зонах, у декора pointer-events:none.
-
     el.soundBtn.addEventListener("click", toggleSound);
     el.addFundsBtn.addEventListener("click", ()=>addFunds(1000));
 
@@ -601,9 +695,10 @@
       sfx.click();
     });
 
-    el.betBtn.addEventListener("click", startBet);
-    el.cashoutBtn.addEventListener("click", cashout);
-    el.resetBtn.addEventListener("click", resetAll);
+    // КЛЮЧ: ставка обязана нажиматься
+    el.betBtn.addEventListener("click", (e)=>{ e.preventDefault(); startBet(); });
+    el.cashoutBtn.addEventListener("click", (e)=>{ e.preventDefault(); cashout(); });
+    el.resetBtn.addEventListener("click", (e)=>{ e.preventDefault(); resetAll(); });
   }
 
   /* ---------- init ---------- */
@@ -613,11 +708,9 @@
     buildLadder();
     bind();
 
-    // default
     setDiff("easy");
     recalcX();
 
-    // place ball
     requestAnimationFrame(()=>{
       const h=ballHome();
       setBall(h.x,h.y);
