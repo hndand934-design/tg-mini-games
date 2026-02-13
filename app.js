@@ -39,6 +39,8 @@ const subtitleEl = document.getElementById("subtitle");
 const balanceEl = document.getElementById("balance");
 
 const coinEl = document.getElementById("coin");
+const sparkEl = document.getElementById("coinSpark");
+
 const soundBtn = document.getElementById("soundBtn");
 
 const pickHeadsBtn = document.getElementById("pickHeads");
@@ -108,15 +110,9 @@ function clampBet() {
   return v;
 }
 
-function setStatus(text) {
-  statusView.textContent = text;
-}
+function setStatus(text) { statusView.textContent = text; }
+function setWin(v) { winView.textContent = (v >= 0 ? `+${v}` : `${v}`); }
 
-function setWin(v) {
-  winView.textContent = (v >= 0 ? `+${v}` : `${v}`);
-}
-
-// монета: в ожидании всегда фиолетовая
 function setCoinState(stateClass) {
   coinEl.classList.remove("purple", "gold", "silver");
   coinEl.classList.add(stateClass);
@@ -128,11 +124,27 @@ function setChoice(next) {
   pickTailsBtn.classList.toggle("active", choice === "tails");
 }
 
+function playSpark() {
+  if (!sparkEl) return;
+  sparkEl.classList.remove("play");
+  void sparkEl.offsetWidth;
+  sparkEl.classList.add("play");
+}
+
+function playLand() {
+  coinEl.classList.remove("landed");
+  void coinEl.offsetWidth;
+  coinEl.classList.add("landed");
+  setTimeout(() => coinEl.classList.remove("landed"), 260);
+}
+
 // сброс визуала при изменении ставки/выбора
 function resetToReady() {
   setCoinState("purple");
   setStatus("Готов");
   setWin(0);
+  coinEl.classList.remove("spin", "landed");
+  if (sparkEl) sparkEl.classList.remove("play");
 }
 
 // --- Init ---
@@ -215,12 +227,11 @@ flipBtn.onclick = async () => {
   setWin(0);
 
   // анимация
-  coinEl.classList.remove("spin"); // перезапуск
+  coinEl.classList.remove("spin");
   void coinEl.offsetWidth;
   coinEl.classList.add("spin");
   beep("tick");
 
-  // результат вычисляем заранее, но показываем после анимации
   const outcome = randFloat() < 0.5 ? "heads" : "tails";
 
   await new Promise((r) => setTimeout(r, 1050));
@@ -228,7 +239,11 @@ flipBtn.onclick = async () => {
   coinEl.classList.remove("spin");
   setCoinState(outcome === "heads" ? "gold" : "silver");
 
-  const payout = bet * 2; // показываем именно ВЫПЛАТУ (как на скрине "+100" при ставке 50)
+  // NEW: маленький “удар” + искра, чтобы было живее
+  playLand();
+  playSpark();
+
+  const payout = bet * 2;
   const win = outcome === choice;
 
   if (win) {
