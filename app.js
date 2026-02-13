@@ -172,7 +172,7 @@ document.querySelectorAll(".chip").forEach((b) => {
     if (val === "max") betInput.value = String(wallet.coins);
     else betInput.value = String(val);
     clampBet();
-    resetToReady(); // важно по твоему ТЗ
+    resetToReady();
     beep("tick");
   };
 });
@@ -218,15 +218,12 @@ flipBtn.onclick = async () => {
 
   busy = true;
 
-  // списываем ставку
   addCoins(-bet);
 
-  // монета в полёте фиолетовая
   setCoinState("purple");
   setStatus("Бросок...");
   setWin(0);
 
-  // анимация
   coinEl.classList.remove("spin");
   void coinEl.offsetWidth;
   coinEl.classList.add("spin");
@@ -239,7 +236,6 @@ flipBtn.onclick = async () => {
   coinEl.classList.remove("spin");
   setCoinState(outcome === "heads" ? "gold" : "silver");
 
-  // NEW: маленький “удар” + искра, чтобы было живее
   playLand();
   playSpark();
 
