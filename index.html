@@ -33,9 +33,13 @@
         </div>
 
         <div class="coinStage">
-          <!-- spark overlay -->
           <div class="coinSpark" id="coinSpark" aria-hidden="true"></div>
-          <div class="coin3d purple" id="coin" aria-label="coin"></div>
+
+          <!-- ВАЖНО: добавили 2 слоя для 3D (edge + face) -->
+          <div class="coin3d purple" id="coin" aria-label="coin">
+            <span class="coinEdge" aria-hidden="true"></span>
+            <span class="coinFace" aria-hidden="true"></span>
+          </div>
         </div>
 
         <div class="grid2">
