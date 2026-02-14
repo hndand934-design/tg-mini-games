@@ -35,9 +35,10 @@ body{
   margin: 14px auto 18px;
 }
 @media (max-width: 520px){
-  .app{ width: calc(100% - 16px); margin: 10px auto 14px; }
+  .app{ width: calc(100% - 14px); margin: 10px auto 14px; }
 }
 
+/* topbar */
 .topbar{
   display:flex; justify-content:space-between; align-items:center; gap:10px;
   padding:12px 14px;
@@ -70,12 +71,12 @@ body{
   cursor:default;
 }
 .pill--mini{padding:8px 10px; font-weight:900}
-
 .dot{
   width:8px;height:8px;border-radius:99px;background:#26d47b;
   box-shadow: 0 0 0 3px rgba(38,212,123,.14);
 }
 
+/* card */
 .card{
   margin-top:12px;
   border-radius: 18px;
@@ -83,7 +84,6 @@ body{
   border:1px solid var(--stroke2);
   overflow:hidden;
 }
-
 .cardHead{
   padding:14px 14px 10px;
   display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
@@ -95,23 +95,20 @@ body{
 .h2{font-weight:900; font-size:14px}
 .hint{font-size:12px; color:var(--muted); margin-top:4px}
 .muted{font-size:12px; color:var(--muted)}
-
 .content{ padding: 10px 14px 14px; }
 
+/* layout */
 .grid2{
   display:grid;
   grid-template-columns: 1.45fr .55fr;
   gap:14px;
 }
 @media (max-width: 760px){
-  .grid2{grid-template-columns: 1fr; }
+  .grid2{grid-template-columns: 1fr;}
   .rightCol{display:none;}
 }
 
-.leftCol{
-  min-width:0;
-}
-
+.leftCol{min-width:0;}
 .rightCol .ghostPanel{
   height: 100%;
   border-radius: 16px;
@@ -119,10 +116,8 @@ body{
   background: rgba(255,255,255,.03);
 }
 
-.seg{
-  display:flex; gap:10px; align-items:center;
-  margin-bottom:12px;
-}
+/* segments */
+.seg{display:flex; gap:10px; align-items:center; margin-bottom:12px;}
 .segBtn{
   padding:10px 14px;
   border-radius:999px;
@@ -138,14 +133,12 @@ body{
   box-shadow: 0 14px 26px rgba(43,97,255,.12);
 }
 
+/* stats */
 .statsRow{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
   gap:10px;
   margin-bottom:12px;
-}
-@media (max-width: 520px){
-  .statsRow{grid-template-columns: 1fr; }
 }
 .stat{
   border-radius: 14px;
@@ -156,6 +149,7 @@ body{
 .label{font-size:12px; color:var(--muted)}
 .value{margin-top:2px; font-size:14px}
 
+/* threshold */
 .thresholdRow{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.08);
@@ -168,9 +162,9 @@ body{
   margin-bottom:10px;
   flex-wrap:wrap;
 }
-
 .range{ width:100%; accent-color: var(--blue1); }
 
+/* dice arena */
 .diceArena{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.08);
@@ -188,9 +182,6 @@ body{
   display:flex; align-items:center; justify-content:center;
   overflow:hidden;
 }
-@media (max-width: 420px){
-  .arenaInner{height: 200px;}
-}
 
 /* ===== 3D DICE ===== */
 .dice{
@@ -201,10 +192,6 @@ body{
   transform: rotateX(-22deg) rotateY(32deg);
   will-change: transform;
 }
-@media (max-width:420px){
-  .dice{width: 78px; height:78px;}
-}
-
 .face{
   position:absolute;
   inset:0;
@@ -233,24 +220,32 @@ body{
   position:absolute;
 }
 
-/* face transforms */
+/* number on top face */
+.topNum{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform: translate(-50%,-50%);
+  font-weight: 1000;
+  font-size: 28px;
+  letter-spacing: .5px;
+  color: rgba(234,240,255,.95);
+  text-shadow: 0 10px 20px rgba(0,0,0,.45);
+  opacity: 0;
+  transition: opacity .15s ease;
+  pointer-events:none;
+}
+.dice.showTopNum .topNum{ opacity: .95; }
+/* когда показываем число — делаем точки на верхней грани чуть тише, чтобы цифра читалась */
+.dice.showTopNum .face3 .pip{ opacity: .28; }
+
+/* faces positions */
 .face1{ transform: translateZ(43px); }
 .face6{ transform: rotateY(180deg) translateZ(43px); }
-
 .face2{ transform: rotateY(90deg) translateZ(43px); }
 .face5{ transform: rotateY(-90deg) translateZ(43px); }
-
 .face3{ transform: rotateX(90deg) translateZ(43px); }
 .face4{ transform: rotateX(-90deg) translateZ(43px); }
-
-@media (max-width:420px){
-  .face1,.face2,.face3,.face4,.face5,.face6{ transform: translateZ(39px); }
-  .face6{ transform: rotateY(180deg) translateZ(39px); }
-  .face2{ transform: rotateY(90deg) translateZ(39px); }
-  .face5{ transform: rotateY(-90deg) translateZ(39px); }
-  .face3{ transform: rotateX(90deg) translateZ(39px); }
-  .face4{ transform: rotateX(-90deg) translateZ(39px); }
-}
 
 /* pips positioning */
 .face2 .p1{left:24px;top:24px}
@@ -278,7 +273,7 @@ body{
 .face6 .p5{left:22px;bottom:20px}
 .face6 .p6{right:22px;bottom:20px}
 
-/* animation: short & smooth for mobile */
+/* animation (коротко и плавно — без лагов на мобилке) */
 .dice.rolling{
   animation: diceRoll 680ms cubic-bezier(.2,.85,.2,1) both;
 }
@@ -290,18 +285,9 @@ body{
   100% { transform: rotateX(var(--rx)) rotateY(var(--ry)) scale(1); }
 }
 
-/* controls */
-.betTitle{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-  margin: 6px 0 8px;
-}
-.chips{
-  display:flex; flex-wrap:wrap; gap:8px;
-  margin-bottom:10px;
-}
+/* bet */
+.betTitle{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0 8px;}
+.chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;}
 .chip{
   padding:10px 12px;
   border-radius:999px;
@@ -340,7 +326,6 @@ body{
   padding: 0 12px;
   outline:none;
 }
-
 .btnPrimary{
   width: 100%;
   padding: 14px 14px;
@@ -355,13 +340,42 @@ body{
 }
 .btnPrimary:disabled{opacity:.6; cursor:not-allowed}
 .btnPrimary:active{transform:scale(.99)}
+.footNote{margin-top:10px; font-size:12px; color: var(--muted);}
 
-.footNote{
-  margin-top:10px;
-  font-size:12px;
-  color: var(--muted);
+/* ===== MOBILE: делаем “кучнее” как ты просил ===== */
+@media (max-width: 520px){
+  .topbar{padding:10px 12px; border-radius:16px;}
+  .pill{padding:8px 10px;}
+  .cardHead{padding:12px 12px 8px;}
+  .content{padding:8px 12px 12px;}
+  .seg{margin-bottom:10px;}
+  .segBtn{padding:9px 12px;}
+  .statsRow{grid-template-columns: 1fr; gap:8px; margin-bottom:10px;}
+  .stat{padding:10px 12px;}
+  .thresholdRow{padding:10px; margin-bottom:10px;}
+  .diceArena{padding:10px; margin-bottom:10px;}
+  .arenaInner{height: 190px;}
+  .chips{gap:7px;}
+  .chip{padding:9px 11px;}
+  .betRow{gap:8px;}
+  .btnSmall{height:42px;}
+  .betInput{height:42px;}
+  .btnPrimary{padding:13px 14px;}
 }
 
+/* чуть уменьшаем куб на узкой мобилке */
+@media (max-width: 420px){
+  .dice{width: 78px; height:78px;}
+  .face1{ transform: translateZ(39px); }
+  .face6{ transform: rotateY(180deg) translateZ(39px); }
+  .face2{ transform: rotateY(90deg) translateZ(39px); }
+  .face5{ transform: rotateY(-90deg) translateZ(39px); }
+  .face3{ transform: rotateX(90deg) translateZ(39px); }
+  .face4{ transform: rotateX(-90deg) translateZ(39px); }
+  .topNum{font-size:26px;}
+}
+
+/* reduce motion */
 @media (prefers-reduced-motion: reduce){
   .dice.rolling{animation:none}
 }
