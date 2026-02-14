@@ -3,10 +3,8 @@
   --bg1:#0b1222;
   --text:#eaf0ff;
   --muted: rgba(234,240,255,.68);
-
   --stroke: rgba(255,255,255,.10);
   --stroke2: rgba(255,255,255,.08);
-
   --blue1:#4c7dff;
   --blue2:#2b61ff;
 }
@@ -20,7 +18,6 @@ body{
   background: linear-gradient(180deg, var(--bg0), var(--bg1));
   overflow-x:hidden;
 }
-
 .bg{
   position:fixed; inset:0;
   background:
@@ -30,19 +27,12 @@ body{
   pointer-events:none;
 }
 
-.app{
-  width:min(980px, calc(100% - 20px));
-  margin: 14px auto 18px;
-}
-@media (max-width: 520px){
-  .app{ width: calc(100% - 14px); margin: 10px auto 14px; }
-}
+.app{ width:min(980px, calc(100% - 16px)); margin: 10px auto 14px; }
 
-/* topbar */
 .topbar{
-  display:flex; justify-content:space-between; align-items:center; gap:10px;
-  padding:12px 14px;
-  border-radius: 18px;
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:10px 12px;
+  border-radius: 16px;
   background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
   border:1px solid var(--stroke2);
 }
@@ -52,7 +42,7 @@ body{
 
 .pill{
   display:inline-flex; align-items:center; gap:8px;
-  padding:10px 12px;
+  padding:8px 10px;
   border-radius:999px;
   border:1px solid var(--stroke);
   background: rgba(255,255,255,.05);
@@ -61,31 +51,23 @@ body{
   user-select:none;
 }
 .pill--balance{cursor:default}
-.pill--bonus{
-  background: rgba(76,125,255,.14);
-  border-color: rgba(76,125,255,.28);
-}
-.pill--ghost{
-  background: rgba(255,255,255,.04);
-  border-color: rgba(255,255,255,.08);
-  cursor:default;
-}
-.pill--mini{padding:8px 10px; font-weight:900}
+.pill--bonus{ background: rgba(76,125,255,.14); border-color: rgba(76,125,255,.28); }
+.pill--ghost{ background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.08); cursor:default; }
+.pill--mini{ padding:7px 9px; font-weight:900 }
 .dot{
   width:8px;height:8px;border-radius:99px;background:#26d47b;
   box-shadow: 0 0 0 3px rgba(38,212,123,.14);
 }
 
-/* card */
 .card{
-  margin-top:12px;
+  margin-top:10px;
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
   border:1px solid var(--stroke2);
   overflow:hidden;
 }
 .cardHead{
-  padding:14px 14px 10px;
+  padding:12px 12px 8px;
   display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
 }
 .rightPills{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
@@ -95,20 +77,15 @@ body{
 .h2{font-weight:900; font-size:14px}
 .hint{font-size:12px; color:var(--muted); margin-top:4px}
 .muted{font-size:12px; color:var(--muted)}
-.content{ padding: 10px 14px 14px; }
+.content{ padding: 8px 12px 12px; }
 
 /* layout */
-.grid2{
-  display:grid;
-  grid-template-columns: 1.45fr .55fr;
-  gap:14px;
-}
+.grid2{ display:grid; grid-template-columns: 1.45fr .55fr; gap:12px; }
 @media (max-width: 760px){
   .grid2{grid-template-columns: 1fr;}
   .rightCol{display:none;}
 }
 
-.leftCol{min-width:0;}
 .rightCol .ghostPanel{
   height: 100%;
   border-radius: 16px;
@@ -117,9 +94,9 @@ body{
 }
 
 /* segments */
-.seg{display:flex; gap:10px; align-items:center; margin-bottom:12px;}
+.seg{display:flex; gap:10px; align-items:center; margin-bottom:10px;}
 .segBtn{
-  padding:10px 14px;
+  padding:9px 12px;
   border-radius:999px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.05);
@@ -133,12 +110,15 @@ body{
   box-shadow: 0 14px 26px rgba(43,97,255,.12);
 }
 
-/* stats */
+/* stats compact */
 .statsRow{
   display:grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap:10px;
-  margin-bottom:12px;
+  grid-template-columns: 1fr;
+  gap:8px;
+  margin-bottom:10px;
+}
+@media (min-width: 760px){
+  .statsRow{ grid-template-columns: repeat(3, 1fr); }
 }
 .stat{
   border-radius: 14px;
@@ -154,28 +134,28 @@ body{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.08);
   background: rgba(0,0,0,.12);
-  padding:12px;
-  margin-bottom:12px;
+  padding:10px;
+  margin-bottom:10px;
 }
 .thrTitle{
   display:flex; justify-content:space-between; gap:10px; align-items:center;
-  margin-bottom:10px;
-  flex-wrap:wrap;
+  margin-bottom:8px;
+  flex-wrap:nowrap;
 }
 .range{ width:100%; accent-color: var(--blue1); }
 
-/* dice arena */
+/* dice arena compact */
 .diceArena{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.08);
   background:
     radial-gradient(700px 240px at 40% 30%, rgba(255,255,255,.05), transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.12));
-  padding: 12px;
-  margin-bottom:12px;
+  padding: 10px;
+  margin-bottom:10px;
 }
 .arenaInner{
-  height: 220px;
+  height: 165px;
   border-radius: 14px;
   border:1px solid rgba(255,255,255,.08);
   background: rgba(0,0,0,.18);
@@ -185,25 +165,22 @@ body{
 
 /* ===== 3D DICE ===== */
 .dice{
-  width: 86px;
-  height: 86px;
+  width: 74px;
+  height: 74px;
   position: relative;
   transform-style: preserve-3d;
-  transform: rotateX(-22deg) rotateY(32deg);
+  transform: rotateX(var(--rx, -22deg)) rotateY(var(--ry, 32deg)) rotateZ(var(--rz, 0deg));
   will-change: transform;
 }
+
 .face{
-  position:absolute;
-  inset:0;
+  position:absolute; inset:0;
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(45,55,78,.95), rgba(20,26,40,.98));
   border: 1px solid rgba(255,255,255,.10);
   box-shadow:
     0 18px 36px rgba(0,0,0,.35),
     inset 0 0 0 2px rgba(255,255,255,.05);
-  display:flex;
-  align-items:center;
-  justify-content:center;
   backface-visibility:hidden;
 }
 .face::after{
@@ -213,83 +190,46 @@ body{
   border:1px solid rgba(255,255,255,.08);
   opacity:.7;
 }
+
+/* pip positions */
 .pip{
-  width:10px;height:10px;border-radius:99px;
+  width:9px;height:9px;border-radius:99px;
   background: rgba(234,240,255,.92);
   box-shadow: 0 2px 6px rgba(0,0,0,.35);
   position:absolute;
 }
+.tl{left:18px;top:18px}
+.tr{right:18px;top:18px}
+.bl{left:18px;bottom:18px}
+.br{right:18px;bottom:18px}
+.ml{left:18px;top:50%;transform:translateY(-50%)}
+.mr{right:18px;top:50%;transform:translateY(-50%)}
+.c{left:50%;top:50%;transform:translate(-50%,-50%)}
 
-/* number on top face */
-.topNum{
-  position:absolute;
-  left:50%;
-  top:50%;
-  transform: translate(-50%,-50%);
-  font-weight: 1000;
-  font-size: 28px;
-  letter-spacing: .5px;
-  color: rgba(234,240,255,.95);
-  text-shadow: 0 10px 20px rgba(0,0,0,.45);
-  opacity: 0;
-  transition: opacity .15s ease;
-  pointer-events:none;
-}
-.dice.showTopNum .topNum{ opacity: .95; }
-/* когда показываем число — делаем точки на верхней грани чуть тише, чтобы цифра читалась */
-.dice.showTopNum .face3 .pip{ opacity: .28; }
+/* faces positions (74px => depth 37px) */
+.face1{ transform: translateZ(37px); }                  /* front */
+.face6{ transform: rotateY(180deg) translateZ(37px); }  /* back */
+.face2{ transform: rotateY(90deg) translateZ(37px); }   /* right */
+.face5{ transform: rotateY(-90deg) translateZ(37px); }  /* left */
+.face3{ transform: rotateX(90deg) translateZ(37px); }   /* top */
+.face4{ transform: rotateX(-90deg) translateZ(37px); }  /* bottom */
 
-/* faces positions */
-.face1{ transform: translateZ(43px); }
-.face6{ transform: rotateY(180deg) translateZ(43px); }
-.face2{ transform: rotateY(90deg) translateZ(43px); }
-.face5{ transform: rotateY(-90deg) translateZ(43px); }
-.face3{ transform: rotateX(90deg) translateZ(43px); }
-.face4{ transform: rotateX(-90deg) translateZ(43px); }
-
-/* pips positioning */
-.face2 .p1{left:24px;top:24px}
-.face2 .p2{right:24px;bottom:24px}
-
-.face3 .p1{left:22px;top:22px}
-.face3 .p2{left:38px;top:38px}
-.face3 .p3{right:22px;bottom:22px}
-
-.face4 .p1{left:22px;top:22px}
-.face4 .p2{right:22px;top:22px}
-.face4 .p3{left:22px;bottom:22px}
-.face4 .p4{right:22px;bottom:22px}
-
-.face5 .p1{left:22px;top:22px}
-.face5 .p2{right:22px;top:22px}
-.face5 .p3{left:38px;top:38px}
-.face5 .p4{left:22px;bottom:22px}
-.face5 .p5{right:22px;bottom:22px}
-
-.face6 .p1{left:22px;top:20px}
-.face6 .p2{right:22px;top:20px}
-.face6 .p3{left:22px;top:38px}
-.face6 .p4{right:22px;top:38px}
-.face6 .p5{left:22px;bottom:20px}
-.face6 .p6{right:22px;bottom:20px}
-
-/* animation (коротко и плавно — без лагов на мобилке) */
+/* roll animation — короткая и лёгкая */
 .dice.rolling{
-  animation: diceRoll 680ms cubic-bezier(.2,.85,.2,1) both;
+  animation: diceRoll 620ms cubic-bezier(.2,.85,.2,1) both;
 }
 @keyframes diceRoll{
-  0%   { transform: rotateX(-22deg) rotateY(32deg) scale(1); }
-  25%  { transform: rotateX(140deg) rotateY(260deg) scale(1.03); }
-  55%  { transform: rotateX(320deg) rotateY(520deg) scale(1.06); }
-  80%  { transform: rotateX(480deg) rotateY(760deg) scale(1.02); }
-  100% { transform: rotateX(var(--rx)) rotateY(var(--ry)) scale(1); }
+  0%   { transform: rotateX(var(--rx0)) rotateY(var(--ry0)) rotateZ(var(--rz0)) scale(1); }
+  45%  { transform: rotateX(calc(var(--rx0) + 240deg)) rotateY(calc(var(--ry0) + 360deg)) rotateZ(calc(var(--rz0) + 180deg)) scale(1.05); }
+  75%  { transform: rotateX(calc(var(--rx0) + 420deg)) rotateY(calc(var(--ry0) + 620deg)) rotateZ(calc(var(--rz0) + 260deg)) scale(1.03); }
+  100% { transform: rotateX(var(--rx))  rotateY(var(--ry))  rotateZ(var(--rz))  scale(1); }
 }
 
 /* bet */
 .betTitle{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0 8px;}
-.chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px;}
 .chip{
-  padding:10px 12px;
+  padding:9px 11px;
   border-radius:999px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.05);
@@ -301,13 +241,13 @@ body{
 
 .betRow{
   display:grid;
-  grid-template-columns: 46px 1fr 46px;
-  gap:10px;
+  grid-template-columns: 44px 1fr 44px;
+  gap:8px;
   align-items:center;
-  margin-bottom:12px;
+  margin-bottom:10px;
 }
 .btnSmall{
-  height:44px;
+  height:42px;
   border-radius: 14px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.05);
@@ -315,9 +255,8 @@ body{
   font-weight:950;
   cursor:pointer;
 }
-.btnSmall:active{transform:scale(.99)}
 .betInput{
-  height:44px;
+  height:42px;
   border-radius: 14px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.05);
@@ -328,7 +267,7 @@ body{
 }
 .btnPrimary{
   width: 100%;
-  padding: 14px 14px;
+  padding: 13px 14px;
   border-radius: 16px;
   font-weight:950;
   font-size:16px;
@@ -339,41 +278,7 @@ body{
   box-shadow: 0 16px 30px rgba(43,97,255,.18);
 }
 .btnPrimary:disabled{opacity:.6; cursor:not-allowed}
-.btnPrimary:active{transform:scale(.99)}
 .footNote{margin-top:10px; font-size:12px; color: var(--muted);}
-
-/* ===== MOBILE: делаем “кучнее” как ты просил ===== */
-@media (max-width: 520px){
-  .topbar{padding:10px 12px; border-radius:16px;}
-  .pill{padding:8px 10px;}
-  .cardHead{padding:12px 12px 8px;}
-  .content{padding:8px 12px 12px;}
-  .seg{margin-bottom:10px;}
-  .segBtn{padding:9px 12px;}
-  .statsRow{grid-template-columns: 1fr; gap:8px; margin-bottom:10px;}
-  .stat{padding:10px 12px;}
-  .thresholdRow{padding:10px; margin-bottom:10px;}
-  .diceArena{padding:10px; margin-bottom:10px;}
-  .arenaInner{height: 190px;}
-  .chips{gap:7px;}
-  .chip{padding:9px 11px;}
-  .betRow{gap:8px;}
-  .btnSmall{height:42px;}
-  .betInput{height:42px;}
-  .btnPrimary{padding:13px 14px;}
-}
-
-/* чуть уменьшаем куб на узкой мобилке */
-@media (max-width: 420px){
-  .dice{width: 78px; height:78px;}
-  .face1{ transform: translateZ(39px); }
-  .face6{ transform: rotateY(180deg) translateZ(39px); }
-  .face2{ transform: rotateY(90deg) translateZ(39px); }
-  .face5{ transform: rotateY(-90deg) translateZ(39px); }
-  .face3{ transform: rotateX(90deg) translateZ(39px); }
-  .face4{ transform: rotateX(-90deg) translateZ(39px); }
-  .topNum{font-size:26px;}
-}
 
 /* reduce motion */
 @media (prefers-reduced-motion: reduce){
