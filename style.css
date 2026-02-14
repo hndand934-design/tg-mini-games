@@ -1,11 +1,12 @@
 :root{
   --bg0:#0b0f1a;
   --bg1:#0b1222;
+  --text:#eaf0ff;
+  --muted: rgba(234,240,255,.68);
+
   --card: rgba(255,255,255,.06);
   --stroke: rgba(255,255,255,.10);
   --stroke2: rgba(255,255,255,.08);
-  --text:#eaf0ff;
-  --muted: rgba(234,240,255,.68);
 
   --blue1:#4c7dff;
   --blue2:#2b61ff;
@@ -26,15 +27,28 @@ body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
   color:var(--text);
+  background: linear-gradient(180deg, var(--bg0), var(--bg1));
+  overflow-x:hidden;
+}
+
+/* фон как “наш стиль”, но без тяжёлых blur/filter */
+.bg{
+  position:fixed; inset:0;
   background:
     radial-gradient(900px 600px at 20% 15%, rgba(76,125,255,.22), transparent 55%),
     radial-gradient(900px 700px at 80% 75%, rgba(176,64,255,.18), transparent 58%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
+    radial-gradient(700px 400px at 50% 40%, rgba(255,255,255,.05), transparent 60%);
+  pointer-events:none;
 }
 
 .app{
   width:min(980px, calc(100% - 20px));
   margin: 14px auto 18px;
+}
+
+/* чтобы “не расползалось” в WebView */
+@media (max-width: 520px){
+  .app{ width: calc(100% - 16px); margin: 10px auto 14px; }
 }
 
 .topbar{
@@ -43,7 +57,6 @@ body{
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
   border:1px solid var(--stroke2);
-  backdrop-filter: blur(10px);
 }
 
 .title{font-weight:950}
@@ -84,65 +97,80 @@ body{
 .hint{font-size:12px; color:var(--muted); margin-top:4px}
 .muted{font-size:12px; color:var(--muted)}
 
-.arena{ padding: 10px 14px 12px; }
-.coinWrap{
-  height: 240px;
+.arena{ padding: 10px 14px 14px; }
+
+.coinPanel{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.08);
   background:
     radial-gradient(700px 240px at 40% 30%, rgba(255,255,255,.05), transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.10));
+  padding: 12px;
+}
+
+.coinWrap{
+  height: 220px;
+  border-radius: 14px;
+  border:1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.18);
   display:flex; align-items:center; justify-content:center;
   overflow:hidden;
 }
 
-/* легкая монета без blur/filter — не лагает на телефонах */
+/* монета — лёгкая, без тяжёлых 3D поворотов */
 .coin{
   width: 150px; height: 150px; border-radius: 999px;
   position: relative;
   transform: translateZ(0);
   will-change: transform;
-  backface-visibility: hidden;
   border:1px solid rgba(255,255,255,.14);
   box-shadow: 0 14px 30px rgba(0,0,0,.35);
+  background: #222;
 }
 
-/* “толщина” (ребро) — легкий conic-gradient */
+/* “ребро” видно всегда (псевдо-3D), но дешево */
 .coin::after{
   content:"";
-  position:absolute; inset:-7px;
+  position:absolute;
+  inset:-8px;
   border-radius:999px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(255,255,255,.16),
-    rgba(255,255,255,.05),
-    rgba(0,0,0,.18),
-    rgba(255,255,255,.06),
-    rgba(0,0,0,.22),
-    rgba(255,255,255,.08),
-    rgba(255,255,255,.16)
+  background: linear-gradient(90deg,
+    rgba(255,255,255,.10),
+    rgba(0,0,0,.28),
+    rgba(255,255,255,.10)
   );
-  opacity:.62;
+  opacity:.55;
   pointer-events:none;
 }
 
-.coin--purple{
-  background:
-    radial-gradient(circle at 28% 26%, rgba(255,255,255,.35), transparent 46%),
-    radial-gradient(circle at 74% 82%, rgba(0,0,0,.22), transparent 55%),
-    linear-gradient(180deg, rgba(177,140,255,.70), rgba(92,45,214,.52));
-}
-.coin--gold{
+/* блик */
+.coin::before{
+  content:"";
+  position:absolute; inset:0;
+  border-radius:999px;
   background:
     radial-gradient(circle at 28% 26%, rgba(255,255,255,.38), transparent 46%),
-    radial-gradient(circle at 74% 82%, rgba(0,0,0,.20), transparent 55%),
-    linear-gradient(180deg, rgba(255,214,110,.82), rgba(182,128,31,.58));
+    radial-gradient(circle at 74% 82%, rgba(0,0,0,.22), transparent 55%);
+  pointer-events:none;
 }
-.coin--silver{
-  background:
-    radial-gradient(circle at 28% 26%, rgba(255,255,255,.40), transparent 46%),
-    radial-gradient(circle at 74% 82%, rgba(0,0,0,.18), transparent 55%),
-    linear-gradient(180deg, rgba(228,238,255,.90), rgba(152,169,201,.60));
+
+/* темы */
+.coin--purple{ background: linear-gradient(180deg, rgba(177,140,255,.78), rgba(92,45,214,.58)); }
+.coin--gold{ background: linear-gradient(180deg, rgba(255,214,110,.88), rgba(182,128,31,.60)); }
+.coin--silver{ background: linear-gradient(180deg, rgba(228,238,255,.95), rgba(152,169,201,.62)); }
+
+/* СУПЕР ЛЁГКАЯ АНИМАЦИЯ (главный фикс лагов на телефоне)
+   вместо rotateY(1800deg) используем scaleX -> “ребро” -> обратно */
+.coin.spin{
+  animation: coinFlip 720ms cubic-bezier(.2,.85,.2,1) both;
+}
+@keyframes coinFlip{
+  0%   { transform: translateZ(0) rotate(0deg)   scale(1)   scaleX(1); }
+  20%  { transform: translateZ(0) rotate(6deg)   scale(1.03) scaleX(.55); }
+  45%  { transform: translateZ(0) rotate(-8deg)  scale(1.05) scaleX(.14); }
+  55%  { transform: translateZ(0) rotate(10deg)  scale(1.05) scaleX(.14); }
+  80%  { transform: translateZ(0) rotate(-6deg)  scale(1.02) scaleX(.70); }
+  100% { transform: translateZ(0) rotate(0deg)   scale(1)   scaleX(1); }
 }
 
 .history{
@@ -152,23 +180,19 @@ body{
   background: rgba(255,255,255,.04);
   padding:10px 10px;
 }
-.historyDots{
-  display:flex;
-  gap:6px;
-  align-items:center;
-  flex-wrap:wrap;
-}
+.historyTitle{font-size:12px; color:var(--muted); margin-bottom:8px}
+.historyDots{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
 .hDot{
   width:10px; height:10px; border-radius:99px;
   background: rgba(255,255,255,.12);
   border: 1px solid rgba(255,255,255,.10);
 }
-.hDot.gold{ background: rgba(255,214,110,.90); border-color: rgba(255,214,110,.25); }
-.hDot.silver{ background: rgba(228,238,255,.90); border-color: rgba(228,238,255,.22); }
+.hDot.gold{ background: rgba(255,214,110,.95); border-color: rgba(255,214,110,.25); }
+.hDot.silver{ background: rgba(228,238,255,.95); border-color: rgba(228,238,255,.22); }
 
 .btnPrimary{
-  margin: 0 14px 12px;
-  width: calc(100% - 28px);
+  margin: 12px 0 0;
+  width: 100%;
   padding: 14px 14px;
   border-radius: 16px;
   font-weight:950;
@@ -182,7 +206,7 @@ body{
 .btnPrimary:disabled{opacity:.6; cursor:not-allowed}
 .btnPrimary:active{transform:scale(.99)}
 
-.controls{ padding: 0 14px 14px; }
+.controls{ padding-top: 14px; }
 
 .rowTitle{
   display:flex; justify-content:space-between; align-items:baseline; gap:10px;
@@ -255,11 +279,11 @@ body{
   box-shadow: 0 10px 20px rgba(0,0,0,.18);
 }
 .pick--gold{
-  background: linear-gradient(180deg, rgba(255,214,110,.24), rgba(182,128,31,.10));
-  border-color: rgba(255,214,110,.25);
+  background: linear-gradient(180deg, rgba(255,214,110,.26), rgba(182,128,31,.10));
+  border-color: rgba(255,214,110,.26);
 }
 .pick--silver{
-  background: linear-gradient(180deg, rgba(228,238,255,.20), rgba(152,169,201,.10));
+  background: linear-gradient(180deg, rgba(228,238,255,.22), rgba(152,169,201,.10));
   border-color: rgba(228,238,255,.22);
 }
 
@@ -288,12 +312,12 @@ body{
   color: var(--muted);
 }
 
+/* мобилка: всё компактно, но не “в пол-экрана” */
 @media (max-width: 420px){
-  .coinWrap{height: 220px;}
-  .coin{width: 140px; height:140px;}
+  .coinWrap{height: 200px;}
+  .coin{width: 136px; height:136px;}
   .stats{grid-template-columns: 1fr;}
 }
-
 @media (prefers-reduced-motion: reduce){
-  .coin{transition:none}
+  .coin.spin{animation:none}
 }
