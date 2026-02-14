@@ -2,101 +2,105 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Mini Games — Coin Flip</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <div class="app">
     <header class="topbar">
-      <div class="topLeft">
+      <div class="topbar__left">
         <div class="title">Mini Games</div>
-        <div class="subtitle" id="subtitle">Открыто вне Telegram</div>
+        <div id="subTitle" class="subtitle">Открыто вне Telegram</div>
       </div>
 
-      <div class="topRight">
-        <button class="pill" id="soundBtn" type="button">Звук: on</button>
-        <div class="balancePill"><span class="coin">🪙</span> <b id="balance">0</b></div>
+      <div class="topbar__right">
+        <button id="soundBtn" class="pill" type="button" aria-label="Звук">
+          <span class="dot"></span>
+          <span id="soundText">Звук on</span>
+        </button>
+        <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
+        <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
 
-    <main class="content">
-      <section class="card">
-        <div class="cardHead">
-          <div>
-            <div class="cardTitle">Coin Flip</div>
-            <div class="cardDesc">
-              Монета в полёте всегда <b>фиолетовая</b>. После броска становится
-              <b>золотой</b> (орёл) или <b>серебряной</b> (решка). Надписей нет.
-            </div>
+    <main class="card">
+      <div class="cardHead">
+        <div>
+          <div class="h1">Coin Flip</div>
+          <div class="hint">До броска монета фиолетовая. Результат: орёл — золото, решка — серебро.</div>
+        </div>
+      </div>
+
+      <!-- Сцена -->
+      <section class="arena">
+        <div class="coinWrap">
+          <div id="coin" class="coin coin--purple" aria-label="coin"></div>
+        </div>
+
+        <!-- История (как в рефе, без кнопок) -->
+        <div class="history" aria-label="history">
+          <div class="historyDots" id="historyDots"></div>
+        </div>
+      </section>
+
+      <!-- Большая кнопка как “Ставка” -->
+      <button id="flipBtn" class="btnPrimary" type="button">Ставка</button>
+
+      <!-- Блок ставок и выбора -->
+      <section class="controls">
+        <div class="rowTitle">
+          <div class="h2">Сумма ставки</div>
+          <div class="muted">Баланс: <b>🪙 <span id="balance2">1000</span></b></div>
+        </div>
+
+        <div class="betRow">
+          <button id="betMinus" class="btnSmall" type="button">−</button>
+          <input id="betInput" class="betInput" type="number" min="1" step="1" value="50" />
+          <button id="betPlus" class="btnSmall" type="button">+</button>
+        </div>
+
+        <div class="chips" role="group" aria-label="chips">
+          <button class="chip" data-bet="10" type="button">10</button>
+          <button class="chip" data-bet="50" type="button">50</button>
+          <button class="chip" data-bet="100" type="button">100</button>
+          <button class="chip" data-bet="250" type="button">250</button>
+          <button class="chip" data-bet="500" type="button">500</button>
+          <button class="chip" data-bet="max" type="button">MAX</button>
+        </div>
+
+        <div class="pickRow">
+          <button id="pickEagle" class="pick pick--gold active" type="button">
+            <span class="mark mark--gold"></span> Орёл
+          </button>
+          <button id="pickTail" class="pick pick--silver" type="button">
+            <span class="mark mark--silver"></span> Решка
+          </button>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Ставка</div>
+            <div class="value"><b id="betView">50</b> 🪙</div>
+          </div>
+          <div class="stat">
+            <div class="label">Выигрыш</div>
+            <div class="value"><b id="winView">+0</b> 🪙</div>
+          </div>
+          <div class="stat">
+            <div class="label">Статус</div>
+            <div class="value"><b id="statusView">Готов</b></div>
           </div>
         </div>
 
-        <div class="coinStage">
-          <div class="coinSpark" id="coinSpark" aria-hidden="true"></div>
-
-          <!-- ВАЖНО: добавили 2 слоя для 3D (edge + face) -->
-          <div class="coin3d purple" id="coin" aria-label="coin">
-            <span class="coinEdge" aria-hidden="true"></span>
-            <span class="coinFace" aria-hidden="true"></span>
-          </div>
+        <div class="footNote">
+          При изменении ставки — монета снова становится фиолетовой до следующего броска.
         </div>
-
-        <div class="grid2">
-          <div class="panel">
-            <div class="row" style="gap:10px; flex-wrap:wrap;">
-              <button class="segBtn" id="pickHeads" type="button">🦅 Орёл</button>
-              <button class="segBtn" id="pickTails" type="button">🌙 Решка</button>
-              <button class="chip ghost" id="bonusBtn" type="button">+1000 🪙</button>
-            </div>
-
-            <div class="stats">
-              <div class="stat">
-                <div class="k">Ставка</div>
-                <div class="v"><b id="betView">50</b> 🪙</div>
-              </div>
-              <div class="stat">
-                <div class="k">Выигрыш</div>
-                <div class="v"><b id="winView">+0</b> 🪙</div>
-              </div>
-              <div class="stat">
-                <div class="k">Статус</div>
-                <div class="v"><b id="statusView">Готов</b></div>
-              </div>
-            </div>
-
-            <button class="btn primary" id="flipBtn" type="button">Бросить</button>
-          </div>
-
-          <div class="panel">
-            <div class="panelTitle">Ставка</div>
-
-            <div class="chips">
-              <button class="chip" data-bet="10" type="button">10</button>
-              <button class="chip" data-bet="50" type="button">50</button>
-              <button class="chip" data-bet="100" type="button">100</button>
-              <button class="chip" data-bet="250" type="button">250</button>
-              <button class="chip" data-bet="500" type="button">500</button>
-              <button class="chip" data-bet="max" type="button">MAX</button>
-            </div>
-
-            <div class="betRow">
-              <button class="btn small" id="betMinus" type="button">-</button>
-              <input class="input" id="betInput" type="number" min="1" step="1" value="50" />
-              <button class="btn small" id="betPlus" type="button">+</button>
-            </div>
-
-            <div class="hint">
-              При изменении ставки — монета снова становится фиолетовой до следующего броска.
-            </div>
-          </div>
-        </div>
-
-        <div class="footerNote">Монеты виртуальные, без вывода.</div>
       </section>
     </main>
   </div>
 
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
