@@ -13,7 +13,7 @@ if (tg) {
 }
 
 // --- Wallet ---
-const WALLET_KEY = "mini_wallet_coinflip_v2";
+const WALLET_KEY = "mini_wallet_coinflip_v3";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -31,9 +31,7 @@ function setCoins(v) {
   saveWallet(wallet);
   renderTop();
 }
-function addCoins(d) {
-  setCoins(wallet.coins + d);
-}
+function addCoins(d) { setCoins(wallet.coins + d); }
 
 // --- Sound (легкий) ---
 let soundOn = true;
@@ -61,7 +59,6 @@ const balance2 = document.getElementById("balance2");
 
 const soundBtn = document.getElementById("soundBtn");
 const soundText = document.getElementById("soundText");
-
 const bonusBtn = document.getElementById("bonusBtn");
 
 const coinEl = document.getElementById("coin");
@@ -84,38 +81,31 @@ const historyDots = document.getElementById("historyDots");
 let picked = "eagle"; // eagle|tail
 let busy = false;
 
-// history (last 18)
-const HISTORY_KEY = "coinflip_history_v1";
+// history
+const HISTORY_KEY = "coinflip_history_v2";
 let hist = [];
 try { hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { hist = []; }
 if (!Array.isArray(hist)) hist = [];
 
-function saveHist() {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-18)));
-}
-function pushHist(v) {
-  hist.push(v);
-  hist = hist.slice(-18);
-  saveHist();
-  renderHist();
-}
-function renderHist() {
+function saveHist(){ localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-18))); }
+function pushHist(v){ hist.push(v); hist = hist.slice(-18); saveHist(); renderHist(); }
+function renderHist(){
   historyDots.innerHTML = "";
   const show = hist.slice(-18);
-  const emptyCount = Math.max(0, 18 - show.length);
-  for (let i=0;i<emptyCount;i++){
+  const empty = Math.max(0, 18 - show.length);
+  for (let i=0;i<empty;i++){
     const d = document.createElement("div");
     d.className = "hDot";
     historyDots.appendChild(d);
   }
-  for (const v of show) {
+  for (const v of show){
     const d = document.createElement("div");
     d.className = "hDot " + (v === "eagle" ? "gold" : "silver");
     historyDots.appendChild(d);
   }
 }
 
-function renderTop() {
+function renderTop(){
   const user = tg?.initDataUnsafe?.user;
   subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
   balanceEl.textContent = String(wallet.coins);
@@ -124,7 +114,7 @@ function renderTop() {
 renderTop();
 renderHist();
 
-// Sound toggle
+// sound toggle
 soundBtn.onclick = () => {
   soundOn = !soundOn;
   soundText.textContent = soundOn ? "Звук on" : "Звук off";
@@ -136,14 +126,11 @@ soundBtn.onclick = () => {
   beep(soundOn ? 640 : 240, 60, 0.03);
 };
 
-// Bonus
-bonusBtn.onclick = () => {
-  addCoins(1000);
-  beep(760, 70, 0.03);
-};
+// bonus
+bonusBtn.onclick = () => { addCoins(1000); beep(760, 70, 0.03); };
 
-// Pick
-function setPick(v) {
+// pick
+function setPick(v){
   picked = v;
   pickEagle.classList.toggle("active", v === "eagle");
   pickTail.classList.toggle("active", v === "tail");
@@ -152,13 +139,13 @@ function setPick(v) {
 pickEagle.onclick = () => setPick("eagle");
 pickTail.onclick = () => setPick("tail");
 
-function setCoinTheme(theme) {
-  coinEl.classList.remove("coin--purple", "coin--gold", "coin--silver");
+function setCoinTheme(theme){
+  coinEl.classList.remove("coin--purple","coin--gold","coin--silver");
   coinEl.classList.add(`coin--${theme}`);
 }
 
 // bet
-function clampBet() {
+function clampBet(){
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
   if (v > wallet.coins) v = wallet.coins;
@@ -170,17 +157,14 @@ function clampBet() {
   winView.textContent = "+0";
   statusView.textContent = "Готов";
 }
-
 betInput.addEventListener("input", clampBet);
 betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); };
 betPlus.onclick  = () => { betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); };
 
-// chips
 document.querySelectorAll(".chip").forEach((b) => {
   b.onclick = () => {
     const val = b.dataset.bet;
-    if (val === "max") betInput.value = String(wallet.coins);
-    else betInput.value = String(val);
+    betInput.value = (val === "max") ? String(wallet.coins) : String(val);
     clampBet();
     beep(540, 55, 0.02);
   };
@@ -188,27 +172,24 @@ document.querySelectorAll(".chip").forEach((b) => {
 
 clampBet();
 
-// --- Smooth animation (mobile-friendly) ---
-function animateFlip(duration = 720) {
-  const keyframes = [
-    { transform: "translateZ(0) rotateX(8deg) rotateY(0deg) scale(1)" },
-    { transform: "translateZ(0) rotateX(16deg) rotateY(540deg) scale(1.04)" },
-    { transform: "translateZ(0) rotateX(22deg) rotateY(1080deg) scale(1.06)" },
-    { transform: "translateZ(0) rotateX(10deg) rotateY(1620deg) scale(1.02)" },
-    { transform: "translateZ(0) rotateX(8deg) rotateY(1800deg) scale(1)" },
-  ];
+// ЛЁГКАЯ АНИМАЦИЯ: CSS class + animationend
+function playFlipAnim(){
+  return new Promise((resolve) => {
+    const onEnd = () => {
+      coinEl.removeEventListener("animationend", onEnd);
+      coinEl.classList.remove("spin");
+      resolve();
+    };
+    coinEl.addEventListener("animationend", onEnd, { once: true });
 
-  if (coinEl.animate) {
-    return coinEl.animate(keyframes, {
-      duration,
-      easing: "cubic-bezier(.2,.85,.2,1)",
-      fill: "both",
-    }).finished;
-  }
-  return new Promise((r) => setTimeout(r, duration));
+    // перезапуск анимации гарантированно
+    coinEl.classList.remove("spin");
+    void coinEl.offsetWidth; // reflow (один раз) — чтобы анимация стартанула
+    coinEl.classList.add("spin");
+  });
 }
 
-// Flip
+// flip
 flipBtn.onclick = async () => {
   if (busy) return;
 
@@ -225,12 +206,15 @@ flipBtn.onclick = async () => {
   addCoins(-bet);
 
   // результат
-  const result = randFloat() < 0.5 ? "eagle" : "tail";
+  const result = (randFloat() < 0.5) ? "eagle" : "tail";
 
   beep(520, 55, 0.02);
 
-  await animateFlip(720);
+  // во время броска монета остаётся фиолетовой
+  setCoinTheme("purple");
+  await playFlipAnim();
 
+  // после — становится золотой/серебряной
   setCoinTheme(result === "eagle" ? "gold" : "silver");
   pushHist(result);
 
