@@ -1,9 +1,11 @@
 // --- RNG (честный) ---
-function randInt(min, max) {
+function randFloat() {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
-  const r = a[0] / 2 ** 32;
-  return Math.floor(r * (max - min + 1)) + min;
+  return a[0] / 2 ** 32;
+}
+function randInt(min, max) {
+  return Math.floor(randFloat() * (max - min + 1)) + min;
 }
 
 // --- Telegram WebApp ---
@@ -14,7 +16,7 @@ if (tg) {
 }
 
 // --- Wallet ---
-const WALLET_KEY = "mini_wallet_dice_v1";
+const WALLET_KEY = "mini_wallet_dice_v2";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -33,7 +35,7 @@ function setCoins(v) {
 }
 function addCoins(d) { setCoins(wallet.coins + d); }
 
-// --- Sound (лёгкий) ---
+// --- Sound ---
 let soundOn = true;
 function beep(freq = 520, ms = 55, vol = 0.03) {
   if (!soundOn) return;
@@ -66,12 +68,12 @@ const btnHigh = document.getElementById("btnHigh");
 
 const thrRange = document.getElementById("thrRange");
 const thrText = document.getElementById("thrText");
+const rolledText = document.getElementById("rolledText");
 
 const multView = document.getElementById("multView");
 const payoutView = document.getElementById("payoutView");
 const chanceView = document.getElementById("chanceView");
 const rulePill = document.getElementById("rulePill");
-const rolledText = document.getElementById("rolledText");
 
 const betInput = document.getElementById("betInput");
 const betMinus = document.getElementById("betMinus");
@@ -79,23 +81,25 @@ const betPlus = document.getElementById("betPlus");
 const rollBtn = document.getElementById("rollBtn");
 
 const diceEl = document.getElementById("dice");
-const topNumEl = document.getElementById("topNum");
 
 // --- state ---
-let mode = "high"; // "high" (>= threshold) or "low" (<= threshold)
+let mode = "high"; // high: >= threshold, low: <= threshold
 let busy = false;
 const houseEdge = 0.985;
 
-// ориентиры “какая грань спереди” (для финальной посадки)
-const ORIENT = {
-  1: { rx: -22, ry: 32 },
-  2: { rx: -22, ry: -58 },
-  3: { rx: -112, ry: 32 },
-  4: { rx: 68, ry: 32 },
-  5: { rx: -22, ry: 122 },
-  6: { rx: -22, ry: 212 }
+// Ориентации: чтобы ВЫПАВШАЯ ГРАНЬ оказалась СВЕРХУ (TOP)
+// В нашем кубе: face3 = top, face4 = bottom, face1 = front, face6 = back, face2 = right, face5 = left
+// Мы вращаем куб так, чтобы нужная грань стала top.
+const TOP_ORIENT = {
+  1: { rx: -90, ry: 0,   rz: 0 },   // front -> top
+  2: { rx: 0,   ry: 0,   rz: -90 }, // right -> top (через Z)
+  3: { rx: 0,   ry: 0,   rz: 0 },   // already top
+  4: { rx: 180, ry: 0,   rz: 0 },   // bottom -> top
+  5: { rx: 0,   ry: 0,   rz: 90 },  // left -> top
+  6: { rx: 90,  ry: 0,   rz: 0 },   // back -> top
 };
 
+// --- top render ---
 function renderTop(){
   const user = tg?.initDataUnsafe?.user;
   subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
@@ -116,10 +120,7 @@ soundBtn.onclick = () => {
 };
 
 // bonus
-function doBonus(){
-  addCoins(1000);
-  beep(760, 70, 0.03);
-}
+function doBonus(){ addCoins(1000); beep(760, 70, 0.03); }
 bonusBtn.onclick = doBonus;
 bonusBtn2.onclick = doBonus;
 
@@ -187,28 +188,45 @@ function updateMath(){
 clampBet();
 updateMath();
 
-// dice anim
-function animateDiceTo(n){
-  return new Promise((resolve) => {
-    const o = ORIENT[n] || ORIENT[1];
-    diceEl.style.setProperty("--rx", `${o.rx}deg`);
-    diceEl.style.setProperty("--ry", `${o.ry}deg`);
+// set dice orientation (final)
+function setDiceOrientation(rx, ry, rz){
+  diceEl.style.setProperty("--rx", `${rx}deg`);
+  diceEl.style.setProperty("--ry", `${ry}deg`);
+  diceEl.style.setProperty("--rz", `${rz}deg`);
+}
 
+// roll animation helper (легко для мобилки)
+function playRollAnim(target){
+  return new Promise((resolve) => {
     const onEnd = () => {
       diceEl.removeEventListener("animationend", onEnd);
       diceEl.classList.remove("rolling");
       resolve();
     };
-
     diceEl.addEventListener("animationend", onEnd, { once:true });
 
+    // стартовые углы (чтобы каждый раз выглядело по-разному)
+    const rx0 = randInt(-30, -10);
+    const ry0 = randInt(10, 50);
+    const rz0 = randInt(-10, 10);
+    diceEl.style.setProperty("--rx0", `${rx0}deg`);
+    diceEl.style.setProperty("--ry0", `${ry0}deg`);
+    diceEl.style.setProperty("--rz0", `${rz0}deg`);
+
+    // финальные (верхняя грань = выпавшее)
+    const o = TOP_ORIENT[target];
+    // чуть рандомим Y вокруг вертикали, но кратно 90°, чтобы куб “по-реальному” менял вид
+    const yTwist = [0, 90, 180, 270][randInt(0,3)];
+    setDiceOrientation(o.rx, o.ry + yTwist, o.rz);
+
+    // перезапуск
     diceEl.classList.remove("rolling");
-    void diceEl.offsetWidth; // один reflow
+    void diceEl.offsetWidth;
     diceEl.classList.add("rolling");
   });
 }
 
-// roll
+// main roll
 rollBtn.onclick = async () => {
   if (busy) return;
 
@@ -219,19 +237,13 @@ rollBtn.onclick = async () => {
   busy = true;
   rollBtn.disabled = true;
 
-  // ставка списалась
   addCoins(-bet);
 
-  // RNG 1..6
   const rolled = randInt(1, 6);
   rolledText.textContent = String(rolled);
 
-  // число на верхней грани
-  topNumEl.textContent = String(rolled);
-  diceEl.classList.add("showTopNum");
-
   beep(520, 55, 0.02);
-  await animateDiceTo(rolled);
+  await playRollAnim(rolled);
 
   const t = Number(thrRange.value);
   const win = (mode === "high") ? (rolled >= t) : (rolled <= t);
@@ -253,4 +265,7 @@ rollBtn.onclick = async () => {
   busy = false;
   rollBtn.disabled = false;
 };
+
+// стартовое положение (красиво)
+setDiceOrientation(-22, 32, 0);
 
