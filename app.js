@@ -84,7 +84,7 @@ const historyDots = document.getElementById("historyDots");
 let picked = "eagle"; // eagle|tail
 let busy = false;
 
-// history storage (last 18)
+// history (last 18)
 const HISTORY_KEY = "coinflip_history_v1";
 let hist = [];
 try { hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { hist = []; }
@@ -102,7 +102,6 @@ function pushHist(v) {
 function renderHist() {
   historyDots.innerHTML = "";
   const show = hist.slice(-18);
-  // если мало — добьем пустыми
   const emptyCount = Math.max(0, 18 - show.length);
   for (let i=0;i<emptyCount;i++){
     const d = document.createElement("div");
@@ -189,10 +188,8 @@ document.querySelectorAll(".chip").forEach((b) => {
 
 clampBet();
 
-// --- ULTRA SMOOTH animation (mobile-friendly) ---
-// только transform, без blur, через Web Animations API
+// --- Smooth animation (mobile-friendly) ---
 function animateFlip(duration = 720) {
-  // небольшой “tilt” + много оборотов
   const keyframes = [
     { transform: "translateZ(0) rotateX(8deg) rotateY(0deg) scale(1)" },
     { transform: "translateZ(0) rotateX(16deg) rotateY(540deg) scale(1.04)" },
@@ -201,7 +198,6 @@ function animateFlip(duration = 720) {
     { transform: "translateZ(0) rotateX(8deg) rotateY(1800deg) scale(1)" },
   ];
 
-  // Safari iOS отлично тянет это
   if (coinEl.animate) {
     return coinEl.animate(keyframes, {
       duration,
@@ -209,8 +205,6 @@ function animateFlip(duration = 720) {
       fill: "both",
     }).finished;
   }
-
-  // fallback: если animate нет — просто задержка
   return new Promise((r) => setTimeout(r, duration));
 }
 
@@ -227,18 +221,16 @@ flipBtn.onclick = async () => {
   statusView.textContent = "Бросок...";
   winView.textContent = "+0";
 
-  // списываем ставку сразу
+  // списываем ставку
   addCoins(-bet);
 
-  // определяем результат
+  // результат
   const result = randFloat() < 0.5 ? "eagle" : "tail";
 
   beep(520, 55, 0.02);
 
-  // крутилка
   await animateFlip(720);
 
-  // применяем цвет результата
   setCoinTheme(result === "eagle" ? "gold" : "silver");
   pushHist(result);
 
