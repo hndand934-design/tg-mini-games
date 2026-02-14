@@ -19,7 +19,9 @@
           <span class="dot"></span>
           <span id="soundText">Звук on</span>
         </button>
+
         <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
+
         <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
@@ -28,26 +30,22 @@
       <div class="cardHead">
         <div>
           <div class="h1">Coin Flip</div>
-          <div class="hint">До броска монета фиолетовая. Результат: орёл — золото, решка — серебро.</div>
+          <div class="hint">До броска монета фиолетовая. Орёл — золото, решка — серебро.</div>
         </div>
       </div>
 
-      <!-- Сцена -->
       <section class="arena">
         <div class="coinWrap">
           <div id="coin" class="coin coin--purple" aria-label="coin"></div>
         </div>
 
-        <!-- История (как в рефе, без кнопок) -->
         <div class="history" aria-label="history">
           <div class="historyDots" id="historyDots"></div>
         </div>
       </section>
 
-      <!-- Большая кнопка как “Ставка” -->
       <button id="flipBtn" class="btnPrimary" type="button">Ставка</button>
 
-      <!-- Блок ставок и выбора -->
       <section class="controls">
         <div class="rowTitle">
           <div class="h2">Сумма ставки</div>
