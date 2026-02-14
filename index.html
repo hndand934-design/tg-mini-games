@@ -32,7 +32,7 @@
       <div class="cardHead">
         <div>
           <div class="h1">Dice</div>
-          <div class="hint">Непрозрачный 3D кубик. Выпало число — куб показывает эту грань (честный RNG).</div>
+          <div class="hint">3D кубик. Выпало число — сверху показывается грань (точки). Честный RNG.</div>
         </div>
 
         <div class="rightPills">
@@ -42,7 +42,6 @@
 
       <section class="content">
         <div class="grid2">
-          <!-- LEFT -->
           <div class="leftCol">
             <div class="seg">
               <button id="btnLow" class="segBtn" type="button">Меньше</button>
@@ -67,38 +66,45 @@
             <div class="thresholdRow">
               <div class="thrTitle">
                 <div class="h2">Порог: <b id="thrText">2</b> из 6</div>
-                <div class="pill pill--ghost" id="rolledPill">Выпало: <b id="rolledText">—</b></div>
+                <div class="pill pill--ghost">Выпало: <b id="rolledText">—</b></div>
               </div>
-
               <input id="thrRange" class="range" type="range" min="2" max="6" value="2" />
             </div>
 
             <div class="diceArena">
               <div class="arenaInner">
                 <div id="dice" class="dice" aria-label="dice">
-                  <div class="face face1"><span class="pip"></span></div>
+                  <!-- front -->
+                  <div class="face face1"><span class="pip c"></span></div>
 
+                  <!-- right -->
                   <div class="face face2">
-                    <span class="pip p1"></span><span class="pip p2"></span>
+                    <span class="pip tl"></span><span class="pip br"></span>
                   </div>
 
-                  <!-- TOP face (face3): сюда выводим число после броска -->
+                  <!-- top -->
                   <div class="face face3">
-                    <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span>
-                    <span class="topNum" id="topNum">—</span>
+                    <span class="pip tl"></span><span class="pip c"></span><span class="pip br"></span>
                   </div>
 
+                  <!-- bottom -->
                   <div class="face face4">
-                    <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span><span class="pip p4"></span>
+                    <span class="pip tl"></span><span class="pip tr"></span>
+                    <span class="pip bl"></span><span class="pip br"></span>
                   </div>
 
+                  <!-- left -->
                   <div class="face face5">
-                    <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span><span class="pip p4"></span><span class="pip p5"></span>
+                    <span class="pip tl"></span><span class="pip tr"></span>
+                    <span class="pip c"></span>
+                    <span class="pip bl"></span><span class="pip br"></span>
                   </div>
 
+                  <!-- back -->
                   <div class="face face6">
-                    <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span>
-                    <span class="pip p4"></span><span class="pip p5"></span><span class="pip p6"></span>
+                    <span class="pip tl"></span><span class="pip tr"></span>
+                    <span class="pip ml"></span><span class="pip mr"></span>
+                    <span class="pip bl"></span><span class="pip br"></span>
                   </div>
                 </div>
               </div>
@@ -124,16 +130,13 @@
               <button id="betPlus" class="btnSmall" type="button">+</button>
             </div>
 
-            <div class="ctaRow">
-              <button id="rollBtn" class="btnPrimary" type="button">Бросить</button>
-            </div>
+            <button id="rollBtn" class="btnPrimary" type="button">Бросить</button>
 
             <div class="footNote">
               Честный RNG: <span class="muted">crypto.getRandomValues</span>. Монеты виртуальные.
             </div>
           </div>
 
-          <!-- RIGHT (пустая колонка как на ПК-скрине) -->
           <div class="rightCol">
             <div class="ghostPanel"></div>
           </div>
