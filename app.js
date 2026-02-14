@@ -79,20 +79,21 @@ const betPlus = document.getElementById("betPlus");
 const rollBtn = document.getElementById("rollBtn");
 
 const diceEl = document.getElementById("dice");
+const topNumEl = document.getElementById("topNum");
 
 // --- state ---
 let mode = "high"; // "high" (>= threshold) or "low" (<= threshold)
 let busy = false;
 const houseEdge = 0.985;
 
-// set dice orientation for each number (maps to which face is front)
+// ориентиры “какая грань спереди” (для финальной посадки)
 const ORIENT = {
-  1: { rx: -22, ry: 32 },        // face1 front
-  2: { rx: -22, ry: -58 },       // rotate to bring face2 front (right)
-  3: { rx: -112, ry: 32 },       // top to front
-  4: { rx: 68, ry: 32 },         // bottom to front
-  5: { rx: -22, ry: 122 },       // left to front
-  6: { rx: -22, ry: 212 }        // back to front
+  1: { rx: -22, ry: 32 },
+  2: { rx: -22, ry: -58 },
+  3: { rx: -112, ry: 32 },
+  4: { rx: 68, ry: 32 },
+  5: { rx: -22, ry: 122 },
+  6: { rx: -22, ry: 212 }
 };
 
 function renderTop(){
@@ -122,7 +123,7 @@ function doBonus(){
 bonusBtn.onclick = doBonus;
 bonusBtn2.onclick = doBonus;
 
-// mode buttons
+// mode
 function setMode(m){
   mode = m;
   btnLow.classList.toggle("active", m === "low");
@@ -133,7 +134,7 @@ function setMode(m){
 btnLow.onclick = () => setMode("low");
 btnHigh.onclick = () => setMode("high");
 
-// bet controls
+// bet
 function clampBet(){
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
@@ -164,36 +165,29 @@ thrRange.addEventListener("input", () => {
 // math
 function calcChance(threshold){
   const t = Number(threshold);
-  if (mode === "high") {
-    // win if roll >= t
-    return (7 - t) / 6;
-  } else {
-    // win if roll <= t
-    return t / 6;
-  }
+  return (mode === "high") ? ((7 - t) / 6) : (t / 6);
 }
-
 function updateMath(){
   const t = Number(thrRange.value);
   thrText.textContent = String(t);
 
   const chance = calcChance(t);
-  const mult = Math.max(1, (houseEdge / chance)); // как на скрине ~1.18 при 83.3%
+  const mult = Math.max(1, (houseEdge / chance));
   multView.textContent = `x${mult.toFixed(2)}`;
 
   const bet = Math.floor(Number(betInput.value) || 0);
   const payout = Math.floor(bet * mult);
   payoutView.textContent = `+${Math.max(0, payout - bet)}`;
-
   chanceView.textContent = `${(chance * 100).toFixed(1)}%`;
 
-  const rule = (mode === "high") ? `Выигрыш если выпало ≥ ${t}` : `Выигрыш если выпало ≤ ${t}`;
-  rulePill.textContent = rule;
+  rulePill.textContent = (mode === "high")
+    ? `Выигрыш если выпало ≥ ${t}`
+    : `Выигрыш если выпало ≤ ${t}`;
 }
 clampBet();
 updateMath();
 
-// dice animation helper (коротко и плавно, без лагов)
+// dice anim
 function animateDiceTo(n){
   return new Promise((resolve) => {
     const o = ORIENT[n] || ORIENT[1];
@@ -225,12 +219,16 @@ rollBtn.onclick = async () => {
   busy = true;
   rollBtn.disabled = true;
 
-  // списываем ставку
+  // ставка списалась
   addCoins(-bet);
 
-  // результат 1..6
+  // RNG 1..6
   const rolled = randInt(1, 6);
   rolledText.textContent = String(rolled);
+
+  // число на верхней грани
+  topNumEl.textContent = String(rolled);
+  diceEl.classList.add("showTopNum");
 
   beep(520, 55, 0.02);
   await animateDiceTo(rolled);
