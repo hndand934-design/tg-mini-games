@@ -84,9 +84,7 @@ body{
 .hint{font-size:12px; color:var(--muted); margin-top:4px}
 .muted{font-size:12px; color:var(--muted)}
 
-.arena{
-  padding: 10px 14px 12px;
-}
+.arena{ padding: 10px 14px 12px; }
 .coinWrap{
   height: 240px;
   border-radius: 16px;
@@ -98,64 +96,55 @@ body{
   overflow:hidden;
 }
 
-/* ВАЖНО: лёгкая монета без тяжёлых теней/blur — чтобы не лагало на телефоне */
+/* легкая монета без blur/filter — не лагает на телефонах */
 .coin{
   width: 150px; height: 150px; border-radius: 999px;
   position: relative;
   transform: translateZ(0);
   will-change: transform;
   backface-visibility: hidden;
-
-  /* “3D” ощущение — только градиенты, без фильтров */
-  background:
-    radial-gradient(circle at 30% 28%, rgba(255,255,255,.35), transparent 46%),
-    radial-gradient(circle at 75% 80%, rgba(0,0,0,.22), transparent 55%),
-    linear-gradient(180deg, rgba(255,255,255,.10), rgba(0,0,0,.10));
   border:1px solid rgba(255,255,255,.14);
-
   box-shadow: 0 14px 30px rgba(0,0,0,.35);
 }
 
-/* тонкий “обод” = толщина, но тоже лёгкий */
+/* “толщина” (ребро) — легкий conic-gradient */
 .coin::after{
   content:"";
-  position:absolute; inset:-6px;
+  position:absolute; inset:-7px;
   border-radius:999px;
   background: conic-gradient(
     from 0deg,
-    rgba(255,255,255,.14),
-    rgba(255,255,255,.04),
-    rgba(0,0,0,.16),
-    rgba(255,255,255,.06),
+    rgba(255,255,255,.16),
+    rgba(255,255,255,.05),
     rgba(0,0,0,.18),
+    rgba(255,255,255,.06),
+    rgba(0,0,0,.22),
     rgba(255,255,255,.08),
-    rgba(255,255,255,.14)
+    rgba(255,255,255,.16)
   );
-  opacity:.65;
+  opacity:.62;
   pointer-events:none;
 }
 
-/* темы */
 .coin--purple{
   background:
-    radial-gradient(circle at 30% 28%, rgba(255,255,255,.35), transparent 46%),
-    radial-gradient(circle at 75% 80%, rgba(0,0,0,.22), transparent 55%),
-    linear-gradient(180deg, rgba(177,140,255,.62), rgba(92,45,214,.46));
+    radial-gradient(circle at 28% 26%, rgba(255,255,255,.35), transparent 46%),
+    radial-gradient(circle at 74% 82%, rgba(0,0,0,.22), transparent 55%),
+    linear-gradient(180deg, rgba(177,140,255,.70), rgba(92,45,214,.52));
 }
 .coin--gold{
   background:
-    radial-gradient(circle at 30% 28%, rgba(255,255,255,.38), transparent 46%),
-    radial-gradient(circle at 75% 80%, rgba(0,0,0,.20), transparent 55%),
-    linear-gradient(180deg, rgba(255,214,110,.78), rgba(182,128,31,.52));
+    radial-gradient(circle at 28% 26%, rgba(255,255,255,.38), transparent 46%),
+    radial-gradient(circle at 74% 82%, rgba(0,0,0,.20), transparent 55%),
+    linear-gradient(180deg, rgba(255,214,110,.82), rgba(182,128,31,.58));
 }
 .coin--silver{
   background:
-    radial-gradient(circle at 30% 28%, rgba(255,255,255,.40), transparent 46%),
-    radial-gradient(circle at 75% 80%, rgba(0,0,0,.18), transparent 55%),
-    linear-gradient(180deg, rgba(228,238,255,.86), rgba(152,169,201,.54));
+    radial-gradient(circle at 28% 26%, rgba(255,255,255,.40), transparent 46%),
+    radial-gradient(circle at 74% 82%, rgba(0,0,0,.18), transparent 55%),
+    linear-gradient(180deg, rgba(228,238,255,.90), rgba(152,169,201,.60));
 }
 
-/* История */
 .history{
   margin-top:10px;
   border-radius: 14px;
@@ -174,8 +163,8 @@ body{
   background: rgba(255,255,255,.12);
   border: 1px solid rgba(255,255,255,.10);
 }
-.hDot.gold{ background: rgba(255,214,110,.85); border-color: rgba(255,214,110,.25); }
-.hDot.silver{ background: rgba(228,238,255,.85); border-color: rgba(228,238,255,.22); }
+.hDot.gold{ background: rgba(255,214,110,.90); border-color: rgba(255,214,110,.25); }
+.hDot.silver{ background: rgba(228,238,255,.90); border-color: rgba(228,238,255,.22); }
 
 .btnPrimary{
   margin: 0 14px 12px;
@@ -193,9 +182,7 @@ body{
 .btnPrimary:disabled{opacity:.6; cursor:not-allowed}
 .btnPrimary:active{transform:scale(.99)}
 
-.controls{
-  padding: 0 14px 14px;
-}
+.controls{ padding: 0 14px 14px; }
 
 .rowTitle{
   display:flex; justify-content:space-between; align-items:baseline; gap:10px;
@@ -257,28 +244,26 @@ body{
   padding:12px 12px;
   border-radius: 14px;
   border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.05);
   color:var(--text);
   font-weight:950;
   cursor:pointer;
   display:flex; align-items:center; justify-content:center; gap:10px;
+  background: rgba(255,255,255,.05);
 }
 .pick.active{
   outline:2px solid rgba(76,125,255,.55);
   box-shadow: 0 10px 20px rgba(0,0,0,.18);
 }
 .pick--gold{
-  background: linear-gradient(180deg, rgba(255,214,110,.22), rgba(182,128,31,.10));
+  background: linear-gradient(180deg, rgba(255,214,110,.24), rgba(182,128,31,.10));
   border-color: rgba(255,214,110,.25);
 }
 .pick--silver{
-  background: linear-gradient(180deg, rgba(228,238,255,.18), rgba(152,169,201,.10));
+  background: linear-gradient(180deg, rgba(228,238,255,.20), rgba(152,169,201,.10));
   border-color: rgba(228,238,255,.22);
 }
 
-.mark{
-  width:10px; height:10px; border-radius:99px;
-}
+.mark{ width:10px; height:10px; border-radius:99px; }
 .mark--gold{ background: rgba(255,214,110,.95); }
 .mark--silver{ background: rgba(228,238,255,.95); }
 
@@ -303,14 +288,12 @@ body{
   color: var(--muted);
 }
 
-/* Мобилка */
 @media (max-width: 420px){
   .coinWrap{height: 220px;}
   .coin{width: 140px; height:140px;}
-  .stats{grid-template-columns: 1fr; }
+  .stats{grid-template-columns: 1fr;}
 }
 
-/* У кого reduce motion — ещё легче */
 @media (prefers-reduced-motion: reduce){
   .coin{transition:none}
 }
