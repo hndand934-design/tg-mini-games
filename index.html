@@ -77,18 +77,25 @@
               <div class="arenaInner">
                 <div id="dice" class="dice" aria-label="dice">
                   <div class="face face1"><span class="pip"></span></div>
+
                   <div class="face face2">
                     <span class="pip p1"></span><span class="pip p2"></span>
                   </div>
+
+                  <!-- TOP face (face3): сюда выводим число после броска -->
                   <div class="face face3">
                     <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span>
+                    <span class="topNum" id="topNum">—</span>
                   </div>
+
                   <div class="face face4">
                     <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span><span class="pip p4"></span>
                   </div>
+
                   <div class="face face5">
                     <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span><span class="pip p4"></span><span class="pip p5"></span>
                   </div>
+
                   <div class="face face6">
                     <span class="pip p1"></span><span class="pip p2"></span><span class="pip p3"></span>
                     <span class="pip p4"></span><span class="pip p5"></span><span class="pip p6"></span>
@@ -126,14 +133,11 @@
             </div>
           </div>
 
-          <!-- RIGHT (пустая колонка как на скрине, чтобы не “разъезжало”) -->
+          <!-- RIGHT (пустая колонка как на ПК-скрине) -->
           <div class="rightCol">
-            <div class="ghostPanel">
-              <div class="ghostTitle"> </div>
-            </div>
+            <div class="ghostPanel"></div>
           </div>
         </div>
-
       </section>
     </main>
   </div>
