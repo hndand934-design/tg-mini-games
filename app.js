@@ -13,7 +13,7 @@ if (tg) {
 }
 
 // --- Wallet ---
-const WALLET_KEY = "mini_wallet_coinflip_v3";
+const WALLET_KEY = "mini_wallet_coinflip_v4";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -33,7 +33,7 @@ function setCoins(v) {
 }
 function addCoins(d) { setCoins(wallet.coins + d); }
 
-// --- Sound (легкий) ---
+// --- Sound (лёгкий) ---
 let soundOn = true;
 function beep(freq = 520, ms = 55, vol = 0.03) {
   if (!soundOn) return;
@@ -75,35 +75,9 @@ const statusView = document.getElementById("statusView");
 const pickEagle = document.getElementById("pickEagle");
 const pickTail = document.getElementById("pickTail");
 
-const historyDots = document.getElementById("historyDots");
-
 // --- state ---
 let picked = "eagle"; // eagle|tail
 let busy = false;
-
-// history
-const HISTORY_KEY = "coinflip_history_v2";
-let hist = [];
-try { hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { hist = []; }
-if (!Array.isArray(hist)) hist = [];
-
-function saveHist(){ localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-18))); }
-function pushHist(v){ hist.push(v); hist = hist.slice(-18); saveHist(); renderHist(); }
-function renderHist(){
-  historyDots.innerHTML = "";
-  const show = hist.slice(-18);
-  const empty = Math.max(0, 18 - show.length);
-  for (let i=0;i<empty;i++){
-    const d = document.createElement("div");
-    d.className = "hDot";
-    historyDots.appendChild(d);
-  }
-  for (const v of show){
-    const d = document.createElement("div");
-    d.className = "hDot " + (v === "eagle" ? "gold" : "silver");
-    historyDots.appendChild(d);
-  }
-}
 
 function renderTop(){
   const user = tg?.initDataUnsafe?.user;
@@ -112,7 +86,6 @@ function renderTop(){
   balance2.textContent = String(wallet.coins);
 }
 renderTop();
-renderHist();
 
 // sound toggle
 soundBtn.onclick = () => {
@@ -139,9 +112,10 @@ function setPick(v){
 pickEagle.onclick = () => setPick("eagle");
 pickTail.onclick = () => setPick("tail");
 
+// theme
 function setCoinTheme(theme){
-  coinEl.classList.remove("coin--purple","coin--gold","coin--silver");
-  coinEl.classList.add(`coin--${theme}`);
+  coinEl.classList.remove("coin3d--purple","coin3d--gold","coin3d--silver");
+  coinEl.classList.add(`coin3d--${theme}`);
 }
 
 // bet
@@ -172,19 +146,22 @@ document.querySelectorAll(".chip").forEach((b) => {
 
 clampBet();
 
-// ЛЁГКАЯ АНИМАЦИЯ: CSS class + animationend
+// 3D anim helper
 function playFlipAnim(){
   return new Promise((resolve) => {
     const onEnd = () => {
       coinEl.removeEventListener("animationend", onEnd);
       coinEl.classList.remove("spin");
+      coinEl.classList.remove("spinning");
       resolve();
     };
+
     coinEl.addEventListener("animationend", onEnd, { once: true });
 
     // перезапуск анимации гарантированно
     coinEl.classList.remove("spin");
-    void coinEl.offsetWidth; // reflow (один раз) — чтобы анимация стартанула
+    coinEl.classList.add("spinning"); // делает ребро толще на время вращения
+    void coinEl.offsetWidth;          // reflow один раз
     coinEl.classList.add("spin");
   });
 }
@@ -208,15 +185,14 @@ flipBtn.onclick = async () => {
   // результат
   const result = (randFloat() < 0.5) ? "eagle" : "tail";
 
+  // во время броска монета фиолетовая
+  setCoinTheme("purple");
   beep(520, 55, 0.02);
 
-  // во время броска монета остаётся фиолетовой
-  setCoinTheme("purple");
   await playFlipAnim();
 
-  // после — становится золотой/серебряной
+  // после броска — золото/серебро
   setCoinTheme(result === "eagle" ? "gold" : "silver");
-  pushHist(result);
 
   const win = result === picked;
   if (win) {
@@ -235,3 +211,4 @@ flipBtn.onclick = async () => {
   busy = false;
   flipBtn.disabled = false;
 };
+
