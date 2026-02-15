@@ -143,20 +143,19 @@ body{
   overflow:hidden;
 }
 
-/* ===== Камера (наклон) ===== */
+/* камера: фикс. наклон (верх читается всегда) */
 .diceCam{
   perspective: 900px;
   transform-style: preserve-3d;
   transform: rotateX(55deg) rotateZ(-12deg);
 }
 
-/* ===== 3D DICE ===== */
 .dice{
   width: 86px;
   height: 86px;
   position: relative;
   transform-style: preserve-3d;
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) rotateZ(var(--rz, 0deg));
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   will-change: transform;
 }
 .face{
@@ -177,7 +176,6 @@ body{
   opacity:.7;
 }
 
-/* pips */
 .pip{
   width:10px;height:10px;border-radius:99px;
   background: rgba(234,240,255,.92);
@@ -192,7 +190,7 @@ body{
 .mr{right:20px;top:50%;transform:translateY(-50%)}
 .c{left:50%;top:50%;transform:translate(-50%,-50%)}
 
-/* depth */
+/* куб */
 .face1{ transform: rotateX(90deg) translateZ(43px); }     /* TOP */
 .face6{ transform: rotateX(-90deg) translateZ(43px); }    /* BOTTOM */
 .face3{ transform: translateZ(43px); }                    /* FRONT */
@@ -200,17 +198,16 @@ body{
 .face2{ transform: rotateY(90deg) translateZ(43px); }     /* RIGHT */
 .face5{ transform: rotateY(-90deg) translateZ(43px); }    /* LEFT */
 
+/* безопасная анимация: всегда приходит в точный rx/ry */
 .dice.rolling{
   animation: diceRoll 620ms cubic-bezier(.2,.85,.2,1) both;
 }
 @keyframes diceRoll{
-  0%   { transform: rotateX(var(--rx0)) rotateY(var(--ry0)) rotateZ(var(--rz0)) scale(1); }
-  45%  { transform: rotateX(calc(var(--rx0) + 240deg)) rotateY(calc(var(--ry0) + 360deg)) rotateZ(calc(var(--rz0) + 180deg)) scale(1.06); }
-  75%  { transform: rotateX(calc(var(--rx0) + 420deg)) rotateY(calc(var(--ry0) + 620deg)) rotateZ(calc(var(--rz0) + 260deg)) scale(1.03); }
-  100% { transform: rotateX(var(--rx))  rotateY(var(--ry))  rotateZ(var(--rz))  scale(1); }
+  0%   { transform: rotateX(var(--rx0)) rotateY(var(--ry0)) scale(1); }
+  50%  { transform: rotateX(calc(var(--rx0) + 280deg)) rotateY(calc(var(--ry0) + 420deg)) scale(1.06); }
+  100% { transform: rotateX(var(--rx))  rotateY(var(--ry))  scale(1); }
 }
 
-/* bet */
 .betTitle{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0 8px;}
 .chips{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px;}
 .chip{
@@ -267,7 +264,6 @@ body{
   .arenaInner{height: 170px;}
   .dice{width: 80px; height:80px;}
 }
-
 @media (prefers-reduced-motion: reduce){
   .dice.rolling{animation:none}
 }
