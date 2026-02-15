@@ -172,17 +172,16 @@ function updateMath(){
 clampBet();
 updateMath();
 
-// ✅ ЖЁСТКОЕ соответствие: выпало X => TOP = X (без доп. твистов)
-// Мы управляем только rotateX/rotateY.
-// По текущей разметке граней (face1 top, face2 right, face3 front, face4 back, face5 left, face6 bottom)
-// Эти пары точно ставят нужную грань наверх:
+// ✅ ОРИЕНТАЦИИ ДЛЯ НОВОГО ПОРЯДКА transform: rotateY(ry) rotateX(rx)
+// Нужно: чтобы TOP (face1) показывал число rolled.
+// Как это сделать:
 const TOP_ORIENT = {
-  1: { rx: 0,   ry: 0   },  // face1 на верх
-  2: { rx: -90, ry: -90 },  // right -> front -> top
-  3: { rx: -90, ry: 0   },  // front -> top
-  4: { rx: 90,  ry: 0   },  // back  -> top
-  5: { rx: -90, ry: 90  },  // left  -> front -> top
-  6: { rx: 180, ry: 0   },  // bottom -> top
+  1: { rx: 0,   ry: 0 },     // top уже 1
+  2: { rx: 0,   ry: -90 },   // right -> top через поворот по Y
+  3: { rx: 90,  ry: 0 },     // front -> top (поднять фронт)
+  4: { rx: -90, ry: 0 },     // back -> top
+  5: { rx: 0,   ry: 90 },    // left -> top
+  6: { rx: 180, ry: 0 },     // bottom -> top
 };
 
 function setDiceOrientation(rx, ry){
@@ -200,14 +199,17 @@ function playRollAnim(target){
     };
     diceEl.addEventListener("animationend", onEnd, { once:true });
 
-    const rx0 = randInt(-25, -10);
-    const ry0 = randInt(15, 55);
+    // стартовая “живая” позиция (слегка), но не ломает синхру
+    const rx0 = randInt(-20, -8);
+    const ry0 = randInt(10, 45);
     diceEl.style.setProperty("--rx0", `${rx0}deg`);
     diceEl.style.setProperty("--ry0", `${ry0}deg`);
 
+    // ставим финальные углы строго под target
     const o = TOP_ORIENT[target];
     setDiceOrientation(o.rx, o.ry);
 
+    // перезапуск анимации
     diceEl.classList.remove("rolling");
     void diceEl.offsetWidth;
     diceEl.classList.add("rolling");
@@ -228,6 +230,8 @@ rollBtn.onclick = async () => {
   addCoins(-bet);
 
   const rolled = randInt(1, 6);
+
+  // ✅ сначала показываем число
   rolledText.textContent = String(rolled);
 
   beep(520, 55, 0.02);
