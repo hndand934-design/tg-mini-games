@@ -30,27 +30,31 @@
 
     <main class="card">
       <div class="cardHead">
-        <div>
-          <div class="h1">Dice</div>
-          <div class="hint">3D кубик. Выпало число — на верхней грани точки. Честный RNG.</div>
+        <div class="headRow">
+          <div>
+            <div class="h1">Dice</div>
+            <div class="hint">
+              3D кубик. Выпало число — на верхней грани точки. Честный RNG.
+            </div>
+          </div>
+          <div class="pill pill--ghost" id="rulePill">Выигрыш если выпало ≥ 2</div>
         </div>
-        <div id="rulePill" class="pill pill--ghost pill--rule">Выигрыш если выпало ≥ 2</div>
+
+        <div class="pickMode">
+          <button id="modeLess" class="seg active" type="button">Меньше</button>
+          <button id="modeMore" class="seg" type="button">Больше</button>
+        </div>
       </div>
 
-      <section class="content">
-        <div class="seg">
-          <button id="btnLow" class="segBtn" type="button">Меньше</button>
-          <button id="btnHigh" class="segBtn active" type="button">Больше</button>
-        </div>
-
-        <div class="statsRow">
+      <section class="arena">
+        <div class="stats">
           <div class="stat">
             <div class="label">Множитель</div>
             <div class="value"><b id="multView">x1.18</b></div>
           </div>
           <div class="stat">
             <div class="label">Возможный выигрыш</div>
-            <div class="value"><b id="payoutView">+0</b> 🪙</div>
+            <div class="value"><b id="winView">+0</b> 🪙</div>
           </div>
           <div class="stat">
             <div class="label">Шанс</div>
@@ -58,65 +62,75 @@
           </div>
         </div>
 
-        <div class="thresholdRow">
-          <div class="thrTitle">
-            <div class="h2">Порог: <b id="thrText">2</b> из 6</div>
-            <div class="pill pill--ghost">Выпало: <b id="rolledText">—</b></div>
+        <div class="threshold">
+          <div class="thresholdTop">
+            <div class="h2">Порог: <b><span id="thrView">2</span></b> из 6</div>
+            <div class="pill pill--ghost">Выпало: <b id="rolledView">—</b></div>
           </div>
-          <input id="thrRange" class="range" type="range" min="2" max="6" value="2" />
+          <input id="thrRange" class="range" type="range" min="1" max="6" value="2" />
         </div>
 
-        <div class="diceArena">
-          <div class="arenaInner">
-            <div class="diceCam">
-              <div id="dice" class="dice" aria-label="dice">
-                <div class="face face1"><span class="pip c"></span></div>
-                <div class="face face2"><span class="pip tl"></span><span class="pip br"></span></div>
-                <div class="face face3"><span class="pip tl"></span><span class="pip c"></span><span class="pip br"></span></div>
-                <div class="face face4">
-                  <span class="pip tl"></span><span class="pip tr"></span>
-                  <span class="pip bl"></span><span class="pip br"></span>
-                </div>
-                <div class="face face5">
-                  <span class="pip tl"></span><span class="pip tr"></span>
-                  <span class="pip c"></span>
-                  <span class="pip bl"></span><span class="pip br"></span>
-                </div>
-                <div class="face face6">
-                  <span class="pip tl"></span><span class="pip tr"></span>
-                  <span class="pip ml"></span><span class="pip mr"></span>
-                  <span class="pip bl"></span><span class="pip br"></span>
-                </div>
+        <div class="dicePanel">
+          <div class="diceStage">
+            <div id="die" class="die" aria-label="3d dice">
+              <!-- face 1 -->
+              <div class="face f1">
+                <span class="pip p11"></span>
+              </div>
+              <!-- face 2 -->
+              <div class="face f2">
+                <span class="pip p21"></span><span class="pip p22"></span>
+              </div>
+              <!-- face 3 -->
+              <div class="face f3">
+                <span class="pip p31"></span><span class="pip p32"></span><span class="pip p33"></span>
+              </div>
+              <!-- face 4 -->
+              <div class="face f4">
+                <span class="pip p41"></span><span class="pip p42"></span><span class="pip p43"></span><span class="pip p44"></span>
+              </div>
+              <!-- face 5 -->
+              <div class="face f5">
+                <span class="pip p51"></span><span class="pip p52"></span><span class="pip p53"></span><span class="pip p54"></span><span class="pip p55"></span>
+              </div>
+              <!-- face 6 -->
+              <div class="face f6">
+                <span class="pip p61"></span><span class="pip p62"></span><span class="pip p63"></span>
+                <span class="pip p64"></span><span class="pip p65"></span><span class="pip p66"></span>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="betTitle">
-          <div class="h2">Ставка</div>
-          <button id="bonusBtn2" class="pill pill--bonus pill--mini" type="button">+1000 🪙</button>
-        </div>
+        <section class="controls">
+          <div class="rowTitle">
+            <div class="h2">Ставка</div>
+            <div class="muted">
+              Баланс: <b>🪙 <span id="balance2">1000</span></b>
+            </div>
+          </div>
 
-        <div class="chips">
-          <button class="chip" data-bet="10" type="button">10</button>
-          <button class="chip" data-bet="50" type="button">50</button>
-          <button class="chip" data-bet="100" type="button">100</button>
-          <button class="chip" data-bet="250" type="button">250</button>
-          <button class="chip" data-bet="500" type="button">500</button>
-          <button class="chip" data-bet="max" type="button">MAX</button>
-        </div>
+          <div class="chips" role="group" aria-label="chips">
+            <button class="chip" data-bet="10" type="button">10</button>
+            <button class="chip" data-bet="50" type="button">50</button>
+            <button class="chip" data-bet="100" type="button">100</button>
+            <button class="chip" data-bet="250" type="button">250</button>
+            <button class="chip" data-bet="500" type="button">500</button>
+            <button class="chip" data-bet="max" type="button">MAX</button>
+          </div>
 
-        <div class="betRow">
-          <button id="betMinus" class="btnSmall" type="button">−</button>
-          <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
-          <button id="betPlus" class="btnSmall" type="button">+</button>
-        </div>
+          <div class="betRow">
+            <button id="betMinus" class="btnSmall" type="button">−</button>
+            <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
+            <button id="betPlus" class="btnSmall" type="button">+</button>
+          </div>
 
-        <button id="rollBtn" class="btnPrimary" type="button">Бросить</button>
+          <button id="rollBtn" class="btnPrimary" type="button">Бросить</button>
 
-        <div class="footNote">
-          Честный RNG: <span class="muted">crypto.getRandomValues</span>. Монеты виртуальные.
-        </div>
+          <div class="footNote">
+            Честный RNG: crypto.getRandomValues. Монеты виртуальные.
+          </div>
+        </section>
       </section>
     </main>
   </div>
