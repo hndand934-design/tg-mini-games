@@ -177,21 +177,25 @@ document.querySelectorAll(".chip").forEach((b) => {
 });
 
 // mines: строго 3..24
+minesRange.min = String(MIN_MINES);
+minesRange.max = String(MAX_MINES);
+
 function clampMines(){
   let m = Math.floor(Number(minesRange.value) || MIN_MINES);
   if (m < MIN_MINES) m = MIN_MINES;
   if (m > MAX_MINES) m = MAX_MINES;
+
   minesRange.value = String(m);
   minesView.textContent = String(m);
 
-  renderLadder(m, st?.safeOpened || 0);
+  // ✅ ВАЖНО: лестница всегда видна ДО старта
+  // если раунд не идет — показываем "предстартовую" лестницу (без подсветки шага)
+  const safeOpened = (st && st.active && !st.over) ? st.safeOpened : 0;
+  renderLadder(m, safeOpened);
+
   renderStats();
 }
-minesRange.min = String(MIN_MINES);
-minesRange.max = String(MAX_MINES);
-
-clampMines();
-clampBet();
+minesRange.addEventListener("input", clampMines);
 
 // ===== Rendering =====
 function renderGrid(){
@@ -256,7 +260,7 @@ function renderLadder(minesCount, safeOpened){
     const m = calcMultiplier(s, minesCount);
     const xTxt = `x${m.toFixed(m >= 100 ? 0 : m >= 10 ? 1 : 2)}`;
     const big = m >= 1000 ? " big" : "";
-    const active = (safeOpened === s) ? " active" : "";
+    const active = (safeOpened === s && st && st.active && !st.over) ? " active" : "";
 
     items.push(`
       <div class="lstep${big}${active}">
@@ -297,7 +301,7 @@ function startGame(){
   };
 
   setMsg("Раунд начался. Открывай safe клетки. Можно “Забрать”.");
-  renderLadder(minesCount, 0);
+  renderLadder(minesCount, 0); // при старте тоже ок
   renderGrid();
   renderStats();
 }
@@ -370,7 +374,7 @@ function resetGame(){
 
   st = null;
   renderGrid();
-  clampMines(); // лесенка всегда возвращается
+  clampMines(); // ✅ вернёт/обновит лестницу ДО старта
   renderStats();
 }
 
@@ -381,5 +385,6 @@ resetBtn.onclick = resetGame;
 
 // ===== Init =====
 renderGrid();
-clampMines();
+clampMines();   // ✅ лестница сразу появится по текущим mines
+clampBet();
 renderStats();
