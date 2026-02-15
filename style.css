@@ -54,6 +54,7 @@ body{
 .pill--bonus{ background: rgba(76,125,255,.14); border-color: rgba(76,125,255,.28); }
 .pill--ghost{ background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.08); cursor:default; }
 .pill--mini{ padding:7px 9px; font-weight:900 }
+.pill--rule{white-space:nowrap}
 .dot{
   width:8px;height:8px;border-radius:99px;background:#26d47b;
   box-shadow: 0 0 0 3px rgba(38,212,123,.14);
@@ -70,26 +71,12 @@ body{
   padding:12px 12px 8px;
   display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
 }
-.rightPills{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-.pill--rule{white-space:nowrap}
-
 .h1{font-weight:950; font-size:18px}
 .h2{font-weight:900; font-size:14px}
 .hint{font-size:12px; color:var(--muted); margin-top:4px}
 .muted{font-size:12px; color:var(--muted)}
-.content{ padding: 8px 12px 12px; }
 
-.grid2{ display:grid; grid-template-columns: 1.45fr .55fr; gap:12px; }
-@media (max-width: 760px){
-  .grid2{grid-template-columns: 1fr;}
-  .rightCol{display:none;}
-}
-.rightCol .ghostPanel{
-  height: 100%;
-  border-radius: 16px;
-  border:1px solid rgba(255,255,255,.08);
-  background: rgba(255,255,255,.03);
-}
+.content{ padding: 8px 12px 12px; }
 
 .seg{display:flex; gap:10px; align-items:center; margin-bottom:10px;}
 .segBtn{
@@ -148,7 +135,7 @@ body{
   margin-bottom:10px;
 }
 .arenaInner{
-  height: 165px;
+  height: 180px;
   border-radius: 14px;
   border:1px solid rgba(255,255,255,.08);
   background: rgba(0,0,0,.18);
@@ -156,18 +143,25 @@ body{
   overflow:hidden;
 }
 
+/* ===== Камера (наклон) ===== */
+.diceCam{
+  perspective: 900px;
+  transform-style: preserve-3d;
+  transform: rotateX(55deg) rotateZ(-12deg);
+}
+
 /* ===== 3D DICE ===== */
 .dice{
-  width: 74px;
-  height: 74px;
+  width: 86px;
+  height: 86px;
   position: relative;
   transform-style: preserve-3d;
-  transform: rotateX(var(--rx, -18deg)) rotateY(var(--ry, 32deg)) rotateZ(var(--rz, 0deg));
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) rotateZ(var(--rz, 0deg));
   will-change: transform;
 }
 .face{
   position:absolute; inset:0;
-  border-radius: 16px;
+  border-radius: 18px;
   background: linear-gradient(180deg, rgba(45,55,78,.95), rgba(20,26,40,.98));
   border: 1px solid rgba(255,255,255,.10);
   box-shadow:
@@ -177,42 +171,41 @@ body{
 }
 .face::after{
   content:"";
-  position:absolute; inset:8px;
-  border-radius: 12px;
+  position:absolute; inset:10px;
+  border-radius: 14px;
   border:1px solid rgba(255,255,255,.08);
   opacity:.7;
 }
 
-/* pip positions */
+/* pips */
 .pip{
-  width:9px;height:9px;border-radius:99px;
+  width:10px;height:10px;border-radius:99px;
   background: rgba(234,240,255,.92);
   box-shadow: 0 2px 6px rgba(0,0,0,.35);
   position:absolute;
 }
-.tl{left:18px;top:18px}
-.tr{right:18px;top:18px}
-.bl{left:18px;bottom:18px}
-.br{right:18px;bottom:18px}
-.ml{left:18px;top:50%;transform:translateY(-50%)}
-.mr{right:18px;top:50%;transform:translateY(-50%)}
+.tl{left:20px;top:20px}
+.tr{right:20px;top:20px}
+.bl{left:20px;bottom:20px}
+.br{right:20px;bottom:20px}
+.ml{left:20px;top:50%;transform:translateY(-50%)}
+.mr{right:20px;top:50%;transform:translateY(-50%)}
 .c{left:50%;top:50%;transform:translate(-50%,-50%)}
 
-/* positions: depth = 37px */
-.face1{ transform: rotateX(90deg) translateZ(37px); }    /* TOP */
-.face6{ transform: rotateX(-90deg) translateZ(37px); }   /* BOTTOM */
-.face3{ transform: translateZ(37px); }                   /* FRONT */
-.face4{ transform: rotateY(180deg) translateZ(37px); }   /* BACK */
-.face2{ transform: rotateY(90deg) translateZ(37px); }    /* RIGHT */
-.face5{ transform: rotateY(-90deg) translateZ(37px); }   /* LEFT */
+/* depth */
+.face1{ transform: rotateX(90deg) translateZ(43px); }     /* TOP */
+.face6{ transform: rotateX(-90deg) translateZ(43px); }    /* BOTTOM */
+.face3{ transform: translateZ(43px); }                    /* FRONT */
+.face4{ transform: rotateY(180deg) translateZ(43px); }    /* BACK */
+.face2{ transform: rotateY(90deg) translateZ(43px); }     /* RIGHT */
+.face5{ transform: rotateY(-90deg) translateZ(43px); }    /* LEFT */
 
-/* roll animation */
 .dice.rolling{
   animation: diceRoll 620ms cubic-bezier(.2,.85,.2,1) both;
 }
 @keyframes diceRoll{
   0%   { transform: rotateX(var(--rx0)) rotateY(var(--ry0)) rotateZ(var(--rz0)) scale(1); }
-  45%  { transform: rotateX(calc(var(--rx0) + 240deg)) rotateY(calc(var(--ry0) + 360deg)) rotateZ(calc(var(--rz0) + 180deg)) scale(1.05); }
+  45%  { transform: rotateX(calc(var(--rx0) + 240deg)) rotateY(calc(var(--ry0) + 360deg)) rotateZ(calc(var(--rz0) + 180deg)) scale(1.06); }
   75%  { transform: rotateX(calc(var(--rx0) + 420deg)) rotateY(calc(var(--ry0) + 620deg)) rotateZ(calc(var(--rz0) + 260deg)) scale(1.03); }
   100% { transform: rotateX(var(--rx))  rotateY(var(--ry))  rotateZ(var(--rz))  scale(1); }
 }
@@ -269,6 +262,11 @@ body{
 }
 .btnPrimary:disabled{opacity:.6; cursor:not-allowed}
 .footNote{margin-top:10px; font-size:12px; color: var(--muted);}
+
+@media (max-width: 420px){
+  .arenaInner{height: 170px;}
+  .dice{width: 80px; height:80px;}
+}
 
 @media (prefers-reduced-motion: reduce){
   .dice.rolling{animation:none}
