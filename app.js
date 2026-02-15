@@ -1,6 +1,4 @@
-// ===== Mines FINAL (UI ladder fixed, big X compact, sounds, reset returns bet) =====
-
-// --- RNG (честный) ---
+// ===== RNG (честный) =====
 function randFloat() {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
@@ -10,7 +8,7 @@ function randInt(min, max) {
   return Math.floor(randFloat() * (max - min + 1)) + min;
 }
 
-// --- Telegram WebApp ---
+// ===== Telegram WebApp =====
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
@@ -18,7 +16,7 @@ if (tg) {
 }
 
 // ===== Wallet =====
-const WALLET_KEY = "mini_wallet_mines_v2";
+const WALLET_KEY = "mini_wallet_mines_v3";
 function loadWallet() {
   try {
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
@@ -30,436 +28,388 @@ function saveWallet(w) {
   localStorage.setItem(WALLET_KEY, JSON.stringify(w));
 }
 let wallet = loadWallet();
-function setCoins(v) {
+function setCoins(v){
   wallet.coins = Math.max(0, Math.floor(v));
   saveWallet(wallet);
   renderTop();
 }
-function addCoins(d) {
-  setCoins(wallet.coins + d);
-}
+function addCoins(d){ setCoins(wallet.coins + d); }
 
-// ===== Sound =====
+// ===== Sound (лёгкий, без лагов) =====
 let soundOn = true;
 let audioCtx = null;
-
-function getCtx() {
-  if (!soundOn) return null;
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function getAC(){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioCtx) audioCtx = new AC();
   return audioCtx;
 }
-function tone(freq = 520, ms = 70, vol = 0.04, type = "sine") {
-  const ctx = getCtx();
-  if (!ctx) return;
-  const o = ctx.createOscillator();
-  const g = ctx.createGain();
-  o.type = type;
-  o.frequency.value = freq;
-  g.gain.value = vol;
-  o.connect(g);
-  g.connect(ctx.destination);
-  o.start();
-  setTimeout(() => {
-    try { o.stop(); } catch {}
-  }, ms);
+function tone(freq = 520, ms = 60, vol = 0.03, type = "sine"){
+  if (!soundOn) return;
+  try{
+    const ctx = getAC();
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    setTimeout(() => { o.stop(); }, ms);
+  }catch{}
 }
-function sfxGem() {
-  // приятный "пинг"
-  tone(740, 55, 0.035, "sine");
-  setTimeout(() => tone(980, 65, 0.03, "sine"), 55);
+function soundSafe(){
+  tone(720, 55, 0.03, "sine");
+  setTimeout(()=>tone(980, 55, 0.03, "sine"), 55);
 }
-function sfxBoom() {
-  // "взрыв" (низкий + шумоподобный)
-  const ctx = getCtx();
-  if (!ctx) return;
-
-  // низкий удар
-  tone(120, 140, 0.06, "square");
-
-  // короткий шум
-  const dur = 0.18;
-  const bufferSize = Math.floor(ctx.sampleRate * dur);
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) {
-    const t = i / bufferSize;
-    data[i] = (Math.random() * 2 - 1) * (1 - t); // затухание
-  }
-  const src = ctx.createBufferSource();
-  src.buffer = buffer;
-  const g = ctx.createGain();
-  g.gain.value = 0.08;
-  src.connect(g);
-  g.connect(ctx.destination);
-  src.start();
+function soundBoom(){
+  tone(140, 120, 0.05, "square");
+  setTimeout(()=>tone(90, 160, 0.05, "square"), 80);
 }
 
-// ===== UI refs (ожидаем твою страницу Mines) =====
+// ===== UI refs =====
 const subTitle = document.getElementById("subTitle");
 const balanceEl = document.getElementById("balance");
+
 const soundBtn = document.getElementById("soundBtn");
 const soundText = document.getElementById("soundText");
 const bonusBtn = document.getElementById("bonusBtn");
 
-// ставка
+const gridEl = document.getElementById("grid");
+
+const openedView = document.getElementById("openedView");
+const safeMaxView = document.getElementById("safeMaxView");
+const multView = document.getElementById("multView");
+const cashNowView = document.getElementById("cashNowView");
+
+const cashoutBtn = document.getElementById("cashoutBtn");
+const resetBtn = document.getElementById("resetBtn");
+const msgEl = document.getElementById("msg");
+
 const betInput = document.getElementById("betInput");
 const betMinus = document.getElementById("betMinus");
 const betPlus = document.getElementById("betPlus");
-const chips = document.querySelectorAll(".chip");
 
-// мины
 const minesRange = document.getElementById("minesRange");
-const minesVal = document.getElementById("minesVal");
+const minesView = document.getElementById("minesView");
 
-// кнопки
 const startBtn = document.getElementById("startBtn");
-const cashBtn = document.getElementById("cashBtn");
-const resetBtn = document.getElementById("resetBtn");
 
-// поле
-const gridEl = document.getElementById("grid");
-
-// нижние статусы
-const openedEl = document.getElementById("openedVal");
-const multEl = document.getElementById("multVal");
-const takeEl = document.getElementById("takeVal");
-
-// сообщение
-const msgEl = document.getElementById("msg");
-
-// лесенка
-const ladderGridEl = document.getElementById("ladderGrid");
+const ladderGrid = document.getElementById("ladderGrid");
 
 // ===== Top render =====
-function renderTop() {
+function renderTop(){
   const user = tg?.initDataUnsafe?.user;
-  if (subTitle) subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
-  if (balanceEl) balanceEl.textContent = String(wallet.coins);
+  subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
+  balanceEl.textContent = String(wallet.coins);
 }
 renderTop();
 
-// ===== Sound toggle =====
-if (soundBtn) {
-  soundBtn.onclick = async () => {
-    soundOn = !soundOn;
-    if (soundText) soundText.textContent = soundOn ? "Звук on" : "Звук off";
-    const dot = soundBtn.querySelector?.(".dot");
-    if (dot) {
-      dot.style.background = soundOn ? "#26d47b" : "#ff5a6a";
-      dot.style.boxShadow = soundOn
-        ? "0 0 0 3px rgba(38,212,123,.14)"
-        : "0 0 0 3px rgba(255,90,106,.14)";
-    }
-    if (soundOn) sfxGem(); else tone(240, 60, 0.03);
-  };
-}
-
-// ===== Bonus =====
-if (bonusBtn) {
-  bonusBtn.onclick = () => {
-    addCoins(1000);
-    sfxGem();
-  };
-}
-
-// ===== Mines logic =====
-const SIZE = 25;      // 5x5
-const COLS = 5;
-const MIN_MINES = 3;  // как ты просил: минимум 3
-
-let state = {
-  active: false,
-  bet: 100,
-  minesCount: 3,
-  mines: new Set(),
-  opened: new Set(),
-  safeOpened: 0,
-  mult: 1.0,
-  over: false,
-  cashed: false
+// sound toggle
+soundBtn.onclick = () => {
+  soundOn = !soundOn;
+  soundText.textContent = "Звук";
+  const dot = soundBtn.querySelector(".dot");
+  dot.style.background = soundOn ? "#26d47b" : "#ff5a6a";
+  dot.style.boxShadow = soundOn
+    ? "0 0 0 3px rgba(38,212,123,.14)"
+    : "0 0 0 3px rgba(255,90,106,.14)";
+  tone(soundOn ? 640 : 240, 70, 0.03);
 };
 
-// --- Математика X: монотонный рост и заметная разница на больших минах ---
-// Используем "house edge" мягко, но X будет расти нормально даже на 23 минах.
-// Формула: X = (1 - edge) / P, где P = вероятность открыть n safe подряд без взрыва.
-// P = C(safeTotal, n) / C(25, n), safeTotal = 25 - minesCount
-function comb(n, k) {
-  if (k < 0 || k > n) return 0;
-  k = Math.min(k, n - k);
-  let res = 1;
-  for (let i = 1; i <= k; i++) {
-    res = (res * (n - k + i)) / i;
-  }
-  return res;
-}
-function calcMultiplier(nSafeOpened, minesCount) {
-  const safeTotal = SIZE - minesCount; // сколько всего safe клеток
-  const n = nSafeOpened;
+// bonus
+bonusBtn.onclick = () => { addCoins(1000); tone(760, 70, 0.03); };
 
-  if (n <= 0) return 1;
+// ===== Game constants =====
+const SIZE = 25; // 5x5
+const COLS = 5;
+const HOUSE_EDGE = 0.05; // небольшой edge, но X всё равно растёт сильно на больших минах
 
-  // вероятность открыть n safe подряд (без взрыва)
-  const p = comb(safeTotal, n) / comb(SIZE, n);
+// ===== State =====
+let st = null;
+// st = {
+//   active: true/false,
+//   bet, minesCount,
+//   mines: Set<int>,
+//   opened: Set<int>,
+//   safeOpened,
+//   over, cashed
+// }
 
-  // edge увеличиваем немного с ростом мин, но НЕ душим большие мины
-  // чтобы на больших минах X реально был большим и рос
-  const edgeBase = 0.06; // 6%
-  const edge = Math.min(0.12, edgeBase + (minesCount - 3) * 0.002); // до 12%
+// ===== Utils =====
+function setMsg(t){ msgEl.textContent = t; }
 
-  let x = (1 - edge) / Math.max(1e-9, p);
-
-  // ограничим сверху разумно (на последних шагах может быть космос)
-  x = Math.min(x, 999999);
-
-  // минимум 1
-  return Math.max(1, x);
-}
-
-// --- build mines ---
-function buildMines(minesCount) {
+function buildMines(minesCount){
   const mines = new Set();
   while (mines.size < minesCount) mines.add(randInt(0, SIZE - 1));
   return mines;
 }
 
-// ===== UI helpers =====
-function clampBet() {
-  let v = Math.floor(Number(betInput?.value) || 0);
+// Честный множитель по шансам:
+// mult = (C(25, m) / C(25-safe, m)) * (1 - edge)
+function comb(n, k){
+  if (k < 0 || k > n) return 0;
+  k = Math.min(k, n - k);
+  let num = 1;
+  let den = 1;
+  for (let i = 1; i <= k; i++){
+    num *= (n - (k - i));
+    den *= i;
+  }
+  return num / den;
+}
+function calcMultiplier(safeOpened, minesCount){
+  if (safeOpened <= 0) return 1.0;
+  const total = SIZE;
+  const m = minesCount;
+  const fair = comb(total, m) / comb(total - safeOpened, m);
+  const withEdge = fair * (1 - HOUSE_EDGE);
+  return Math.max(1, withEdge);
+}
+
+function money(n){
+  return `${Math.floor(n)} 🪙`;
+}
+
+// ===== Controls =====
+function clampBet(){
+  let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
   if (v > wallet.coins) v = wallet.coins;
-  if (betInput) betInput.value = String(v);
-  state.bet = v;
+  betInput.value = String(v);
+  renderStats();
 }
-function clampMines() {
-  let v = Math.floor(Number(minesRange?.value) || MIN_MINES);
-  if (v < MIN_MINES) v = MIN_MINES;
-  if (v > 24) v = 24;
-  state.minesCount = v;
-  if (minesRange) minesRange.value = String(v);
-  if (minesVal) minesVal.textContent = String(v);
+betInput.addEventListener("input", clampBet);
+betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); };
+betPlus.onclick  = () => { betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); };
+
+document.querySelectorAll(".chip").forEach((b) => {
+  b.onclick = () => {
+    const val = b.dataset.bet;
+    betInput.value = (val === "max") ? String(wallet.coins) : String(val);
+    clampBet();
+    tone(540, 55, 0.02);
+  };
+});
+
+function clampMines(){
+  let m = Math.floor(Number(minesRange.value) || 3);
+  if (m < 3) m = 3;
+  if (m > 24) m = 24;
+  minesRange.value = String(m);
+  minesView.textContent = String(m);
+
+  // при смене мин в ожидании — просто обновляем лесенку/статы
+  renderLadder(m, st?.safeOpened || 0);
+  renderStats();
 }
+minesRange.addEventListener("input", clampMines);
 
-// формат икса в лесенке — чтобы не вылезало и красиво
-function formatX(x) {
-  if (x >= 1000) return `x${Math.round(x)}`;   // большие без .00
-  return `x${x.toFixed(2)}`;
-}
+clampMines();
+clampBet();
 
-// ===== Ladder render =====
-function renderLadder(activeStep, minesCount) {
-  if (!ladderGridEl) return;
+// ===== Rendering =====
+function renderGrid(){
+  const isActive = !!st && st.active;
+  const over = st?.over;
 
-  const safeTotal = SIZE - minesCount;
-  const totalSteps = safeTotal; // можно открыть максимум safeTotal клеток
+  let html = "";
+  for (let i = 0; i < SIZE; i++){
+    const opened = isActive && st.opened.has(i);
+    const isMine = isActive && st.mines.has(i);
 
-  ladderGridEl.innerHTML = "";
-
-  for (let step = 1; step <= totalSteps; step++) {
-    const x = calcMultiplier(step, minesCount);
-
-    const div = document.createElement("div");
-    div.className = "lstep";
-
-    // большие иксы пометим классом
-    if (x >= 50) div.classList.add("big");
-
-    // подсветка текущего шага
-    if (step === activeStep) div.classList.add("active");
-
-    div.innerHTML = `<span class="k">#${step}</span><span class="x">${formatX(x)}</span>`;
-    ladderGridEl.appendChild(div);
-  }
-}
-
-// ===== Grid render =====
-function renderGrid() {
-  if (!gridEl) return;
-
-  const cells = [];
-  for (let i = 0; i < SIZE; i++) {
-    const opened = state.opened.has(i);
-
-    // до старта — пустые “непрозрачные” клетки (без рисунков)
-    let label = "";
     let cls = "cell";
-    if (!state.active) cls += " cell--idle";
+    let icon = "";
 
-    if (opened) {
-      const isMine = state.mines.has(i);
-      cls += isMine ? " mine" : " safe";
-      label = isMine ? "💣" : "💎";
+    if (!isActive){
+      cls += " locked";
+      icon = ""; // ДО Start — пусто
+    } else {
+      if (opened && !isMine) { cls += " safe"; icon = "💎"; }
+      if (opened && isMine)  { cls += " mine"; icon = "💣"; }
     }
 
-    cells.push(
-      `<button class="${cls}" data-i="${i}" ${state.over || !state.active ? "disabled" : ""}>
-        <span class="cellInner">${label}</span>
-      </button>`
-    );
+    html += `<button class="${cls}" data-i="${i}" ${(!isActive || over) ? "disabled" : ""}>
+      <span class="icon">${icon}</span>
+    </button>`;
   }
-  gridEl.innerHTML = cells.join("");
-  gridEl.querySelectorAll("button[data-i]").forEach((b) => {
-    b.onclick = () => onCellClick(Number(b.dataset.i));
+
+  gridEl.innerHTML = html;
+
+  gridEl.querySelectorAll(".cell").forEach((btn) => {
+    btn.onclick = () => onCellClick(Number(btn.dataset.i));
   });
 }
 
-// ===== Bottom stats =====
-function renderBottom() {
-  if (openedEl) openedEl.textContent = `${state.safeOpened} / ${SIZE - state.minesCount}`;
-  if (multEl) multEl.textContent = `x${state.mult.toFixed(2)}`;
+function renderStats(){
+  const minesCount = Math.floor(Number(minesRange.value) || 3);
+  const safeMax = SIZE - minesCount;
+  safeMaxView.textContent = String(safeMax);
 
-  const take = Math.floor(state.bet * state.mult);
-  if (takeEl) takeEl.textContent = state.active ? `${take} 🪙` : "— 🪙";
-
-  if (cashBtn) cashBtn.disabled = !state.active || state.over || state.safeOpened <= 0 || state.cashed;
-}
-
-// ===== Message =====
-function setMsg(t) {
-  if (msgEl) msgEl.textContent = t || "";
-}
-
-// ===== Start / Cashout / Reset =====
-function startGame() {
-  clampBet();
-  clampMines();
-
-  if (state.bet <= 0) return alert("Ставка должна быть больше 0");
-  if (state.bet > wallet.coins) return alert("Недостаточно монет");
-  if (state.minesCount < MIN_MINES || state.minesCount > 24)
-    return alert(`Мин должно быть от ${MIN_MINES} до 24`);
-
-  // списываем ставку только при Start
-  addCoins(-state.bet);
-
-  state.active = true;
-  state.over = false;
-  state.cashed = false;
-  state.mines = buildMines(state.minesCount);
-  state.opened = new Set();
-  state.safeOpened = 0;
-  state.mult = 1.0;
-
-  setMsg("Игра началась. Открывай safe 💎 или забирай.");
-  renderAll();
-}
-
-function cashOut() {
-  if (!state.active || state.over || state.cashed) return;
-  if (state.safeOpened <= 0) return;
-
-  state.cashed = true;
-  state.over = true;
-
-  const payout = Math.floor(state.bet * state.mult);
-  addCoins(payout);
-
-  setMsg(`✅ Забрал: +${payout} 🪙 (${state.mult.toFixed(2)}x)`);
-
-  // покажем все
-  for (let i = 0; i < SIZE; i++) state.opened.add(i);
-
-  renderAll();
-}
-
-function resetGame() {
-  // если игра была начата и ставка списана — возвращаем при сбросе (как ты просил)
-  if (state.active && !state.over) {
-    addCoins(state.bet);
+  if (!st || !st.active){
+    openedView.textContent = "0";
+    multView.textContent = "x1.00";
+    cashNowView.textContent = "—";
+    cashoutBtn.disabled = true;
+    return;
   }
 
-  state.active = false;
-  state.over = false;
-  state.cashed = false;
-  state.mines = new Set();
-  state.opened = new Set();
-  state.safeOpened = 0;
-  state.mult = 1.0;
+  openedView.textContent = String(st.safeOpened);
+  multView.textContent = `x${st.multiplier.toFixed(2)}`;
 
-  setMsg("Выбери ставку и количество мин, затем нажми Start.");
-  renderAll();
+  const cashNow = Math.floor(st.bet * st.multiplier);
+  cashNowView.textContent = money(cashNow);
+
+  cashoutBtn.disabled = st.over || st.safeOpened <= 0 || st.cashed;
 }
 
-// ===== Cell click =====
-function onCellClick(i) {
-  if (!state.active || state.over) return;
-  if (state.opened.has(i)) return;
+function renderLadder(minesCount, safeOpened){
+  const safeMax = SIZE - minesCount;
 
-  state.opened.add(i);
+  // шаги: 1..safeMax
+  // показываем X заранее, подсветка = текущий safeOpened
+  const items = [];
+  for (let s = 1; s <= safeMax; s++){
+    const m = calcMultiplier(s, minesCount);
+    const xTxt = `x${m.toFixed(m >= 100 ? 0 : m >= 10 ? 1 : 2)}`;
 
-  // mine
-  if (state.mines.has(i)) {
-    state.over = true;
-    sfxBoom();
-    setMsg(`💥 Мина! Ставка ${state.bet} 🪙 сгорела.`);
+    const big = m >= 1000 ? " big" : "";
+    const active = (safeOpened === s) ? " active" : "";
 
-    // показать все
-    for (let k = 0; k < SIZE; k++) state.opened.add(k);
-    renderAll();
+    items.push(`
+      <div class="lstep${big}${active}">
+        <span class="k">#${s}</span>
+        <span class="x">${xTxt}</span>
+      </div>
+    `);
+  }
+
+  ladderGrid.innerHTML = items.join("");
+}
+
+// ===== Game flow =====
+function startGame(){
+  if (st && st.active && !st.over){
+    setMsg("Раунд уже идёт. Можно открывать клетки или нажать “Забрать/Сброс”.");
+    return;
+  }
+
+  const bet = Math.floor(Number(betInput.value) || 0);
+  const minesCount = Math.floor(Number(minesRange.value) || 3);
+
+  if (bet <= 0) return alert("Ставка должна быть больше 0");
+  if (bet > wallet.coins) return alert("Недостаточно монет");
+  if (minesCount < 3 || minesCount > 24) return alert("Мин должно быть от 3 до 24");
+
+  // списываем ставку один раз на Start
+  addCoins(-bet);
+
+  st = {
+    active: true,
+    bet,
+    minesCount,
+    mines: buildMines(minesCount),
+    opened: new Set(),
+    safeOpened: 0,
+    multiplier: 1.0,
+    over: false,
+    cashed: false,
+  };
+
+  setMsg("Раунд начался. Открывай safe клетки. Можно “Забрать”.");
+  renderLadder(minesCount, 0);
+  renderGrid();
+  renderStats();
+}
+
+function revealAll(){
+  for (let i = 0; i < SIZE; i++) st.opened.add(i);
+}
+
+function onCellClick(i){
+  if (!st || !st.active || st.over) return;
+  if (st.opened.has(i)) return;
+
+  st.opened.add(i);
+
+  if (st.mines.has(i)){
+    // проигрыш
+    st.over = true;
+    st.cashed = false;
+    revealAll();
+    setMsg(`💥 Мина! Ставка ${st.bet} 🪙 сгорела.`);
+    soundBoom();
+    renderLadder(st.minesCount, st.safeOpened);
+    renderGrid();
+    renderStats();
     return;
   }
 
   // safe
-  state.safeOpened += 1;
-  state.mult = calcMultiplier(state.safeOpened, state.minesCount);
+  st.safeOpened += 1;
+  st.multiplier = calcMultiplier(st.safeOpened, st.minesCount);
+  soundSafe();
 
-  sfxGem();
-  setMsg("");
+  // подсветка шага
+  renderLadder(st.minesCount, st.safeOpened);
 
-  // авто если открыл все safe
-  const maxSafe = SIZE - state.minesCount;
-  if (state.safeOpened >= maxSafe) {
-    setMsg("🏁 Открыл все safe! Авто-забор.");
-    cashOut();
+  // если открыл все safe — авто cashout
+  const safeMax = SIZE - st.minesCount;
+  if (st.safeOpened >= safeMax){
+    cashOut(true);
     return;
   }
 
-  renderAll();
-}
-
-// ===== Render all =====
-function renderAll() {
-  // кнопки
-  if (startBtn) startBtn.disabled = state.active && !state.over;
-  if (resetBtn) resetBtn.disabled = false;
-
-  // лестенка показывается ВСЕГДА по выбранным минам
-  renderLadder(state.active ? state.safeOpened : 0, state.minesCount);
-
   renderGrid();
-  renderBottom();
-  renderTop();
+  renderStats();
 }
 
-// ===== Bind UI =====
-if (betInput) betInput.addEventListener("input", () => { clampBet(); renderBottom(); });
-if (betMinus) betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); renderBottom(); };
-if (betPlus) betPlus.onclick = () => { betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); renderBottom(); };
+function cashOut(auto = false){
+  if (!st || !st.active || st.over || st.cashed) return;
+  if (st.safeOpened <= 0) {
+    setMsg("Нужно открыть хотя бы 1 safe клетку, чтобы забрать.");
+    return;
+  }
 
-chips.forEach((b) => {
-  b.onclick = () => {
-    const val = b.dataset.bet;
-    if (val === "max") betInput.value = String(wallet.coins);
-    else betInput.value = String(val);
-    clampBet();
-    renderBottom();
-    sfxGem();
-  };
-});
+  st.cashed = true;
+  st.over = true;
 
-if (minesRange) minesRange.oninput = () => {
-  clampMines();
-  // обновляем лесенку до старта тоже
-  renderLadder(state.active ? state.safeOpened : 0, state.minesCount);
-};
+  const payout = Math.floor(st.bet * st.multiplier);
+  addCoins(payout);
 
-if (startBtn) startBtn.onclick = startGame;
-if (cashBtn) cashBtn.onclick = cashOut;
-if (resetBtn) resetBtn.onclick = resetGame;
+  setMsg(auto
+    ? `🏁 Открыл все safe! Авто-забор: +${payout} 🪙 (x${st.multiplier.toFixed(2)})`
+    : `✅ Забрал: +${payout} 🪙 (x${st.multiplier.toFixed(2)})`
+  );
 
-// ===== init =====
-(function init() {
-  clampMines();
-  clampBet();
-  setMsg("Выбери ставку и количество мин, затем нажми Start.");
-  renderAll();
-})();
+  revealAll();
+  renderGrid();
+  renderStats();
+}
+
+function resetGame(){
+  // если был активный раунд и он НЕ проигран и НЕ закэш-аутен — возвращаем ставку
+  if (st && st.active && !st.over){
+    addCoins(st.bet);
+    setMsg(`↩️ Сброс. Ставка ${st.bet} 🪙 возвращена.`);
+  } else {
+    setMsg("Выбери ставку и количество мин, затем нажми Start.");
+  }
+
+  st = null;
+  renderGrid();
+  clampMines();  // важное: лесенка всегда возвращается
+  renderStats();
+}
+
+// ===== Buttons =====
+startBtn.onclick = startGame;
+cashoutBtn.onclick = () => cashOut(false);
+resetBtn.onclick = resetGame;
+
+// ===== Init =====
+renderGrid();
+clampMines();
+renderStats();
