@@ -24,9 +24,7 @@ function loadWallet() {
   } catch {}
   return { coins: 1000 };
 }
-function saveWallet(w) {
-  localStorage.setItem(WALLET_KEY, JSON.stringify(w));
-}
+function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
 function setCoins(v) {
   wallet.coins = Math.max(0, Math.floor(v));
@@ -85,22 +83,6 @@ const diceEl = document.getElementById("dice");
 let mode = "high";
 let busy = false;
 const houseEdge = 0.985;
-
-// ✅ ПРАВИЛЬНЫЕ ориентации под нашу разметку (face1 = TOP)
-// 1: top (face1)
-// 2: right (face2) -> top (rotateZ +90)
-// 3: front (face3) -> top (rotateX -90)
-// 4: back (face4) -> top (rotateX +90)
-// 5: left (face5) -> top (rotateZ -90)
-// 6: bottom (face6) -> top (rotateX 180)
-const TOP_ORIENT = {
-  1: { rx: 0,   ry: 0,   rz: 0 },
-  2: { rx: 0,   ry: 0,   rz: 90 },
-  3: { rx: -90, ry: 0,   rz: 0 },
-  4: { rx: 90,  ry: 0,   rz: 0 },
-  5: { rx: 0,   ry: 0,   rz: -90 },
-  6: { rx: 180, ry: 0,   rz: 0 },
-};
 
 function renderTop(){
   const user = tg?.initDataUnsafe?.user;
@@ -190,11 +172,22 @@ function updateMath(){
 clampBet();
 updateMath();
 
-// orientation helpers
-function setDiceOrientation(rx, ry, rz){
+// ✅ ЖЁСТКОЕ соответствие: выпало X => TOP = X (без доп. твистов)
+// Мы управляем только rotateX/rotateY.
+// По текущей разметке граней (face1 top, face2 right, face3 front, face4 back, face5 left, face6 bottom)
+// Эти пары точно ставят нужную грань наверх:
+const TOP_ORIENT = {
+  1: { rx: 0,   ry: 0   },  // face1 на верх
+  2: { rx: -90, ry: -90 },  // right -> front -> top
+  3: { rx: -90, ry: 0   },  // front -> top
+  4: { rx: 90,  ry: 0   },  // back  -> top
+  5: { rx: -90, ry: 90  },  // left  -> front -> top
+  6: { rx: 180, ry: 0   },  // bottom -> top
+};
+
+function setDiceOrientation(rx, ry){
   diceEl.style.setProperty("--rx", `${rx}deg`);
   diceEl.style.setProperty("--ry", `${ry}deg`);
-  diceEl.style.setProperty("--rz", `${rz}deg`);
 }
 
 // roll anim
@@ -209,16 +202,11 @@ function playRollAnim(target){
 
     const rx0 = randInt(-25, -10);
     const ry0 = randInt(15, 55);
-    const rz0 = randInt(-12, 12);
     diceEl.style.setProperty("--rx0", `${rx0}deg`);
     diceEl.style.setProperty("--ry0", `${ry0}deg`);
-    diceEl.style.setProperty("--rz0", `${rz0}deg`);
 
     const o = TOP_ORIENT[target];
-
-    // yTwist НЕ меняет top, только поворот вокруг вертикали
-    const yTwist = [0, 90, 180, 270][randInt(0,3)];
-    setDiceOrientation(o.rx, o.ry + yTwist, o.rz);
+    setDiceOrientation(o.rx, o.ry);
 
     diceEl.classList.remove("rolling");
     void diceEl.offsetWidth;
@@ -267,4 +255,4 @@ rollBtn.onclick = async () => {
 };
 
 // стартовое положение
-setDiceOrientation(0, 0, 0);
+setDiceOrientation(0, 0);
