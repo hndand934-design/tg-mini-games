@@ -296,33 +296,42 @@ body{
 }
 
 .lstep{
-  height:48px;
+  height:50px;
   border-radius: 12px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.04);
-  padding: 8px 10px;
+
+  /* ВАЖНО: фиксируем сетку, чтобы ничего не вылезало */
   display:grid;
-  grid-template-columns: 44px 1fr;
+  grid-template-columns: 46px 1fr;
   align-items:center;
   gap:8px;
-  font-weight:950;
-  min-width:0;
-  overflow:hidden;
+
+  padding: 8px 10px;
+  min-width:0;              /* разрешаем shrink внутри grid */
+  overflow:hidden;          /* гарантируем отсутствие “вылезаний” */
 }
 
 .lstep .k{
   font-size:12px;
   opacity:.82;
-  text-align:left;
+  white-space:nowrap;
 }
 
 .lstep .x{
-  font-size:16px;              /* ВОТ ТУТ КРУПНЕЕ X */
-  letter-spacing: .2px;
+  /* ВАЖНО: крупно, но безопасно */
+  font-size:17px;
+  font-weight:950;
   text-align:right;
+
+  /* чтобы длинные иксы не ломали блок */
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+
+  /* красивее цифры (не скачут по ширине) */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .2px;
 }
 
 .lstep.active{
@@ -331,10 +340,11 @@ body{
   box-shadow: 0 10px 18px rgba(0,0,0,.18);
 }
 
+/* Большие иксы — чуть жирнее и еще читабельнее */
 .lstep.big{
   background: rgba(255,214,110,.08);
   border-color: rgba(255,214,110,.18);
 }
 .lstep.big .x{
-  font-size:18px;              /* ЕЩЁ КРУПНЕЕ НА БОЛЬШИХ ИКСАХ */
+  font-size:19px;
 }
