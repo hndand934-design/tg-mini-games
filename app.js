@@ -119,7 +119,6 @@ soundBtn.onclick = async () => {
     ? "0 0 0 3px rgba(38,212,123,.14)"
     : "0 0 0 3px rgba(255,90,106,.14)";
 
-  // iOS/Telegram иногда требует “жеста” — это как раз он
   if (soundOn) ensureCtx();
   beep(soundOn ? 640 : 240, 70, 0.03);
 };
@@ -133,19 +132,15 @@ bonusBtn.onclick = onBonus;
 bonusBtn2.onclick = onBonus;
 
 // ===== Game state =====
-const HOUSE_EDGE = 0.985; // чтобы x1.18 при шанс 83.3%
+const HOUSE_EDGE = 0.985;
 
-let mode = "more"; // more | less
+let mode = "more";
 let busy = false;
 let lastRoll = null;
 
 // ===== Cube faces (pips) =====
-// Мы делаем стандартные значения на гранях: U=1 D=6 F=2 B=5 R=3 L=4.
-// И дальше поворачиваем куб так, чтобы наверху оказался нужный результат.
-// Тогда “Выпало” = верхняя грань (точки) всегда совпадает.
 const BASE = { U: 1, D: 6, F: 2, B: 5, R: 3, L: 4 };
 
-// Pips patterns in 3x3 positions (0..8)
 const PIPS = {
   1: [4],
   2: [0, 8],
@@ -171,23 +166,18 @@ function mountFaces() {
 }
 mountFaces();
 
-// ===== Orientation BFS (24 states) =====
-// Мы генерим все ориентации куба (24) и для каждой храним углы (кратные 90),
-// чтобы потом по result выбрать ориентацию где U=result.
+// ===== Orientation BFS =====
 function keyOf(o) {
   return `${o.U}${o.D}${o.F}${o.B}${o.R}${o.L}`;
 }
 
 function rotX(o) {
-  // вращение вокруг X: U->B, B->D, D->F, F->U (R/L неизменны)
   return { U: o.F, D: o.B, F: o.D, B: o.U, R: o.R, L: o.L };
 }
 function rotY(o) {
-  // вокруг Y: F->R, R->B, B->L, L->F (U/D неизменны)
   return { U: o.U, D: o.D, F: o.L, B: o.R, R: o.F, L: o.B };
 }
 function rotZ(o) {
-  // вокруг Z: U->L, L->D, D->R, R->U (F/B неизменны)
   return { U: o.R, D: o.L, F: o.F, B: o.B, R: o.D, L: o.U };
 }
 
@@ -226,7 +216,6 @@ function bfsOrientations() {
     }
   }
 
-  // group by top value
   const byTop = new Map();
   for (const rec of seen.values()) {
     const top = rec.o.U;
@@ -238,7 +227,7 @@ function bfsOrientations() {
 
 const ORIENTS_BY_TOP = bfsOrientations();
 
-// ===== Apply cube rotation (with extra spins for beauty) =====
+// ===== Apply cube rotation =====
 function setCubeAngles(rx, ry, rz) {
   cubeEl.style.setProperty("--rx", `${rx}deg`);
   cubeEl.style.setProperty("--ry", `${ry}deg`);
@@ -249,14 +238,12 @@ function spinToTopValue(n) {
   const list = ORIENTS_BY_TOP.get(n);
   const pick = list[randInt(0, list.length - 1)];
 
-  // add extra 360 spins for nicer roll (still ends at same orientation)
   const extraX = 360 * randInt(1, 2);
   const extraY = 360 * randInt(1, 2);
   const extraZ = 360 * randInt(0, 1);
 
   setCubeAngles(pick.rx + extraX, pick.ry + extraY, pick.rz + extraZ);
 
-  // return when transition ends
   return new Promise((resolve) => {
     const onEnd = () => {
       cubeEl.removeEventListener("transitionend", onEnd);
@@ -306,9 +293,8 @@ thrRange.oninput = () => {
 };
 
 function chanceFor(thr, mode) {
-  // thr in [2..6]
-  if (mode === "more") return (7 - thr) / 6;      // >= thr
-  return (thr - 1) / 6;                           // <= thr-1
+  if (mode === "more") return (7 - thr) / 6;
+  return (thr - 1) / 6;
 }
 
 function recalc() {
@@ -341,7 +327,6 @@ rollBtn.onclick = async () => {
   busy = true;
   rollBtn.disabled = true;
 
-  // deduct bet once
   addCoins(-bet);
 
   const thr = Number(thrRange.value);
@@ -351,7 +336,6 @@ rollBtn.onclick = async () => {
   rolledView.textContent = "…";
   beep(520, 55, 0.02);
 
-  // rotate cube so that TOP FACE == result (синхрон 1-в-1)
   await spinToTopValue(result);
 
   rolledView.textContent = String(result);
@@ -360,7 +344,6 @@ rollBtn.onclick = async () => {
     (mode === "more" && result >= thr) ||
     (mode === "less" && result <= (thr - 1));
 
-  // payout
   const chance = chanceFor(thr, mode);
   const mult = Math.max(1.01, (1 / chance) * HOUSE_EDGE);
   const payout = Math.floor(bet * mult);
