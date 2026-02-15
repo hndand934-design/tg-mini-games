@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!doctype html>
 <html lang="ru">
 <head>
@@ -22,29 +21,29 @@
           <span class="dot"></span>
           <span id="soundText">Звук on</span>
         </button>
-
         <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
         <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
 
-    <main class="layout">
-      <!-- LEFT -->
+    <main class="mainGrid">
+      <!-- LEFT: поле -->
       <section class="card">
         <div class="cardHead">
-          <div class="h1">Mines</div>
-          <div class="hint">Открывай safe клетки. Больше мин — выше риск и быстрее X. Можно “Забрать”.</div>
+          <div>
+            <div class="h1">Mines</div>
+            <div class="hint">Открывай safe клетки. Чем больше мин — тем быстрее растёт X. Можно “Забрать”.</div>
+          </div>
+          <div class="pill pill--mini" id="soundMini">Звук</div>
         </div>
 
-        <div class="leftBody">
-          <div class="board">
-            <div id="grid" class="grid" aria-label="mines grid"></div>
-          </div>
+        <div class="fieldWrap">
+          <div class="grid" id="grid"></div>
 
           <div class="bottomStats">
             <div class="stat">
               <div class="label">Открыто safe</div>
-              <div class="value"><b id="openedView">0 / 24</b></div>
+              <div class="value"><b id="openedView">0</b> / <span id="safeTotalView">22</span></div>
             </div>
             <div class="stat">
               <div class="label">Множитель</div>
@@ -56,32 +55,24 @@
             </div>
           </div>
 
-          <div class="ladderBox">
-            <div class="ladderHead">
-              <div class="ladderTitle">Лесенка X</div>
-              <div class="ladderSub">Показывает X по шагам. До старта — превью по выбранным минам.</div>
-            </div>
-            <div id="ladder" class="ladderGrid" aria-label="ladder"></div>
-          </div>
-
-          <div id="msg" class="msg"></div>
-
-          <div class="row">
+          <div class="rowButtons">
             <button id="cashBtn" class="btnPrimary" type="button" disabled>Забрать</button>
             <button id="resetBtn" class="btnGhost" type="button">Сброс</button>
           </div>
+
+          <div id="msg" class="msg"></div>
         </div>
       </section>
 
-      <!-- RIGHT -->
+      <!-- RIGHT: ставки/настройки -->
       <aside class="card">
         <div class="cardHead">
           <div class="h1">Ставка</div>
-          <div class="hint">Ставка списывается при Start. “Сброс” до проигрыша — возвращает ставку.</div>
+          <div class="pill pill--bonus" id="bonusBtn2">+1000 🪙</div>
         </div>
 
-        <div class="rightBody">
-          <div class="chips">
+        <div class="panel">
+          <div class="chips" role="group" aria-label="chips">
             <button class="chip" data-bet="10" type="button">10</button>
             <button class="chip" data-bet="50" type="button">50</button>
             <button class="chip" data-bet="100" type="button">100</button>
@@ -98,14 +89,30 @@
 
           <div class="minesRowTitle">
             <div class="h2">Mines</div>
-            <div class="pill pill--tiny"><b id="minesVal">3</b></div>
+            <div class="pill pill--mini"><b id="minesView">3</b></div>
           </div>
-          <input id="minesRange" class="range" type="range" min="1" max="24" value="3" />
-          <div class="footNote">На раунде менять нельзя. Больше мин → выше X.</div>
+
+          <input id="minesRange" class="range" type="range" min="3" max="24" value="3" />
+
+          <div class="smallNote">
+            На раунде менять нельзя. Больше мин — выше риск и выше X.
+          </div>
 
           <button id="startBtn" class="btnPrimary" type="button">Start</button>
 
-          <div class="tinyNote">Честный RNG: crypto.getRandomValues. Монеты виртуальные.</div>
+          <div class="smallNote" style="margin-top:10px;">
+            Ставка списывается при Start. Открыл safe — множитель растёт. Жми “Забрать”, чтобы зафиксировать выигрыш.
+          </div>
+
+          <div class="ladderTitle">
+            <div class="h2">Лесенка X</div>
+            <div class="muted">показывается заранее</div>
+          </div>
+          <div id="ladder" class="ladder"></div>
+
+          <div class="foot">
+            Честный RNG: <span class="muted">crypto.getRandomValues</span>. Монеты виртуальные.
+          </div>
         </div>
       </aside>
     </main>
