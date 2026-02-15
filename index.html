@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Mini Games — Coin Flip</title>
+  <title>Mini Games — Mines</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -12,14 +12,14 @@
   <div class="app">
     <header class="topbar">
       <div class="topbar__left">
-        <div class="title">Mini Games</div>
+        <div class="title">Mines</div>
         <div id="subTitle" class="subtitle">Открыто вне Telegram</div>
       </div>
 
       <div class="topbar__right">
-        <button id="soundBtn" class="pill" type="button" aria-label="Звук">
+        <button id="soundBtn" class="pill" type="button">
           <span class="dot"></span>
-          <span id="soundText">Звук on</span>
+          <span id="soundText">Звук</span>
         </button>
 
         <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
@@ -28,78 +28,80 @@
       </div>
     </header>
 
-    <main class="card">
-      <div class="cardHead">
-        <div>
-          <div class="h1">Coin Flip</div>
-          <div class="hint">До броска монета фиолетовая. Орёл — золото, решка — серебро.</div>
-        </div>
-      </div>
-
-      <section class="arena">
-        <div class="coinPanel">
-          <div class="coinWrap" aria-label="coin arena">
-            <!-- 3D coin -->
-            <div id="coin" class="coin3d coin3d--purple">
-              <div class="coinFace coinFace--front"></div>
-              <div class="coinEdge"></div>
-              <div class="coinFace coinFace--back"></div>
-            </div>
+    <main class="layout">
+      <!-- LEFT: board -->
+      <section class="card boardCard">
+        <div class="cardHead">
+          <div>
+            <div class="h1">Mines</div>
+            <div class="hint">Открывай safe клетки. Чем больше мин — тем быстрее растёт X. Можно “Забрать”.</div>
           </div>
         </div>
 
-        <button id="flipBtn" class="btnPrimary" type="button">Ставка</button>
+        <div class="boardWrap">
+          <div id="grid" class="grid" aria-label="mines grid"></div>
+        </div>
 
-        <section class="controls">
-          <div class="rowTitle">
-            <div class="h2">Сумма ставки</div>
-            <div class="muted">Баланс: <b>🪙 <span id="balance2">1000</span></b></div>
+        <div class="bottomStats">
+          <div class="miniStat">
+            <div class="label">Открыто safe</div>
+            <div class="value"><b id="openedView">0</b> / <span id="safeTotalView">22</span></div>
           </div>
+          <div class="miniStat">
+            <div class="label">Множитель</div>
+            <div class="value"><b id="multView">x1.00</b></div>
+          </div>
+          <div class="miniStat">
+            <div class="label">Забрать сейчас</div>
+            <div class="value"><b id="cashNowView">—</b></div>
+          </div>
+        </div>
 
-          <div class="betRow">
-            <button id="betMinus" class="btnSmall" type="button">−</button>
-            <input id="betInput" class="betInput" type="number" min="1" step="1" value="50" />
-            <button id="betPlus" class="btnSmall" type="button">+</button>
-          </div>
+        <div class="actionsRow">
+          <button id="cashoutBtn" class="btnPrimary" type="button" disabled>Забрать</button>
+          <button id="resetBtn" class="btnGhost" type="button">Сброс</button>
+        </div>
 
-          <div class="chips" role="group" aria-label="chips">
-            <button class="chip" data-bet="10" type="button">10</button>
-            <button class="chip" data-bet="50" type="button">50</button>
-            <button class="chip" data-bet="100" type="button">100</button>
-            <button class="chip" data-bet="250" type="button">250</button>
-            <button class="chip" data-bet="500" type="button">500</button>
-            <button class="chip" data-bet="max" type="button">MAX</button>
-          </div>
-
-          <div class="pickRow">
-            <button id="pickEagle" class="pick pick--gold active" type="button">
-              <span class="mark mark--gold"></span> Орёл
-            </button>
-            <button id="pickTail" class="pick pick--silver" type="button">
-              <span class="mark mark--silver"></span> Решка
-            </button>
-          </div>
-
-          <div class="stats">
-            <div class="stat">
-              <div class="label">Ставка</div>
-              <div class="value"><b id="betView">50</b> 🪙</div>
-            </div>
-            <div class="stat">
-              <div class="label">Выигрыш</div>
-              <div class="value"><b id="winView">+0</b> 🪙</div>
-            </div>
-            <div class="stat">
-              <div class="label">Статус</div>
-              <div class="value"><b id="statusView">Готов</b></div>
-            </div>
-          </div>
-
-          <div class="footNote">
-            При изменении ставки — монета снова становится фиолетовой до следующего броска.
-          </div>
-        </section>
+        <div id="msg" class="msgBar"></div>
       </section>
+
+      <!-- RIGHT: controls -->
+      <aside class="card sideCard">
+        <div class="sideHead">
+          <div class="h2">Ставка</div>
+          <button id="bonusBtn2" class="pill pill--bonus pill--small" type="button">+1000 🪙</button>
+        </div>
+
+        <div class="chips" role="group" aria-label="chips">
+          <button class="chip" data-bet="10" type="button">10</button>
+          <button class="chip" data-bet="50" type="button">50</button>
+          <button class="chip" data-bet="100" type="button">100</button>
+          <button class="chip" data-bet="250" type="button">250</button>
+          <button class="chip" data-bet="500" type="button">500</button>
+          <button class="chip" data-bet="max" type="button">MAX</button>
+        </div>
+
+        <div class="betRow">
+          <button id="betMinus" class="btnSmall" type="button">−</button>
+          <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
+          <button id="betPlus" class="btnSmall" type="button">+</button>
+        </div>
+
+        <div class="sliderBlock">
+          <div class="rowTitle">
+            <div class="h2">Mines</div>
+            <div class="badge"><b id="minesView">3</b></div>
+          </div>
+          <input id="minesRange" class="range" type="range" min="1" max="24" value="3" />
+          <div class="note">На раунде менять нельзя. Больше мин — выше риск.</div>
+        </div>
+
+        <button id="startBtn" class="btnPrimary" type="button">Start</button>
+
+        <div class="smallNote">
+          Ставка списывается при Start. Открыл safe — множитель растёт. Нажми “Забрать”, чтобы зафиксировать выигрыш.
+        </div>
+      </aside>
     </main>
   </div>
 
