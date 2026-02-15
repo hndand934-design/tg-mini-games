@@ -26,7 +26,7 @@ let wallet = loadWallet();
 function setCoins(v) { wallet.coins = Math.max(0, Math.floor(v)); saveWallet(wallet); renderTop(); }
 function addCoins(d) { setCoins(wallet.coins + d); }
 
-// ====== Light sound (safe / boom) ======
+// ====== Sound ======
 let soundOn = true;
 let audioCtx = null;
 function ctx() {
@@ -44,7 +44,6 @@ function beep(type) {
     o.connect(g); g.connect(c.destination);
 
     if (type === "safe") {
-      // кристалл: две короткие ноты
       o.type = "sine";
       o.frequency.setValueAtTime(740, t0);
       o.frequency.exponentialRampToValueAtTime(990, t0 + 0.08);
@@ -55,7 +54,6 @@ function beep(type) {
       return;
     }
 
-    // boom: шумоподобный "взрыв" (быстро вниз)
     o.type = "sawtooth";
     o.frequency.setValueAtTime(220, t0);
     o.frequency.exponentialRampToValueAtTime(60, t0 + 0.18);
@@ -103,7 +101,7 @@ function renderTop(){
 }
 renderTop();
 
-// ====== Settings ======
+// ====== Sound toggle / bonus ======
 soundBtn.onclick = () => {
   soundOn = !soundOn;
   soundText.textContent = soundOn ? "Звук" : "Звук off";
@@ -116,16 +114,10 @@ soundBtn.onclick = () => {
 };
 bonusBtn.onclick = () => addCoins(1000);
 
-// ====== Game constants/state ======
-const SIZE = 25; // 5x5
-const COLS = 5;
-
+// ====== Game ======
+const SIZE = 25;
 let state = null;
-// state = {
-//   bet, minesCount, mines:Set, opened:Set, over:boolean,
-//   safeOpened:number, multiplier:number,
-//   inRound:boolean, cashed:boolean, lastHit:number|null
-// }
+// state = { bet, minesCount, mines:Set, opened:Set, over, safeOpened, multiplier, cashed }
 
 function buildMines(minesCount) {
   const mines = new Set();
@@ -133,15 +125,13 @@ function buildMines(minesCount) {
   return mines;
 }
 
-// ====== MULTIPLIER (фикс: после 15 мин не падает) ======
-// Идея: "ускорение" зависит от мин, и квадратичный рост по safe тоже усиливается.
-// Держим адекватные ранние X и усиливаем большие мины.
+// Рост X: усилен на больших минах, без “провалов”
 function calcMultiplier(safeOpened, minesCount) {
   if (safeOpened <= 0) return 1;
 
   const m = minesCount;                 // 3..24
-  const k1 = 0.095 + m * 0.012;         // линейный рост (сильно зависит от мин)
-  const k2 = 0.010 + m * 0.0022;        // ускорение (квадрат)
+  const k1 = 0.095 + m * 0.012;
+  const k2 = 0.010 + m * 0.0022;
   const mult = 1 + safeOpened * k1 + (safeOpened * safeOpened) * k2 * 0.06;
 
   return Math.max(1, mult);
@@ -152,7 +142,7 @@ function payoutNow() {
   return Math.floor(state.bet * state.multiplier);
 }
 
-// ====== BET controls ======
+// ====== Bet controls ======
 function clampBet(){
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
@@ -171,6 +161,7 @@ document.querySelectorAll(".chip").forEach((b) => {
   };
 });
 
+// ====== Mines control ======
 function clampMines(){
   let v = Math.floor(Number(minesRange.value) || 3);
   if (v < 3) v = 3;
@@ -178,12 +169,11 @@ function clampMines(){
   minesRange.value = String(v);
   minesShow.textContent = String(v);
 
-  // показываем лесенку заранее (без игры)
   if (!state) renderLadder(0, v);
 }
 minesRange.addEventListener("input", clampMines);
 
-// ====== Ladder render (без "..." и с подсветкой) ======
+// ====== Ladder ======
 function renderLadder(openedSafe, minesCount){
   const totalSafe = SIZE - minesCount;
   safeTotalView.textContent = String(totalSafe);
@@ -191,7 +181,6 @@ function renderLadder(openedSafe, minesCount){
 
   for (let step = 1; step <= totalSafe; step++){
     const x = calcMultiplier(step, minesCount);
-
     const div = document.createElement("div");
     div.className = "lstep" + (step === openedSafe ? " active" : "");
     if (x >= 10) div.classList.add("big");
@@ -200,7 +189,7 @@ function renderLadder(openedSafe, minesCount){
   }
 }
 
-// ====== Draw grid ======
+// ====== Grid ======
 function drawGrid(){
   gridEl.innerHTML = "";
 
@@ -209,30 +198,28 @@ function drawGrid(){
     btn.className = "cell";
     btn.type = "button";
 
-    let opened = false, isMine = false;
-
-    if (state){
-      opened = state.opened.has(i);
-      isMine = state.mines.has(i);
-
-      if (opened && isMine) btn.classList.add("mine");
-      if (opened && !isMine) btn.classList.add("safe");
-      if (state.over) btn.disabled = true;
-    } else {
+    // ДО START: клетки пустые и непрозрачные
+    if (!state){
+      btn.classList.add("idle");
       btn.disabled = true;
+      gridEl.appendChild(btn);
+      continue;
     }
 
-    const icon = document.createElement("div");
-    icon.className = "icon";
+    const opened = state.opened.has(i);
+    const isMine = state.mines.has(i);
+
+    if (state.over) btn.disabled = true;
+
+    if (opened && isMine) btn.classList.add("mine");
+    if (opened && !isMine) btn.classList.add("safe");
 
     if (opened){
+      const icon = document.createElement("div");
+      icon.className = "icon";
       icon.textContent = isMine ? "💣" : "💎";
-    } else {
-      icon.textContent = "💎"; // как на твоём скрине: “плитки” с алмазами
-      icon.style.opacity = "0.35";
+      btn.appendChild(icon);
     }
-
-    btn.appendChild(icon);
 
     btn.onclick = () => onCellClick(i);
     gridEl.appendChild(btn);
@@ -272,7 +259,6 @@ startBtn.onclick = () => {
   if (bet > wallet.coins) return alert("Недостаточно монет");
   if (minesCount < 3 || minesCount > 24) return alert("Мины: от 3 до 24");
 
-  // списываем ставку при Start
   addCoins(-bet);
 
   state = {
@@ -283,9 +269,7 @@ startBtn.onclick = () => {
     over: false,
     safeOpened: 0,
     multiplier: 1,
-    inRound: true,
-    cashed: false,
-    lastHit: null
+    cashed: false
   };
 
   msgEl.textContent = "Раунд начался. Открывай клетки.";
@@ -293,8 +277,8 @@ startBtn.onclick = () => {
 };
 
 resetBtn.onclick = () => {
-  // СБРОС: если раунд начат и НЕ проигран и НЕ кэшаут — вернуть ставку
-  if (state && state.inRound && !state.over && !state.cashed){
+  // если раунд начат и не проигран и не кэшаут — вернуть ставку
+  if (state && !state.over && !state.cashed){
     addCoins(state.bet);
   }
   state = null;
@@ -331,8 +315,6 @@ function onCellClick(i){
 
   if (state.mines.has(i)){
     state.over = true;
-    state.lastHit = i;
-    state.inRound = true; // было
     msgEl.textContent = `💥 Мина! Ставка ${state.bet} 🪙 сгорела.`;
     beep("boom");
     revealAll();
@@ -344,7 +326,6 @@ function onCellClick(i){
   state.multiplier = calcMultiplier(state.safeOpened, state.minesCount);
   beep("safe");
 
-  // если открыл все safe — авто cashout
   const totalSafe = SIZE - state.minesCount;
   if (state.safeOpened >= totalSafe){
     state.cashed = true;
