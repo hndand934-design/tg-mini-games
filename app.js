@@ -24,9 +24,7 @@ function loadWallet() {
   } catch {}
   return { coins: 1000 };
 }
-function saveWallet(w) {
-  localStorage.setItem(WALLET_KEY, JSON.stringify(w));
-}
+function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
 function setCoins(v){
   wallet.coins = Math.max(0, Math.floor(v));
@@ -35,7 +33,7 @@ function setCoins(v){
 }
 function addCoins(d){ setCoins(wallet.coins + d); }
 
-// ===== Sound (лёгкий, без лагов) =====
+// ===== Sound =====
 let soundOn = true;
 let audioCtx = null;
 function getAC(){
@@ -69,7 +67,7 @@ function soundBoom(){
   setTimeout(()=>tone(90, 160, 0.05, "square"), 80);
 }
 
-// ===== UI refs =====
+// ===== UI =====
 const subTitle = document.getElementById("subTitle");
 const balanceEl = document.getElementById("balance");
 
@@ -96,10 +94,9 @@ const minesRange = document.getElementById("minesRange");
 const minesView = document.getElementById("minesView");
 
 const startBtn = document.getElementById("startBtn");
-
 const ladderGrid = document.getElementById("ladderGrid");
 
-// ===== Top render =====
+// ===== Top =====
 function renderTop(){
   const user = tg?.initDataUnsafe?.user;
   subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
@@ -124,19 +121,12 @@ bonusBtn.onclick = () => { addCoins(1000); tone(760, 70, 0.03); };
 
 // ===== Game constants =====
 const SIZE = 25; // 5x5
-const COLS = 5;
-const HOUSE_EDGE = 0.05; // небольшой edge, но X всё равно растёт сильно на больших минах
+const MIN_MINES = 3;
+const MAX_MINES = 24;
+const HOUSE_EDGE = 0.05;
 
 // ===== State =====
 let st = null;
-// st = {
-//   active: true/false,
-//   bet, minesCount,
-//   mines: Set<int>,
-//   opened: Set<int>,
-//   safeOpened,
-//   over, cashed
-// }
 
 // ===== Utils =====
 function setMsg(t){ msgEl.textContent = t; }
@@ -147,13 +137,11 @@ function buildMines(minesCount){
   return mines;
 }
 
-// Честный множитель по шансам:
 // mult = (C(25, m) / C(25-safe, m)) * (1 - edge)
 function comb(n, k){
   if (k < 0 || k > n) return 0;
   k = Math.min(k, n - k);
-  let num = 1;
-  let den = 1;
+  let num = 1, den = 1;
   for (let i = 1; i <= k; i++){
     num *= (n - (k - i));
     den *= i;
@@ -162,16 +150,10 @@ function comb(n, k){
 }
 function calcMultiplier(safeOpened, minesCount){
   if (safeOpened <= 0) return 1.0;
-  const total = SIZE;
-  const m = minesCount;
-  const fair = comb(total, m) / comb(total - safeOpened, m);
-  const withEdge = fair * (1 - HOUSE_EDGE);
-  return Math.max(1, withEdge);
+  const fair = comb(SIZE, minesCount) / comb(SIZE - safeOpened, minesCount);
+  return Math.max(1, fair * (1 - HOUSE_EDGE));
 }
-
-function money(n){
-  return `${Math.floor(n)} 🪙`;
-}
+function money(n){ return `${Math.floor(n)} 🪙`; }
 
 // ===== Controls =====
 function clampBet(){
@@ -194,18 +176,19 @@ document.querySelectorAll(".chip").forEach((b) => {
   };
 });
 
+// mines: строго 3..24
 function clampMines(){
-  let m = Math.floor(Number(minesRange.value) || 3);
-  if (m < 3) m = 3;
-  if (m > 24) m = 24;
+  let m = Math.floor(Number(minesRange.value) || MIN_MINES);
+  if (m < MIN_MINES) m = MIN_MINES;
+  if (m > MAX_MINES) m = MAX_MINES;
   minesRange.value = String(m);
   minesView.textContent = String(m);
 
-  // при смене мин в ожидании — просто обновляем лесенку/статы
   renderLadder(m, st?.safeOpened || 0);
   renderStats();
 }
-minesRange.addEventListener("input", clampMines);
+minesRange.min = String(MIN_MINES);
+minesRange.max = String(MAX_MINES);
 
 clampMines();
 clampBet();
@@ -244,7 +227,7 @@ function renderGrid(){
 }
 
 function renderStats(){
-  const minesCount = Math.floor(Number(minesRange.value) || 3);
+  const minesCount = Math.floor(Number(minesRange.value) || MIN_MINES);
   const safeMax = SIZE - minesCount;
   safeMaxView.textContent = String(safeMax);
 
@@ -268,13 +251,10 @@ function renderStats(){
 function renderLadder(minesCount, safeOpened){
   const safeMax = SIZE - minesCount;
 
-  // шаги: 1..safeMax
-  // показываем X заранее, подсветка = текущий safeOpened
   const items = [];
   for (let s = 1; s <= safeMax; s++){
     const m = calcMultiplier(s, minesCount);
     const xTxt = `x${m.toFixed(m >= 100 ? 0 : m >= 10 ? 1 : 2)}`;
-
     const big = m >= 1000 ? " big" : "";
     const active = (safeOpened === s) ? " active" : "";
 
@@ -285,7 +265,6 @@ function renderLadder(minesCount, safeOpened){
       </div>
     `);
   }
-
   ladderGrid.innerHTML = items.join("");
 }
 
@@ -297,13 +276,12 @@ function startGame(){
   }
 
   const bet = Math.floor(Number(betInput.value) || 0);
-  const minesCount = Math.floor(Number(minesRange.value) || 3);
+  const minesCount = Math.floor(Number(minesRange.value) || MIN_MINES);
 
   if (bet <= 0) return alert("Ставка должна быть больше 0");
   if (bet > wallet.coins) return alert("Недостаточно монет");
-  if (minesCount < 3 || minesCount > 24) return alert("Мин должно быть от 3 до 24");
+  if (minesCount < MIN_MINES || minesCount > MAX_MINES) return alert(`Мин должно быть от ${MIN_MINES} до ${MAX_MINES}`);
 
-  // списываем ставку один раз на Start
   addCoins(-bet);
 
   st = {
@@ -335,7 +313,6 @@ function onCellClick(i){
   st.opened.add(i);
 
   if (st.mines.has(i)){
-    // проигрыш
     st.over = true;
     st.cashed = false;
     revealAll();
@@ -347,15 +324,12 @@ function onCellClick(i){
     return;
   }
 
-  // safe
   st.safeOpened += 1;
   st.multiplier = calcMultiplier(st.safeOpened, st.minesCount);
   soundSafe();
 
-  // подсветка шага
   renderLadder(st.minesCount, st.safeOpened);
 
-  // если открыл все safe — авто cashout
   const safeMax = SIZE - st.minesCount;
   if (st.safeOpened >= safeMax){
     cashOut(true);
@@ -368,10 +342,7 @@ function onCellClick(i){
 
 function cashOut(auto = false){
   if (!st || !st.active || st.over || st.cashed) return;
-  if (st.safeOpened <= 0) {
-    setMsg("Нужно открыть хотя бы 1 safe клетку, чтобы забрать.");
-    return;
-  }
+  if (st.safeOpened <= 0) { setMsg("Нужно открыть хотя бы 1 safe клетку, чтобы забрать."); return; }
 
   st.cashed = true;
   st.over = true;
@@ -390,7 +361,6 @@ function cashOut(auto = false){
 }
 
 function resetGame(){
-  // если был активный раунд и он НЕ проигран и НЕ закэш-аутен — возвращаем ставку
   if (st && st.active && !st.over){
     addCoins(st.bet);
     setMsg(`↩️ Сброс. Ставка ${st.bet} 🪙 возвращена.`);
@@ -400,7 +370,7 @@ function resetGame(){
 
   st = null;
   renderGrid();
-  clampMines();  // важное: лесенка всегда возвращается
+  clampMines(); // лесенка всегда возвращается
   renderStats();
 }
 
