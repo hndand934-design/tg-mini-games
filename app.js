@@ -1,19 +1,21 @@
-// --- RNG (честный) ---
-function randInt(min, max) {
+// ===== RNG (честный) =====
+function randFloat() {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
-  const r = a[0] / 2 ** 32;
-  return Math.floor(r * (max - min + 1)) + min;
+  return a[0] / 2 ** 32;
+}
+function randInt(min, max) {
+  return Math.floor(randFloat() * (max - min + 1)) + min;
 }
 
-// --- Telegram WebApp ---
+// ===== Telegram WebApp =====
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
 }
 
-// --- Wallet ---
+// ===== Wallet =====
 const WALLET_KEY = "mini_wallet_dice_v1";
 function loadWallet() {
   try {
@@ -22,7 +24,9 @@ function loadWallet() {
   } catch {}
   return { coins: 1000 };
 }
-function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
+function saveWallet(w) {
+  localStorage.setItem(WALLET_KEY, JSON.stringify(w));
+}
 let wallet = loadWallet();
 
 function setCoins(v) {
@@ -30,90 +34,83 @@ function setCoins(v) {
   saveWallet(wallet);
   renderTop();
 }
-function addCoins(d) { setCoins(wallet.coins + d); }
+function addCoins(d) {
+  setCoins(wallet.coins + d);
+}
 
-// --- Sound ---
+// ===== Sound (лёгкий, без лагов) =====
 let soundOn = true;
+let audioCtx = null;
+
+function ensureCtx() {
+  if (!soundOn) return null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioCtx) audioCtx = new AC();
+  return audioCtx;
+}
+
 function beep(freq = 520, ms = 55, vol = 0.03) {
   if (!soundOn) return;
   try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AC();
+    const ctx = ensureCtx();
+    if (!ctx) return;
+
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = "sine";
     o.frequency.value = freq;
-    g.gain.value = vol;
-    o.connect(g); g.connect(ctx.destination);
-    o.start();
-    setTimeout(() => { o.stop(); ctx.close(); }, ms);
+
+    const t0 = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
+
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(t0);
+    o.stop(t0 + ms / 1000 + 0.02);
   } catch {}
 }
 
-// --- UI refs ---
+// ===== UI =====
 const subTitle = document.getElementById("subTitle");
 const balanceEl = document.getElementById("balance");
-const balance2 = document.getElementById("balance2");
 
 const soundBtn = document.getElementById("soundBtn");
 const soundText = document.getElementById("soundText");
 const bonusBtn = document.getElementById("bonusBtn");
+const bonusBtn2 = document.getElementById("bonusBtn2");
 
-const modeLess = document.getElementById("modeLess");
-const modeMore = document.getElementById("modeMore");
+const btnLess = document.getElementById("btnLess");
+const btnMore = document.getElementById("btnMore");
 const rulePill = document.getElementById("rulePill");
 
 const multView = document.getElementById("multView");
-const winView = document.getElementById("winView");
+const profitView = document.getElementById("profitView");
 const chanceView = document.getElementById("chanceView");
 
 const thrRange = document.getElementById("thrRange");
 const thrView = document.getElementById("thrView");
 const rolledView = document.getElementById("rolledView");
 
-const dieEl = document.getElementById("die");
-
 const betInput = document.getElementById("betInput");
 const betMinus = document.getElementById("betMinus");
 const betPlus = document.getElementById("betPlus");
 const rollBtn = document.getElementById("rollBtn");
 
-// --- state ---
-let mode = "more";     // "more" | "less"
-let threshold = 2;     // 1..6
-let busy = false;
+const cubeEl = document.getElementById("cube");
 
-// IMPORTANT: углы подобраны так, чтобы ВЕРХНЯЯ грань = нужное число.
-// Face layout в CSS: 1 top,6 bottom,3 front,4 back,2 right,5 left
-// Для rotateY затем rotateX (как в transform): эти пары дают нужную верхнюю грань.
-function anglesForTop(n) {
-  switch (n) {
-    case 1: return { rx: 0,   ry: 0   };
-    case 2: return { rx: 90,  ry: 90  };
-    case 3: return { rx: 270, ry: 0   };
-    case 4: return { rx: 90,  ry: 0   };
-    case 5: return { rx: 90,  ry: 270 };
-    case 6: return { rx: 180, ry: 0   };
-    default: return { rx: 0, ry: 0 };
-  }
-}
-
-function setDieToNumber(n) {
-  const { rx, ry } = anglesForTop(n);
-  // небольшой "камерный" наклон сохраняем через rotateZ, чтобы выглядело живо
-  dieEl.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(0deg)`;
-}
-
+// ===== Top render =====
 function renderTop() {
   const user = tg?.initDataUnsafe?.user;
   subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
   balanceEl.textContent = String(wallet.coins);
-  balance2.textContent = String(wallet.coins);
 }
 renderTop();
 
-// sound toggle
-soundBtn.onclick = () => {
+// ===== Sound toggle =====
+soundBtn.onclick = async () => {
   soundOn = !soundOn;
   soundText.textContent = soundOn ? "Звук on" : "Звук off";
   const dot = soundBtn.querySelector(".dot");
@@ -121,18 +118,161 @@ soundBtn.onclick = () => {
   dot.style.boxShadow = soundOn
     ? "0 0 0 3px rgba(38,212,123,.14)"
     : "0 0 0 3px rgba(255,90,106,.14)";
-  beep(soundOn ? 640 : 240, 60, 0.03);
+
+  // iOS/Telegram иногда требует “жеста” — это как раз он
+  if (soundOn) ensureCtx();
+  beep(soundOn ? 640 : 240, 70, 0.03);
 };
 
-bonusBtn.onclick = () => { addCoins(1000); beep(760, 70, 0.03); };
+// ===== Bonus =====
+function onBonus() {
+  addCoins(1000);
+  beep(760, 70, 0.03);
+}
+bonusBtn.onclick = onBonus;
+bonusBtn2.onclick = onBonus;
 
-// bet controls
+// ===== Game state =====
+const HOUSE_EDGE = 0.985; // чтобы x1.18 при шанс 83.3%
+
+let mode = "more"; // more | less
+let busy = false;
+let lastRoll = null;
+
+// ===== Cube faces (pips) =====
+// Мы делаем стандартные значения на гранях: U=1 D=6 F=2 B=5 R=3 L=4.
+// И дальше поворачиваем куб так, чтобы наверху оказался нужный результат.
+// Тогда “Выпало” = верхняя грань (точки) всегда совпадает.
+const BASE = { U: 1, D: 6, F: 2, B: 5, R: 3, L: 4 };
+
+// Pips patterns in 3x3 positions (0..8)
+const PIPS = {
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8],
+};
+
+function faceHTML(val) {
+  const on = new Set(PIPS[val]);
+  const dots = Array.from({ length: 9 }, (_, i) => `<span class="pip ${on.has(i) ? "on" : ""}"></span>`).join("");
+  return `<div class="pips" aria-label="pips-${val}">${dots}</div>`;
+}
+
+function mountFaces() {
+  cubeEl.querySelector('[data-face="top"]').innerHTML = faceHTML(1);
+  cubeEl.querySelector('[data-face="bottom"]').innerHTML = faceHTML(6);
+  cubeEl.querySelector('[data-face="front"]').innerHTML = faceHTML(2);
+  cubeEl.querySelector('[data-face="back"]').innerHTML = faceHTML(5);
+  cubeEl.querySelector('[data-face="right"]').innerHTML = faceHTML(3);
+  cubeEl.querySelector('[data-face="left"]').innerHTML = faceHTML(4);
+}
+mountFaces();
+
+// ===== Orientation BFS (24 states) =====
+// Мы генерим все ориентации куба (24) и для каждой храним углы (кратные 90),
+// чтобы потом по result выбрать ориентацию где U=result.
+function keyOf(o) {
+  return `${o.U}${o.D}${o.F}${o.B}${o.R}${o.L}`;
+}
+
+function rotX(o) {
+  // вращение вокруг X: U->B, B->D, D->F, F->U (R/L неизменны)
+  return { U: o.F, D: o.B, F: o.D, B: o.U, R: o.R, L: o.L };
+}
+function rotY(o) {
+  // вокруг Y: F->R, R->B, B->L, L->F (U/D неизменны)
+  return { U: o.U, D: o.D, F: o.L, B: o.R, R: o.F, L: o.B };
+}
+function rotZ(o) {
+  // вокруг Z: U->L, L->D, D->R, R->U (F/B неизменны)
+  return { U: o.R, D: o.L, F: o.F, B: o.B, R: o.D, L: o.U };
+}
+
+function normDeg(d) {
+  let x = d % 360;
+  if (x < 0) x += 360;
+  return x;
+}
+
+function bfsOrientations() {
+  const start = { ...BASE };
+  const q = [{ o: start, rx: 0, ry: 0, rz: 0 }];
+  const seen = new Map();
+  seen.set(keyOf(start), { rx: 0, ry: 0, rz: 0, o: start });
+
+  const moves = [
+    { fn: rotX, dx: 90, dy: 0, dz: 0 },
+    { fn: rotY, dx: 0, dy: 90, dz: 0 },
+    { fn: rotZ, dx: 0, dy: 0, dz: 90 },
+  ];
+
+  while (q.length) {
+    const cur = q.shift();
+    for (const m of moves) {
+      const no = m.fn(cur.o);
+      const k = keyOf(no);
+      if (seen.has(k)) continue;
+
+      const nx = normDeg(cur.rx + m.dx);
+      const ny = normDeg(cur.ry + m.dy);
+      const nz = normDeg(cur.rz + m.dz);
+
+      const rec = { rx: nx, ry: ny, rz: nz, o: no };
+      seen.set(k, rec);
+      q.push({ o: no, rx: nx, ry: ny, rz: nz });
+    }
+  }
+
+  // group by top value
+  const byTop = new Map();
+  for (const rec of seen.values()) {
+    const top = rec.o.U;
+    if (!byTop.has(top)) byTop.set(top, []);
+    byTop.get(top).push(rec);
+  }
+  return byTop;
+}
+
+const ORIENTS_BY_TOP = bfsOrientations();
+
+// ===== Apply cube rotation (with extra spins for beauty) =====
+function setCubeAngles(rx, ry, rz) {
+  cubeEl.style.setProperty("--rx", `${rx}deg`);
+  cubeEl.style.setProperty("--ry", `${ry}deg`);
+  cubeEl.style.setProperty("--rz", `${rz}deg`);
+}
+
+function spinToTopValue(n) {
+  const list = ORIENTS_BY_TOP.get(n);
+  const pick = list[randInt(0, list.length - 1)];
+
+  // add extra 360 spins for nicer roll (still ends at same orientation)
+  const extraX = 360 * randInt(1, 2);
+  const extraY = 360 * randInt(1, 2);
+  const extraZ = 360 * randInt(0, 1);
+
+  setCubeAngles(pick.rx + extraX, pick.ry + extraY, pick.rz + extraZ);
+
+  // return when transition ends
+  return new Promise((resolve) => {
+    const onEnd = () => {
+      cubeEl.removeEventListener("transitionend", onEnd);
+      resolve();
+    };
+    cubeEl.addEventListener("transitionend", onEnd, { once: true });
+  });
+}
+
+// ===== Bet controls =====
 function clampBet() {
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
   if (v > wallet.coins) v = wallet.coins;
   betInput.value = String(v);
-  recompute();
+  recalc();
 }
 betInput.addEventListener("input", clampBet);
 betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); };
@@ -146,76 +286,51 @@ document.querySelectorAll(".chip").forEach((b) => {
     beep(540, 55, 0.02);
   };
 });
+clampBet();
 
-// mode
+// ===== Mode + threshold =====
 function setMode(m) {
   mode = m;
-  modeLess.classList.toggle("active", m === "less");
-  modeMore.classList.toggle("active", m === "more");
-  beep(520, 50, 0.02);
-  recompute();
+  btnLess.classList.toggle("active", mode === "less");
+  btnMore.classList.toggle("active", mode === "more");
+  beep(520, 55, 0.02);
+  recalc();
 }
-modeLess.onclick = () => setMode("less");
-modeMore.onclick = () => setMode("more");
+btnLess.onclick = () => setMode("less");
+btnMore.onclick = () => setMode("more");
 
-// threshold
 thrRange.oninput = () => {
-  threshold = Math.max(1, Math.min(6, Number(thrRange.value) || 2));
-  thrView.textContent = String(threshold);
-  recompute();
+  thrView.textContent = String(thrRange.value);
+  beep(460, 40, 0.015);
+  recalc();
 };
 
-function chanceFor(mode, thr) {
-  // less: win if roll <= thr (chance = thr/6)
-  // more: win if roll >= thr (chance = (7-thr)/6)
-  const c = mode === "less" ? (thr / 6) : ((7 - thr) / 6);
-  return Math.max(1/6, Math.min(1, c));
+function chanceFor(thr, mode) {
+  // thr in [2..6]
+  if (mode === "more") return (7 - thr) / 6;      // >= thr
+  return (thr - 1) / 6;                           // <= thr-1
 }
 
-function computeMultiplier(chance) {
-  // house edge ~2%
-  const m = (1 / chance) * 0.98;
-  return Math.max(1.01, m);
-}
+function recalc() {
+  const thr = Number(thrRange.value);
+  thrView.textContent = String(thr);
 
-function recompute() {
   const bet = Math.floor(Number(betInput.value) || 0);
-  const c = chanceFor(mode, threshold);
-  const mult = computeMultiplier(c);
-
-  multView.textContent = `x${mult.toFixed(2)}`;
-  chanceView.textContent = `${(c * 100).toFixed(1)}%`;
-
+  const chance = chanceFor(thr, mode);
+  const mult = Math.max(1.01, (1 / chance) * HOUSE_EDGE);
   const payout = Math.floor(bet * mult);
   const profit = Math.max(0, payout - bet);
-  winView.textContent = `+${profit}`;
 
-  // правило справа сверху
-  rulePill.textContent = mode === "more"
-    ? `Выигрыш если выпало ≥ ${threshold}`
-    : `Выигрыш если выпало ≤ ${threshold}`;
+  multView.textContent = `x${mult.toFixed(2)}`;
+  profitView.textContent = `+${profit}`;
+  chanceView.textContent = `${(chance * 100).toFixed(1)}%`;
+
+  if (mode === "more") rulePill.textContent = `Выигрыш если выпало ≥ ${thr}`;
+  else rulePill.textContent = `Выигрыш если выпало ≤ ${thr - 1}`;
 }
-clampBet();
-setMode("more");
-threshold = Number(thrRange.value) || 2;
-setDieToNumber(1); // стартовая поза
+recalc();
 
-function playRollAnim() {
-  return new Promise((resolve) => {
-    const done = () => {
-      dieEl.removeEventListener("animationend", done);
-      dieEl.classList.remove("rolling");
-      resolve();
-    };
-    dieEl.addEventListener("animationend", done, { once: true });
-
-    dieEl.classList.remove("rolling");
-    void dieEl.offsetWidth; // reflow
-    dieEl.classList.add("rolling");
-  });
-}
-
-// roll
+// ===== Roll action =====
 rollBtn.onclick = async () => {
   if (busy) return;
 
@@ -225,29 +340,32 @@ rollBtn.onclick = async () => {
 
   busy = true;
   rollBtn.disabled = true;
-  rolledView.textContent = "—";
-  beep(520, 55, 0.02);
 
-  // списываем ставку
+  // deduct bet once
   addCoins(-bet);
 
-  // генерим число
-  const rolled = randInt(1, 6);
+  const thr = Number(thrRange.value);
+  const result = randInt(1, 6);
+  lastRoll = result;
 
-  // анимация
-  await playRollAnim();
+  rolledView.textContent = "…";
+  beep(520, 55, 0.02);
 
-  // ВАЖНО: после анимации СТАВИМ грань строго под rolled
-  setDieToNumber(rolled);
-  rolledView.textContent = String(rolled);
+  // rotate cube so that TOP FACE == result (синхрон 1-в-1)
+  await spinToTopValue(result);
 
-  // win check
-  const win = mode === "less" ? (rolled <= threshold) : (rolled >= threshold);
-  const c = chanceFor(mode, threshold);
-  const mult = computeMultiplier(c);
+  rolledView.textContent = String(result);
+
+  const win =
+    (mode === "more" && result >= thr) ||
+    (mode === "less" && result <= (thr - 1));
+
+  // payout
+  const chance = chanceFor(thr, mode);
+  const mult = Math.max(1.01, (1 / chance) * HOUSE_EDGE);
+  const payout = Math.floor(bet * mult);
 
   if (win) {
-    const payout = Math.floor(bet * mult);
     addCoins(payout);
     beep(760, 65, 0.03);
     beep(920, 65, 0.03);
@@ -255,8 +373,7 @@ rollBtn.onclick = async () => {
     beep(220, 85, 0.03);
   }
 
-  // обновляем возможный выигрыш (на случай если баланс изменился)
-  recompute();
+  recalc();
 
   busy = false;
   rollBtn.disabled = false;
