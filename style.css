@@ -79,13 +79,11 @@ body{
 .muted{font-size:12px; color:var(--muted)}
 .content{ padding: 8px 12px 12px; }
 
-/* layout */
 .grid2{ display:grid; grid-template-columns: 1.45fr .55fr; gap:12px; }
 @media (max-width: 760px){
   .grid2{grid-template-columns: 1fr;}
   .rightCol{display:none;}
 }
-
 .rightCol .ghostPanel{
   height: 100%;
   border-radius: 16px;
@@ -93,7 +91,6 @@ body{
   background: rgba(255,255,255,.03);
 }
 
-/* segments */
 .seg{display:flex; gap:10px; align-items:center; margin-bottom:10px;}
 .segBtn{
   padding:9px 12px;
@@ -110,7 +107,6 @@ body{
   box-shadow: 0 14px 26px rgba(43,97,255,.12);
 }
 
-/* stats compact */
 .statsRow{
   display:grid;
   grid-template-columns: 1fr;
@@ -129,7 +125,6 @@ body{
 .label{font-size:12px; color:var(--muted)}
 .value{margin-top:2px; font-size:14px}
 
-/* threshold */
 .thresholdRow{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.08);
@@ -140,11 +135,9 @@ body{
 .thrTitle{
   display:flex; justify-content:space-between; gap:10px; align-items:center;
   margin-bottom:8px;
-  flex-wrap:nowrap;
 }
 .range{ width:100%; accent-color: var(--blue1); }
 
-/* dice arena compact */
 .diceArena{
   border-radius: 16px;
   border:1px solid rgba(255,255,255,.08);
@@ -169,10 +162,9 @@ body{
   height: 74px;
   position: relative;
   transform-style: preserve-3d;
-  transform: rotateX(var(--rx, -22deg)) rotateY(var(--ry, 32deg)) rotateZ(var(--rz, 0deg));
+  transform: rotateX(var(--rx, -18deg)) rotateY(var(--ry, 32deg)) rotateZ(var(--rz, 0deg));
   will-change: transform;
 }
-
 .face{
   position:absolute; inset:0;
   border-radius: 16px;
@@ -206,15 +198,15 @@ body{
 .mr{right:18px;top:50%;transform:translateY(-50%)}
 .c{left:50%;top:50%;transform:translate(-50%,-50%)}
 
-/* faces positions (74px => depth 37px) */
-.face1{ transform: translateZ(37px); }                  /* front */
-.face6{ transform: rotateY(180deg) translateZ(37px); }  /* back */
-.face2{ transform: rotateY(90deg) translateZ(37px); }   /* right */
-.face5{ transform: rotateY(-90deg) translateZ(37px); }  /* left */
-.face3{ transform: rotateX(90deg) translateZ(37px); }   /* top */
-.face4{ transform: rotateX(-90deg) translateZ(37px); }  /* bottom */
+/* positions: depth = 37px */
+.face1{ transform: rotateX(90deg) translateZ(37px); }    /* TOP */
+.face6{ transform: rotateX(-90deg) translateZ(37px); }   /* BOTTOM */
+.face3{ transform: translateZ(37px); }                   /* FRONT */
+.face4{ transform: rotateY(180deg) translateZ(37px); }   /* BACK */
+.face2{ transform: rotateY(90deg) translateZ(37px); }    /* RIGHT */
+.face5{ transform: rotateY(-90deg) translateZ(37px); }   /* LEFT */
 
-/* roll animation — короткая и лёгкая */
+/* roll animation */
 .dice.rolling{
   animation: diceRoll 620ms cubic-bezier(.2,.85,.2,1) both;
 }
@@ -237,8 +229,6 @@ body{
   cursor:pointer;
   font-weight:900;
 }
-.chip:active{transform:scale(.98)}
-
 .betRow{
   display:grid;
   grid-template-columns: 44px 1fr 44px;
@@ -280,7 +270,6 @@ body{
 .btnPrimary:disabled{opacity:.6; cursor:not-allowed}
 .footNote{margin-top:10px; font-size:12px; color: var(--muted);}
 
-/* reduce motion */
 @media (prefers-reduced-motion: reduce){
   .dice.rolling{animation:none}
 }
