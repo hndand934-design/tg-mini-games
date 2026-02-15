@@ -54,10 +54,9 @@ function beep(freq = 520, ms = 55, vol = 0.03) {
   } catch {}
 }
 
-// --- UI refs ---
+// --- UI ---
 const subTitle = document.getElementById("subTitle");
 const balanceEl = document.getElementById("balance");
-
 const soundBtn = document.getElementById("soundBtn");
 const soundText = document.getElementById("soundText");
 const bonusBtn = document.getElementById("bonusBtn");
@@ -83,23 +82,22 @@ const rollBtn = document.getElementById("rollBtn");
 const diceEl = document.getElementById("dice");
 
 // --- state ---
-let mode = "high"; // high: >= threshold, low: <= threshold
+let mode = "high";
 let busy = false;
 const houseEdge = 0.985;
 
-// Ориентации: чтобы ВЫПАВШАЯ ГРАНЬ оказалась СВЕРХУ (TOP)
-// В нашем кубе: face3 = top, face4 = bottom, face1 = front, face6 = back, face2 = right, face5 = left
-// Мы вращаем куб так, чтобы нужная грань стала top.
+// Ориентации: хотим, чтобы "число" было видно НА ВЕРХУ (TOP)
+// Так как мы сделали face1 = TOP (в HTML/CSS), то:
+// 1 должно оказаться сверху, 2/3/4/5/6 — тоже по результату.
 const TOP_ORIENT = {
-  1: { rx: -90, ry: 0,   rz: 0 },   // front -> top
-  2: { rx: 0,   ry: 0,   rz: -90 }, // right -> top (через Z)
-  3: { rx: 0,   ry: 0,   rz: 0 },   // already top
-  4: { rx: 180, ry: 0,   rz: 0 },   // bottom -> top
-  5: { rx: 0,   ry: 0,   rz: 90 },  // left -> top
-  6: { rx: 90,  ry: 0,   rz: 0 },   // back -> top
+  1: { rx: 0,   ry: 0,   rz: 0 },     // 1 уже на TOP
+  2: { rx: 0,   ry: 0,   rz: -90 },   // right -> top
+  3: { rx: 90,  ry: 0,   rz: 0 },     // front -> top
+  4: { rx: -90, ry: 0,   rz: 0 },     // back -> top
+  5: { rx: 0,   ry: 0,   rz: 90 },    // left -> top
+  6: { rx: 180, ry: 0,   rz: 0 },     // bottom -> top
 };
 
-// --- top render ---
 function renderTop(){
   const user = tg?.initDataUnsafe?.user;
   subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
@@ -188,14 +186,13 @@ function updateMath(){
 clampBet();
 updateMath();
 
-// set dice orientation (final)
+// orientation helpers
 function setDiceOrientation(rx, ry, rz){
   diceEl.style.setProperty("--rx", `${rx}deg`);
   diceEl.style.setProperty("--ry", `${ry}deg`);
   diceEl.style.setProperty("--rz", `${rz}deg`);
 }
 
-// roll animation helper (легко для мобилки)
 function playRollAnim(target){
   return new Promise((resolve) => {
     const onEnd = () => {
@@ -205,28 +202,29 @@ function playRollAnim(target){
     };
     diceEl.addEventListener("animationend", onEnd, { once:true });
 
-    // стартовые углы (чтобы каждый раз выглядело по-разному)
-    const rx0 = randInt(-30, -10);
-    const ry0 = randInt(10, 50);
-    const rz0 = randInt(-10, 10);
+    // стартовые углы
+    const rx0 = randInt(-25, -10);
+    const ry0 = randInt(15, 55);
+    const rz0 = randInt(-8, 8);
     diceEl.style.setProperty("--rx0", `${rx0}deg`);
     diceEl.style.setProperty("--ry0", `${ry0}deg`);
     diceEl.style.setProperty("--rz0", `${rz0}deg`);
 
-    // финальные (верхняя грань = выпавшее)
+    // финальная ориентация: выпавшая грань сверху (точки видно!)
     const o = TOP_ORIENT[target];
-    // чуть рандомим Y вокруг вертикали, но кратно 90°, чтобы куб “по-реальному” менял вид
+
+    // лёгкий “твист” вокруг вертикали, кратно 90 (чтобы не ломать реализм)
     const yTwist = [0, 90, 180, 270][randInt(0,3)];
     setDiceOrientation(o.rx, o.ry + yTwist, o.rz);
 
-    // перезапуск
+    // restart
     diceEl.classList.remove("rolling");
     void diceEl.offsetWidth;
     diceEl.classList.add("rolling");
   });
 }
 
-// main roll
+// roll
 rollBtn.onclick = async () => {
   if (busy) return;
 
@@ -266,6 +264,5 @@ rollBtn.onclick = async () => {
   rollBtn.disabled = false;
 };
 
-// стартовое положение (красиво)
-setDiceOrientation(-22, 32, 0);
-
+// старт
+setDiceOrientation(-18, 32, 0);
