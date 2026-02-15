@@ -86,16 +86,20 @@ let mode = "high";
 let busy = false;
 const houseEdge = 0.985;
 
-// Ориентации: хотим, чтобы "число" было видно НА ВЕРХУ (TOP)
-// Так как мы сделали face1 = TOP (в HTML/CSS), то:
-// 1 должно оказаться сверху, 2/3/4/5/6 — тоже по результату.
+// ✅ ПРАВИЛЬНЫЕ ориентации под нашу разметку (face1 = TOP)
+// 1: top (face1)
+// 2: right (face2) -> top (rotateZ +90)
+// 3: front (face3) -> top (rotateX -90)
+// 4: back (face4) -> top (rotateX +90)
+// 5: left (face5) -> top (rotateZ -90)
+// 6: bottom (face6) -> top (rotateX 180)
 const TOP_ORIENT = {
-  1: { rx: 0,   ry: 0,   rz: 0 },     // 1 уже на TOP
-  2: { rx: 0,   ry: 0,   rz: -90 },   // right -> top
-  3: { rx: 90,  ry: 0,   rz: 0 },     // front -> top
-  4: { rx: -90, ry: 0,   rz: 0 },     // back -> top
-  5: { rx: 0,   ry: 0,   rz: 90 },    // left -> top
-  6: { rx: 180, ry: 0,   rz: 0 },     // bottom -> top
+  1: { rx: 0,   ry: 0,   rz: 0 },
+  2: { rx: 0,   ry: 0,   rz: 90 },
+  3: { rx: -90, ry: 0,   rz: 0 },
+  4: { rx: 90,  ry: 0,   rz: 0 },
+  5: { rx: 0,   ry: 0,   rz: -90 },
+  6: { rx: 180, ry: 0,   rz: 0 },
 };
 
 function renderTop(){
@@ -193,6 +197,7 @@ function setDiceOrientation(rx, ry, rz){
   diceEl.style.setProperty("--rz", `${rz}deg`);
 }
 
+// roll anim
 function playRollAnim(target){
   return new Promise((resolve) => {
     const onEnd = () => {
@@ -202,22 +207,19 @@ function playRollAnim(target){
     };
     diceEl.addEventListener("animationend", onEnd, { once:true });
 
-    // стартовые углы
     const rx0 = randInt(-25, -10);
     const ry0 = randInt(15, 55);
-    const rz0 = randInt(-8, 8);
+    const rz0 = randInt(-12, 12);
     diceEl.style.setProperty("--rx0", `${rx0}deg`);
     diceEl.style.setProperty("--ry0", `${ry0}deg`);
     diceEl.style.setProperty("--rz0", `${rz0}deg`);
 
-    // финальная ориентация: выпавшая грань сверху (точки видно!)
     const o = TOP_ORIENT[target];
 
-    // лёгкий “твист” вокруг вертикали, кратно 90 (чтобы не ломать реализм)
+    // yTwist НЕ меняет top, только поворот вокруг вертикали
     const yTwist = [0, 90, 180, 270][randInt(0,3)];
     setDiceOrientation(o.rx, o.ry + yTwist, o.rz);
 
-    // restart
     diceEl.classList.remove("rolling");
     void diceEl.offsetWidth;
     diceEl.classList.add("rolling");
@@ -264,5 +266,5 @@ rollBtn.onclick = async () => {
   rollBtn.disabled = false;
 };
 
-// старт
-setDiceOrientation(-18, 32, 0);
+// стартовое положение
+setDiceOrientation(0, 0, 0);
