@@ -19,14 +19,16 @@
       <div class="topbar__right">
         <button id="soundBtn" class="pill" type="button" aria-label="Звук">
           <span class="dot"></span>
-          <span id="soundText">Звук on</span>
+          <span id="soundText">Звук</span>
         </button>
+
         <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
+
         <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
 
-    <main class="mainGrid">
+    <main class="layout">
       <!-- LEFT: поле -->
       <section class="card">
         <div class="cardHead">
@@ -34,16 +36,15 @@
             <div class="h1">Mines</div>
             <div class="hint">Открывай safe клетки. Чем больше мин — тем быстрее растёт X. Можно “Забрать”.</div>
           </div>
-          <div class="pill pill--mini" id="soundMini">Звук</div>
         </div>
 
-        <div class="fieldWrap">
-          <div class="grid" id="grid"></div>
+        <div class="panel">
+          <div id="grid" class="grid" aria-label="mines grid"></div>
 
           <div class="bottomStats">
             <div class="stat">
               <div class="label">Открыто safe</div>
-              <div class="value"><b id="openedView">0</b> / <span id="safeTotalView">22</span></div>
+              <div class="value"><b id="safeView">0</b> / <span id="safeTotal">22</span></div>
             </div>
             <div class="stat">
               <div class="label">Множитель</div>
@@ -51,11 +52,11 @@
             </div>
             <div class="stat">
               <div class="label">Забрать сейчас</div>
-              <div class="value"><b id="cashNowView">—</b></div>
+              <div class="value"><b id="takeView">—</b> 🪙</div>
             </div>
           </div>
 
-          <div class="rowButtons">
+          <div class="actionsRow">
             <button id="cashBtn" class="btnPrimary" type="button" disabled>Забрать</button>
             <button id="resetBtn" class="btnGhost" type="button">Сброс</button>
           </div>
@@ -64,11 +65,11 @@
         </div>
       </section>
 
-      <!-- RIGHT: ставки/настройки -->
+      <!-- RIGHT: ставка/настройки -->
       <aside class="card">
         <div class="cardHead">
           <div class="h1">Ставка</div>
-          <div class="pill pill--bonus" id="bonusBtn2">+1000 🪙</div>
+          <div class="muted">Монеты виртуальные, без вывода.</div>
         </div>
 
         <div class="panel">
@@ -87,20 +88,19 @@
             <button id="betPlus" class="btnSmall" type="button">+</button>
           </div>
 
-          <div class="minesRowTitle">
+          <div class="rowTitle" style="margin-top:12px;">
             <div class="h2">Mines</div>
-            <div class="pill pill--mini"><b id="minesView">3</b></div>
+            <div class="pill pill--mini"> <b id="minesShow">3</b> </div>
           </div>
 
           <input id="minesRange" class="range" type="range" min="3" max="24" value="3" />
-
-          <div class="smallNote">
+          <div class="muted" style="margin-top:6px;">
             На раунде менять нельзя. Больше мин — выше риск и выше X.
           </div>
 
-          <button id="startBtn" class="btnPrimary" type="button">Start</button>
+          <button id="startBtn" class="btnPrimary" type="button" style="margin-top:12px;">Start</button>
 
-          <div class="smallNote" style="margin-top:10px;">
+          <div class="muted" style="margin-top:10px;">
             Ставка списывается при Start. Открыл safe — множитель растёт. Жми “Забрать”, чтобы зафиксировать выигрыш.
           </div>
 
@@ -108,10 +108,10 @@
             <div class="h2">Лесенка X</div>
             <div class="muted">показывается заранее</div>
           </div>
-          <div id="ladder" class="ladder"></div>
+          <div id="ladder" class="ladderGrid" aria-label="Лесенка множителей"></div>
 
-          <div class="foot">
-            Честный RNG: <span class="muted">crypto.getRandomValues</span>. Монеты виртуальные.
+          <div class="muted" style="margin-top:10px;">
+            Честный RNG: crypto.getRandomValues. Монеты виртуальные.
           </div>
         </div>
       </aside>
@@ -122,3 +122,4 @@
   <script src="./app.js"></script>
 </body>
 </html>
+
