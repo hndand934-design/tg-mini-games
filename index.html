@@ -22,84 +22,113 @@
           <span id="soundText">Звук on</span>
         </button>
 
+        <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
+
         <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
 
-    <main class="layout">
-      <!-- LEFT: wheel -->
-      <section class="panel panel--wheel">
-        <div class="stats">
-          <div class="stat">
-            <div class="label">Статус</div>
-            <div id="statusView" class="value">Ожидание</div>
-          </div>
-          <div class="stat">
-            <div class="label">Твой выбор</div>
-            <div id="pickView" class="value">—</div>
-          </div>
-          <div class="stat">
-            <div class="label">Результат</div>
-            <div id="resultView" class="value">—</div>
-          </div>
+    <main class="card">
+      <div class="card__inner">
+
+        <!-- История результатов -->
+        <div class="historyRow">
+          <div class="historyLabel">Результаты</div>
+          <div id="history" class="history" aria-label="history"></div>
         </div>
 
-        <div class="wheelWrap">
+        <!-- Колесо -->
+        <section class="wheelBlock">
           <div class="wheelStage">
-            <div class="pointer"></div>
-            <canvas id="wheel" width="720" height="720" aria-label="wheel"></canvas>
+            <div class="pointer" aria-hidden="true"></div>
+            <canvas id="wheel" width="720" height="720" aria-label="wheel canvas"></canvas>
 
-            <div class="centerBadge">
-              <div class="centerTitle">Выбери фракцию</div>
-              <div class="centerSub">и нажми “Крутить”</div>
-            </div>
+            <div class="centerRing" aria-hidden="true"></div>
           </div>
-        </div>
+        </section>
 
-        <div class="factions" aria-label="factions">
-          <button class="faction" data-m="1.2" type="button"><span class="dotc d12"></span><b>1.20x</b></button>
-          <button class="faction" data-m="1.5" type="button"><span class="dotc d15"></span><b>1.50x</b></button>
-          <button class="faction" data-m="2" type="button"><span class="dotc d20"></span><b>2.00x</b></button>
-          <button class="faction" data-m="3" type="button"><span class="dotc d30"></span><b>3.00x</b></button>
-          <button class="faction" data-m="5" type="button"><span class="dotc d50"></span><b>5.00x</b></button>
-          <button class="faction" data-m="10" type="button"><span class="dotc d100"></span><b>10.00x</b></button>
-        </div>
+        <!-- Кнопки множителей (как на скрине) -->
+        <section class="picks" aria-label="picks">
+          <button class="pick" data-m="0" type="button">
+            <span class="pickTop">0.00×</span>
+            <span class="pickBar c0"></span>
+          </button>
 
-        <div class="rule">
-          Правило: если выпало на твою фракцию — выигрываешь ×множитель, иначе ставка сгорает.
-        </div>
-      </section>
+          <button class="pick active" data-m="1.5" type="button">
+            <span class="pickTop">1.50×</span>
+            <span class="pickBar c15"></span>
+          </button>
 
-      <!-- RIGHT: bet -->
-      <aside class="panel panel--bet">
-        <div class="betHead">
-          <div class="h2">Ставка</div>
-          <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
-        </div>
+          <button class="pick" data-m="1.7" type="button">
+            <span class="pickTop">1.70×</span>
+            <span class="pickBar c17"></span>
+          </button>
 
-        <div class="chips" role="group" aria-label="chips">
-          <button class="chip" data-bet="10" type="button">10</button>
-          <button class="chip" data-bet="50" type="button">50</button>
-          <button class="chip" data-bet="100" type="button">100</button>
-          <button class="chip" data-bet="250" type="button">250</button>
-          <button class="chip" data-bet="500" type="button">500</button>
-          <button class="chip" data-bet="max" type="button">MAX</button>
-        </div>
+          <button class="pick" data-m="2" type="button">
+            <span class="pickTop">2.00×</span>
+            <span class="pickBar c20"></span>
+          </button>
 
-        <div class="betRow">
-          <button id="betMinus" class="btnSmall" type="button">−</button>
-          <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
-          <button id="betPlus" class="btnSmall" type="button">+</button>
-        </div>
+          <button class="pick" data-m="3" type="button">
+            <span class="pickTop">3.00×</span>
+            <span class="pickBar c30"></span>
+          </button>
 
-        <button id="spinBtn" class="btnPrimary" type="button">Крутить</button>
+          <button class="pick" data-m="4" type="button">
+            <span class="pickTop">4.00×</span>
+            <span class="pickBar c40"></span>
+          </button>
+        </section>
 
-        <div class="betHint">
-          Выбери фракцию снизу. Шанс зависит от количества её секторов.
-        </div>
+        <!-- Большая кнопка -->
+        <button id="spinBtn" class="btnSpin" type="button">Ставка</button>
 
-        <div class="version">v1 — режим Wheel</div>
-      </aside>
+        <!-- нижние плашки статуса -->
+        <section class="miniStats">
+          <div class="miniStat">
+            <div class="msLabel">Статус</div>
+            <div id="statusView" class="msValue">Ожидание</div>
+          </div>
+
+          <div class="miniStat">
+            <div class="msLabel">Твой выбор</div>
+            <div id="pickView" class="msValue">1.50×</div>
+          </div>
+
+          <div class="miniStat">
+            <div class="msLabel">Результат</div>
+            <div id="resultView" class="msValue">—</div>
+          </div>
+        </section>
+
+        <!-- ставка -->
+        <section class="betBox">
+          <div class="betLine">
+            <span class="betLabel">Ставка</span>
+            <span class="betRight">Баланс: 🪙 <b id="balance2">1000</b></span>
+          </div>
+
+          <div class="betRow">
+            <button id="betMinus" class="btnSmall" type="button">−</button>
+            <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
+            <button id="betPlus" class="btnSmall" type="button">+</button>
+          </div>
+
+          <div class="chips" role="group" aria-label="chips">
+            <button class="chip" data-bet="10" type="button">10</button>
+            <button class="chip" data-bet="50" type="button">50</button>
+            <button class="chip" data-bet="100" type="button">100</button>
+            <button class="chip" data-bet="250" type="button">250</button>
+            <button class="chip" data-bet="500" type="button">500</button>
+            <button class="chip" data-bet="max" type="button">MAX</button>
+          </div>
+
+          <div class="footNote">
+            Правило: выигрыш только при попадании на выбранный множитель. RNG: crypto.getRandomValues.
+          </div>
+        </section>
+
+      </div>
     </main>
   </div>
 
