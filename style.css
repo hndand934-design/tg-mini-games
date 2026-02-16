@@ -1,4 +1,5 @@
-/* style.css */
+/* style.css — ОБНОВЛЕНО (кнопка + чуть оптимизация визуала) */
+
 :root{
   --bg0:#0b0f1a;
   --bg1:#0b1222;
@@ -8,26 +9,20 @@
   --stroke: rgba(255,255,255,.10);
   --stroke2: rgba(255,255,255,.08);
 
+  /* БОМБА-синий */
+  --blue0:#78a3ff;
   --blue1:#4c7dff;
   --blue2:#2b61ff;
+  --blue3:#1c42cc;
 
-  --lose:#556274;          /* серый “пустой” */
-  --lose2:#465365;
+  --lose1:#4f5c6f;
+  --lose2:#3f4a5c;
 
-  --g1:#34d45a;            /* 1.5x */
-  --g2:#1aa640;
-
-  --w1:#e7f0ff;            /* 1.7x (почти белый) */
-  --w2:#9fb2d6;
-
-  --y1:#ffd34d;            /* 2x */
-  --y2:#b78612;
-
-  --p1:#8b5cff;            /* 3x */
-  --p2:#5a2fe0;
-
-  --o1:#ffb04a;            /* 4x */
-  --o2:#c96e0d;
+  --g1:#34d45a; --g2:#1aa640;
+  --w1:#e7f0ff; --w2:#9fb2d6;
+  --y1:#ffd34d; --y2:#b78612;
+  --p1:#8b5cff; --p2:#5a2fe0;
+  --o1:#ffb04a; --o2:#c96e0d;
 }
 
 *{box-sizing:border-box}
@@ -95,7 +90,7 @@ body{
   gap:12px;
 }
 @media (max-width: 920px){
-  .grid{grid-template-columns:1fr; }
+  .grid{grid-template-columns:1fr;}
 }
 
 .card{
@@ -114,9 +109,7 @@ body{
   display:flex; justify-content:space-between; align-items:center; gap:10px;
   margin-bottom:10px;
 }
-.results{
-  display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;
-}
+.results{display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;}
 .rchip{
   padding:6px 10px;
   border-radius:999px;
@@ -150,6 +143,9 @@ body{
   height:auto;
   display:block;
   border-radius:999px;
+  /* микрофикс для мобилок */
+  touch-action: manipulation;
+  image-rendering: auto;
 }
 
 .pointer{
@@ -186,7 +182,7 @@ body{
   gap:10px;
 }
 @media (max-width: 520px){
-  .picks{grid-template-columns: repeat(3, 1fr); }
+  .picks{grid-template-columns: repeat(3, 1fr);}
 }
 .pick{
   padding:12px 10px;
@@ -203,30 +199,58 @@ body{
   outline:2px solid rgba(76,125,255,.55);
   box-shadow: 0 10px 20px rgba(0,0,0,.18);
 }
-.bar{
-  width:12px; height:12px; border-radius:99px;
-  box-shadow: 0 0 0 3px rgba(0,0,0,.18) inset;
-}
+.bar{ width:12px; height:12px; border-radius:99px; box-shadow: 0 0 0 3px rgba(0,0,0,.18) inset; }
 .bar--g{background: rgba(52,212,90,.95)}
 .bar--w{background: rgba(231,240,255,.95)}
 .bar--y{background: rgba(255,211,77,.95)}
 .bar--p{background: rgba(139,92,255,.95)}
 .bar--o{background: rgba(255,176,74,.95)}
 
+/* ====== БОМБОВАЯ СИНЯЯ КНОПКА ====== */
 .btnPrimary{
   width:100%;
-  padding: 14px 14px;
+  padding: 15px 14px;
   border-radius: 16px;
-  font-weight:950;
+  font-weight:1000;
   font-size:16px;
-  color: var(--text);
+  letter-spacing:.2px;
+  color: #f3f7ff;
   cursor:pointer;
-  border:1px solid rgba(76,125,255,.60);
-  background: linear-gradient(180deg, rgba(76,125,255,.95), rgba(43,97,255,.85));
-  box-shadow: 0 16px 30px rgba(43,97,255,.18);
+
+  border:1px solid rgba(120,163,255,.70);
+  background:
+    radial-gradient(120% 140% at 20% 15%, rgba(255,255,255,.28), transparent 40%),
+    linear-gradient(180deg, var(--blue0), var(--blue2));
+  box-shadow:
+    0 18px 34px rgba(43,97,255,.22),
+    0 0 0 1px rgba(255,255,255,.06) inset;
+  position:relative;
+  overflow:hidden;
 }
-.btnPrimary:disabled{opacity:.6; cursor:not-allowed}
+.btnPrimary::after{
+  content:"";
+  position:absolute; inset:-40% -60%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
+  transform: rotate(18deg) translateX(-40%);
+  opacity:.0;
+}
+.btnPrimary:hover::after{ opacity:.8; animation: shine 900ms ease both; }
+@keyframes shine{
+  from{ transform: rotate(18deg) translateX(-40%); }
+  to  { transform: rotate(18deg) translateX(40%); }
+}
 .btnPrimary:active{transform:scale(.99)}
+.btnPrimary:disabled{opacity:.60; cursor:not-allowed; box-shadow:none}
+
+/* во время вращения — лёгкий пульс */
+.btnPrimary.is-spinning{
+  animation: pulse 650ms ease-in-out infinite;
+}
+@keyframes pulse{
+  0%{ filter: brightness(1); }
+  50%{ filter: brightness(1.12); }
+  100%{ filter: brightness(1); }
+}
 
 .badges{
   margin-top:10px;
@@ -246,11 +270,7 @@ body{
 .label{font-size:12px; color:var(--muted)}
 .value{margin-top:2px; font-size:14px}
 
-.foot{
-  margin-top:10px;
-  font-size:12px;
-  color: var(--muted);
-}
+.foot{ margin-top:10px; font-size:12px; color: var(--muted); }
 
 /* right */
 .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
@@ -299,17 +319,5 @@ body{
   background: rgba(255,255,255,.04);
   padding:10px 12px;
 }
-.mini__row{
-  display:flex; justify-content:space-between; align-items:center;
-  padding:6px 0;
-}
-.note{
-  margin-top:10px;
-  font-size:12px;
-  color:var(--muted);
-}
-
-@media (prefers-reduced-motion: reduce){
-  *{scroll-behavior:auto!important}
-}
-
+.mini__row{ display:flex; justify-content:space-between; align-items:center; padding:6px 0; }
+.note{ margin-top:10px; font-size:12px; color:var(--muted); }
