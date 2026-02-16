@@ -1,105 +1,114 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Rocket Crash</title>
-  <link rel="stylesheet" href="./style.css"/>
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <div class="bg"></div>
+  <div class="stars"></div>
 
-<div class="bg"></div>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar__left">
+        <div class="title">Rocket Crash</div>
+        <div id="subTitle" class="subtitle">Открыто вне Telegram</div>
+      </div>
 
-<div class="app">
+      <div class="topbar__right">
+        <button id="soundBtn" class="pill" type="button">
+          <span id="soundDot" class="dot"></span>
+          <span id="soundText">Звук on</span>
+        </button>
 
-  <header class="topbar">
-    <div>
-      <div class="title">Rocket Crash</div>
-      <div id="subTitle" class="subtitle">Открыто вне Telegram</div>
-    </div>
+        <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
 
-    <div class="balance">Баланс 🪙 <b id="balance">1000</b></div>
-  </header>
+        <div class="pill pill--balance">Баланс 🪙 <b id="balance">1000</b></div>
+      </div>
+    </header>
 
-  <main class="layout">
+    <main class="grid">
+      <!-- LEFT: GAME -->
+      <section class="panel panel--game">
+        <div class="statsRow">
+          <div class="statCard">
+            <div class="k">Множитель</div>
+            <div id="multVal" class="v">x1.00</div>
+            <div id="multHint" class="s">Ожидание</div>
+          </div>
 
-    <!-- LEFT -->
-    <section class="left card">
+          <div class="statCard">
+            <div class="k">Статус</div>
+            <div id="statusVal" class="v">Раунд</div>
+            <div id="statusHint" class="s">Старт через 5с</div>
+          </div>
 
-      <div class="statsRow">
-        <div class="stat">
-          <div class="label">Множитель</div>
-          <div id="multView" class="value">x1.00</div>
-          <div class="hint">Ожидание</div>
+          <div class="statCard">
+            <div class="k">Твоя ставка</div>
+            <div id="betVal" class="v">—</div>
+            <div id="betHint" class="s">не в раунде</div>
+          </div>
         </div>
 
-        <div class="stat">
-          <div class="label">Статус</div>
-          <div id="stateView" class="value">Раунд</div>
-          <div id="phaseView" class="hint">Старт через 5с</div>
+        <div class="chartWrap">
+          <canvas id="graph" class="chart"></canvas>
+
+          <div class="overlay">
+            <div id="overlayX" class="overlayX">1.00x</div>
+            <div id="overlayText" class="overlayText">Ты не в раунде</div>
+          </div>
+
+          <div class="chartBadges">
+            <div class="badge">Звук <b id="soundMini">on</b></div>
+            <div class="badge badge--right">Краш-поинт скрыт (честный RNG)</div>
+          </div>
         </div>
 
-        <div class="stat">
-          <div class="label">Твоя ставка</div>
-          <div id="betState" class="value">—</div>
-          <div id="cashInfo" class="hint">не в раунде</div>
-        </div>
-      </div>
+        <div id="bottomLine" class="bottomLine">Новый раунд через 5с…</div>
+      </section>
 
-      <div class="graphWrap">
-        <canvas id="graph"></canvas>
-
-        <div class="overlay">
-          <div id="bigX" class="bigX">1.00x</div>
-          <div id="overlayText" class="overlayText">Ожидание следующего раунда</div>
+      <!-- RIGHT: BET -->
+      <aside class="panel panel--bet">
+        <div class="betTitleRow">
+          <div class="betTitle">Ставка</div>
+          <div class="pill pill--bonus small">+1000 🪙</div>
         </div>
 
-        <div class="badge sound" id="soundBtn">Звук on</div>
-        <div class="badge rng">Краш-поинт скрыт (честный RNG)</div>
-      </div>
+        <div class="chips" role="group" aria-label="chips">
+          <button class="chip" data-bet="10" type="button">10</button>
+          <button class="chip" data-bet="50" type="button">50</button>
+          <button class="chip" data-bet="100" type="button">100</button>
+          <button class="chip" data-bet="250" type="button">250</button>
+          <button class="chip" data-bet="500" type="button">500</button>
+          <button class="chip" data-bet="max" type="button">MAX</button>
+        </div>
 
-      <div class="footerText" id="roundInfo">
-        Новый раунд через 5с...
-      </div>
+        <div class="betRow">
+          <button id="betMinus" class="btnMini" type="button">−</button>
+          <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
+          <button id="betPlus" class="btnMini" type="button">+</button>
+        </div>
 
-    </section>
+        <div class="actions">
+          <button id="joinBtn" class="btnPrimary" type="button">Войти в раунд</button>
+          <button id="cashBtn" class="btnDanger" type="button" disabled>Забрать</button>
+        </div>
 
-    <!-- RIGHT -->
-    <section class="right card">
+        <div class="betHelp">
+          Вход только до старта. В полёте можно “Забрать”.
+        </div>
 
-      <div class="sideTitle">Ставка</div>
+        <div class="foot">
+          Монеты виртуальные, без вывода.<br/>
+          vFINAL — только режим Crash
+        </div>
+      </aside>
+    </main>
+  </div>
 
-      <div class="chips">
-        <button class="chip" data-bet="10">10</button>
-        <button class="chip" data-bet="50">50</button>
-        <button class="chip" data-bet="100">100</button>
-        <button class="chip" data-bet="250">250</button>
-        <button class="chip" data-bet="500">500</button>
-        <button class="chip" data-bet="max">MAX</button>
-      </div>
-
-      <div class="betRow">
-        <button id="minus">−</button>
-        <input id="betInput" type="number" value="100"/>
-        <button id="plus">+</button>
-      </div>
-
-      <div class="btnRow">
-        <button id="joinBtn" class="join">Войти в раунд</button>
-        <button id="cashBtn" class="cash" disabled>Забрать</button>
-      </div>
-
-      <div class="hintSide">
-        Вход только до старта. В полёте можно “Забрать”.
-      </div>
-
-    </section>
-
-  </main>
-
-</div>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="./app.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
