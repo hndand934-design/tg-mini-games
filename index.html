@@ -24,7 +24,6 @@
         </button>
 
         <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
-
         <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
@@ -47,12 +46,13 @@
           </div>
         </div>
 
+        <!-- выбор множителя (серого НЕТ) -->
         <div class="picks" role="group" aria-label="Выбор множителя">
-          <button class="pick" data-pick="1.5" type="button"><span class="bar bar--g"></span>1.50x</button>
-          <button class="pick" data-pick="1.7" type="button"><span class="bar bar--w"></span>1.70x</button>
-          <button class="pick" data-pick="2"   type="button"><span class="bar bar--y"></span>2.00x</button>
-          <button class="pick" data-pick="3"   type="button"><span class="bar bar--p"></span>3.00x</button>
-          <button class="pick" data-pick="4"   type="button"><span class="bar bar--o"></span>4.00x</button>
+          <button class="pick pick--g active" data-pick="1.5" type="button"><span class="bar bar--g"></span>1.50x</button>
+          <button class="pick pick--w" data-pick="1.7" type="button"><span class="bar bar--w"></span>1.70x</button>
+          <button class="pick pick--y" data-pick="2"   type="button"><span class="bar bar--y"></span>2.00x</button>
+          <button class="pick pick--p" data-pick="3"   type="button"><span class="bar bar--p"></span>3.00x</button>
+          <button class="pick pick--o" data-pick="4"   type="button"><span class="bar bar--o"></span>4.00x</button>
         </div>
 
         <button id="spinBtn" class="btnPrimary" type="button">Крутить</button>
@@ -64,7 +64,7 @@
           </div>
           <div class="badge">
             <div class="label">Твой выбор</div>
-            <div class="value"><b id="pickView">—</b></div>
+            <div class="value"><b id="pickView">1.50x</b></div>
           </div>
           <div class="badge">
             <div class="label">Результат</div>
@@ -73,7 +73,7 @@
         </div>
 
         <div class="foot">
-          Правило: выигрыш только при попадании в выбранный множитель. RNG: crypto.getRandomValues.
+          Правило: выигрыш только при попадании в выбранный множитель. Серый сектор — проигрыш. RNG: crypto.getRandomValues.
         </div>
       </section>
 
@@ -108,7 +108,7 @@
         </div>
 
         <div class="note">
-          Серый сектор — проигрыш (ставить на него нельзя).
+          Важно: на серый сектор ставить нельзя — он всегда проигрыш.
         </div>
       </aside>
     </main>
