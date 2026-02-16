@@ -3,77 +3,78 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Rocket Crash</title>
+  <title>Wheel</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <div class="bg"></div>
-  <div class="stars"></div>
 
   <div class="app">
     <header class="topbar">
       <div class="topbar__left">
-        <div class="title">Rocket Crash</div>
+        <div class="title">Wheel</div>
         <div id="subTitle" class="subtitle">Открыто вне Telegram</div>
       </div>
 
       <div class="topbar__right">
-        <button id="soundBtn" class="pill" type="button">
-          <span id="soundDot" class="dot"></span>
+        <button id="soundBtn" class="pill" type="button" aria-label="Звук">
+          <span class="dot"></span>
           <span id="soundText">Звук on</span>
         </button>
 
-        <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
-
-        <div class="pill pill--balance">Баланс 🪙 <b id="balance">1000</b></div>
+        <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
 
-    <main class="grid">
-      <!-- LEFT: GAME -->
-      <section class="panel panel--game">
-        <div class="statsRow">
-          <div class="statCard">
-            <div class="k">Множитель</div>
-            <div id="multVal" class="v">x1.00</div>
-            <div id="multHint" class="s">Ожидание</div>
+    <main class="layout">
+      <!-- LEFT: wheel -->
+      <section class="panel panel--wheel">
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Статус</div>
+            <div id="statusView" class="value">Ожидание</div>
           </div>
-
-          <div class="statCard">
-            <div class="k">Статус</div>
-            <div id="statusVal" class="v">Раунд</div>
-            <div id="statusHint" class="s">Старт через 5с</div>
+          <div class="stat">
+            <div class="label">Твой выбор</div>
+            <div id="pickView" class="value">—</div>
           </div>
-
-          <div class="statCard">
-            <div class="k">Твоя ставка</div>
-            <div id="betVal" class="v">—</div>
-            <div id="betHint" class="s">не в раунде</div>
+          <div class="stat">
+            <div class="label">Результат</div>
+            <div id="resultView" class="value">—</div>
           </div>
         </div>
 
-        <div class="chartWrap">
-          <canvas id="graph" class="chart"></canvas>
+        <div class="wheelWrap">
+          <div class="wheelStage">
+            <div class="pointer"></div>
+            <canvas id="wheel" width="720" height="720" aria-label="wheel"></canvas>
 
-          <div class="overlay">
-            <div id="overlayX" class="overlayX">1.00x</div>
-            <div id="overlayText" class="overlayText">Ты не в раунде</div>
-          </div>
-
-          <div class="chartBadges">
-            <div class="badge">Звук <b id="soundMini">on</b></div>
-            <div class="badge badge--right">Краш-поинт скрыт (честный RNG)</div>
+            <div class="centerBadge">
+              <div class="centerTitle">Выбери фракцию</div>
+              <div class="centerSub">и нажми “Крутить”</div>
+            </div>
           </div>
         </div>
 
-        <div id="bottomLine" class="bottomLine">Новый раунд через 5с…</div>
+        <div class="factions" aria-label="factions">
+          <button class="faction" data-m="1.2" type="button"><span class="dotc d12"></span><b>1.20x</b></button>
+          <button class="faction" data-m="1.5" type="button"><span class="dotc d15"></span><b>1.50x</b></button>
+          <button class="faction" data-m="2" type="button"><span class="dotc d20"></span><b>2.00x</b></button>
+          <button class="faction" data-m="3" type="button"><span class="dotc d30"></span><b>3.00x</b></button>
+          <button class="faction" data-m="5" type="button"><span class="dotc d50"></span><b>5.00x</b></button>
+          <button class="faction" data-m="10" type="button"><span class="dotc d100"></span><b>10.00x</b></button>
+        </div>
+
+        <div class="rule">
+          Правило: если выпало на твою фракцию — выигрываешь ×множитель, иначе ставка сгорает.
+        </div>
       </section>
 
-      <!-- RIGHT: BET -->
+      <!-- RIGHT: bet -->
       <aside class="panel panel--bet">
-        <div class="betTitleRow">
-          <div class="betTitle">Ставка</div>
-          <div class="pill pill--bonus small">+1000 🪙</div>
+        <div class="betHead">
+          <div class="h2">Ставка</div>
+          <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
         </div>
 
         <div class="chips" role="group" aria-label="chips">
@@ -86,24 +87,18 @@
         </div>
 
         <div class="betRow">
-          <button id="betMinus" class="btnMini" type="button">−</button>
+          <button id="betMinus" class="btnSmall" type="button">−</button>
           <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
-          <button id="betPlus" class="btnMini" type="button">+</button>
+          <button id="betPlus" class="btnSmall" type="button">+</button>
         </div>
 
-        <div class="actions">
-          <button id="joinBtn" class="btnPrimary" type="button">Войти в раунд</button>
-          <button id="cashBtn" class="btnDanger" type="button" disabled>Забрать</button>
+        <button id="spinBtn" class="btnPrimary" type="button">Крутить</button>
+
+        <div class="betHint">
+          Выбери фракцию снизу. Шанс зависит от количества её секторов.
         </div>
 
-        <div class="betHelp">
-          Вход только до старта. В полёте можно “Забрать”.
-        </div>
-
-        <div class="foot">
-          Монеты виртуальные, без вывода.<br/>
-          vFINAL — только режим Crash
-        </div>
+        <div class="version">v1 — режим Wheel</div>
       </aside>
     </main>
   </div>
