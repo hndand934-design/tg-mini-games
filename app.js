@@ -1,4 +1,4 @@
-// ======== RPS FINAL (противник 🥷, руки бежевые) ========
+// ===== RPS (бот, финальная логика: ставка списывается 1 раз на старт серии) =====
 
 // --- Telegram WebApp ---
 const tg = window.Telegram?.WebApp;
@@ -22,7 +22,7 @@ function setCoins(v){
 }
 function addCoins(d){ setCoins(wallet.coins + d); }
 
-// --- Sound (тихий) ---
+// --- Sound ---
 let soundOn = true;
 function beep(freq=520, ms=55, vol=0.03){
   if(!soundOn) return;
@@ -40,7 +40,7 @@ function beep(freq=520, ms=55, vol=0.03){
   }catch{}
 }
 
-// --- RNG (честный) ---
+// --- RNG ---
 function randInt(n){
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
@@ -69,7 +69,7 @@ const ladderEl = document.getElementById("ladder");
 
 const bStatus = document.getElementById("bStatus");
 const bYou = document.getElementById("bYou");
-const bOpp = document.getElementById("bOpp");
+const bBot = document.getElementById("bBot");
 const bResult = document.getElementById("bResult");
 
 const streakText = document.getElementById("streakText");
@@ -77,20 +77,20 @@ const xText = document.getElementById("xText");
 const potentialText = document.getElementById("potentialText");
 
 const youIcon = document.getElementById("youIcon");
-const oppIcon = document.getElementById("oppIcon");
+const botIcon = document.getElementById("botIcon");
 
-// --- Ladder (фикс) ---
-const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00]; // step0..step6
+// --- Ladder ---
+const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00];
 const MAX_STEP = LADDER.length - 1;
 
 // --- State ---
-let chosen = "rock";          // rock|scissors|paper
-let inSeries = false;         // ставка уже списана?
-let seriesBet = 0;            // ставка серии
-let step = 0;                 // 0..MAX_STEP
+let chosen = "rock";
+let inSeries = false;
+let seriesBet = 0;
+let step = 0;
 let busy = false;
 
-// --- Beige hand SVGs (simple, clean) ---
+// --- SVG руки (теперь бежевые через CSS переменную --hand) ---
 function svgRock(){
   return `
   <svg class="handSvg" viewBox="0 0 64 64" aria-hidden="true">
@@ -125,7 +125,7 @@ function labelFor(choice){
   return "Ножницы";
 }
 
-// --- UI render helpers ---
+// --- Render ---
 function renderTop(){
   balanceEl.textContent = `${wallet.coins} ₽`;
 }
@@ -143,17 +143,15 @@ function renderLadder(){
 function renderStats(){
   streakText.textContent = `${step} побед`;
   xText.textContent = `x${LADDER[step].toFixed(2)}`;
-
-  const pot = inSeries ? Math.floor(seriesBet * LADDER[step]) : Math.floor((Number(betInput.value)||0) * LADDER[step]);
+  const pot = inSeries ? Math.floor(seriesBet * LADDER[step]) : 0;
   potentialText.textContent = `${pot} ₽`;
-
   winLine.textContent = inSeries ? `${pot} ₽` : "0 ₽";
   cashBtn.disabled = !(inSeries && step >= 1 && !busy);
 }
-function setBadges(status, you, opp, res){
+function setBadges(status, you, bot, res){
   bStatus.textContent = status;
   bYou.textContent = you;
-  bOpp.textContent = opp;
+  bBot.textContent = bot;
   bResult.textContent = res;
 }
 
@@ -167,33 +165,23 @@ function setPick(choice){
   beep(520, 45, 0.02);
 }
 setPick("rock");
-oppIcon.innerHTML = "🥷";
 
-// --- Bet controls ---
+// --- Bet ---
 function clampBet(){
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
-  if (!inSeries) {
+
+  if (!inSeries){
     if (v > wallet.coins) v = wallet.coins;
     betInput.value = String(v);
   } else {
-    // во время серии ставка фиксируется
     betInput.value = String(seriesBet);
   }
-  renderStats();
 }
-betInput.addEventListener("input", clampBet);
+betInput.addEventListener("input", ()=>{ if(!inSeries) clampBet(); });
 
-betMinus.onclick = () => {
-  if(inSeries) return;
-  betInput.value = String((Number(betInput.value)||1) - 10);
-  clampBet();
-};
-betPlus.onclick = () => {
-  if(inSeries) return;
-  betInput.value = String((Number(betInput.value)||1) + 10);
-  clampBet();
-};
+betMinus.onclick = () => { if(inSeries) return; betInput.value = String((+betInput.value||1)-10); clampBet(); };
+betPlus.onclick  = () => { if(inSeries) return; betInput.value = String((+betInput.value||1)+10); clampBet(); };
 
 document.querySelectorAll(".chip").forEach(btn=>{
   btn.onclick = () => {
@@ -204,10 +192,9 @@ document.querySelectorAll(".chip").forEach(btn=>{
     beep(540, 55, 0.02);
   };
 });
-
 clampBet();
 
-// --- Sound toggle / bonus ---
+// --- Sound/bonus ---
 soundBtn.onclick = () => {
   soundOn = !soundOn;
   soundText.textContent = soundOn ? "Звук on" : "Звук off";
@@ -225,30 +212,28 @@ pickRock.onclick = () => setPick("rock");
 pickScissors.onclick = () => setPick("scissors");
 pickPaper.onclick = () => setPick("paper");
 
-// --- Game logic ---
-function oppChoice(){
-  // 0 rock, 1 scissors, 2 paper
+// --- Game ---
+function botChoice(){
   const r = randInt(3);
   return r===0 ? "rock" : (r===1 ? "scissors" : "paper");
 }
-function outcome(me, op){
-  if(me===op) return "draw";
+function outcome(me, bot){
+  if(me===bot) return "draw";
   if(
-    (me==="rock" && op==="scissors") ||
-    (me==="scissors" && op==="paper") ||
-    (me==="paper" && op==="rock")
+    (me==="rock" && bot==="scissors") ||
+    (me==="scissors" && bot==="paper") ||
+    (me==="paper" && bot==="rock")
   ) return "win";
   return "lose";
 }
 
-function resetRoundUI(){
+function resetUI(){
+  botIcon.innerHTML = "🤖";
   setBadges(inSeries ? "Серия" : "Ожидание", labelFor(chosen), "—", inSeries ? "Серия растёт" : "—");
-  bOpp.textContent = "—";
-  bResult.textContent = inSeries ? "Серия растёт" : "—";
-  oppIcon.innerHTML = "🥷";
   renderLadder();
   renderStats();
 }
+resetUI();
 
 function endSeriesLost(){
   inSeries = false;
@@ -273,17 +258,17 @@ function cashout(){
   winLine.textContent = `${payout} ₽`;
   beep(760, 65, 0.03); beep(920, 65, 0.03);
 }
-
 cashBtn.onclick = cashout;
 
 playBtn.onclick = async () => {
   if(busy) return;
 
   const bet = Math.floor(Number(betInput.value) || 0);
+
   if(!inSeries){
     if(bet <= 0) return alert("Ставка должна быть больше 0");
     if(bet > wallet.coins) return alert("Недостаточно средств");
-    // списываем 1 раз
+
     addCoins(-bet);
     inSeries = true;
     seriesBet = bet;
@@ -294,27 +279,23 @@ playBtn.onclick = async () => {
   playBtn.disabled = true;
   cashBtn.disabled = true;
 
-  const op = oppChoice();
-  const res = outcome(chosen, op);
+  const bot = botChoice();
+  const res = outcome(chosen, bot);
 
-  // show icons
-  oppIcon.innerHTML = iconFor(op);
-  bOpp.textContent = labelFor(op);
+  botIcon.innerHTML = iconFor(bot);
+  bBot.textContent = labelFor(bot);
 
   if(res === "draw"){
-    setBadges("Ничья", labelFor(chosen), labelFor(op), "Серия без изменений");
-    bResult.textContent = "Ничья";
+    setBadges("Ничья", labelFor(chosen), labelFor(bot), "Серия без изменений");
     beep(520, 50, 0.02);
   } else if(res === "win"){
     step = Math.min(MAX_STEP, step + 1);
-    setBadges("Победа", labelFor(chosen), labelFor(op), step===MAX_STEP ? "Авто-кэшаут" : "Серия растёт");
-    bResult.textContent = step===MAX_STEP ? "Авто-кэшаут" : "Серия растёт";
+    setBadges("Победа", labelFor(chosen), labelFor(bot), step===MAX_STEP ? "Авто-кэшаут" : "Серия растёт");
     beep(760, 55, 0.03);
 
     renderLadder();
     renderStats();
 
-    // авто-кэшаут на максимальном шаге
     if(step === MAX_STEP){
       await new Promise(r=>setTimeout(r, 220));
       cashout();
@@ -323,10 +304,8 @@ playBtn.onclick = async () => {
       return;
     }
   } else {
-    setBadges("Поражение", labelFor(chosen), labelFor(op), "Серия в ноль");
-    bResult.textContent = "Серия в ноль";
+    setBadges("Поражение", labelFor(chosen), labelFor(bot), "Серия в ноль");
     beep(220, 85, 0.03);
-    // ставка сгорает
     endSeriesLost();
   }
 
@@ -338,4 +317,4 @@ playBtn.onclick = async () => {
 };
 
 renderLadder();
-resetRoundUI();
+renderStats();
