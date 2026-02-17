@@ -21,8 +21,7 @@
           <span class="dot"></span>
           <span id="soundText">Звук on</span>
         </button>
-
-        <div class="pill pill--balance">Баланс <b id="balance">1000 ₽</b></div>
+        <div class="pill pill--balance">Баланс <b id="balance">0 ₽</b></div>
       </div>
     </header>
 
@@ -39,8 +38,8 @@
             <div id="bYou" class="value">—</div>
           </div>
           <div class="badge">
-            <div class="label">Бот</div>
-            <div id="bBot" class="value">—</div>
+            <div class="label">Противник</div>
+            <div id="bOpp" class="value">—</div>
           </div>
           <div class="badge">
             <div class="label">Результат</div>
@@ -53,7 +52,6 @@
             <div class="h2">Лестница</div>
             <div class="muted">Выигрывай подряд — X растёт. Проиграл — серия в ноль.</div>
           </div>
-
           <div id="ladder" class="ladder" aria-label="ladder"></div>
         </div>
 
@@ -74,24 +72,24 @@
 
         <div class="vsRow">
           <div class="vsCard">
-            <div class="cap">Бот</div>
-            <div id="botIcon" class="icon">🤖</div>
-            <div id="botReady" class="ready muted">Готов</div>
+            <div class="cap">Противник <span class="capEmoji">🥷</span></div>
+            <div id="oppIcon" class="iconSlot">—</div>
+            <div class="ready muted">Готов</div>
           </div>
 
           <div class="vsMid">VS</div>
 
           <div class="vsCard">
             <div class="cap">Ты</div>
-            <div id="youIcon" class="icon">—</div>
-            <div id="youReady" class="ready muted">Готов</div>
+            <div id="youIcon" class="iconSlot">—</div>
+            <div class="ready muted">Готов</div>
           </div>
         </div>
 
         <div class="pickBar">
-          <button id="pickRock" class="pickBtn" type="button">✊ <span>Камень</span></button>
-          <button id="pickScissors" class="pickBtn" type="button">✌️ <span>Ножницы</span></button>
-          <button id="pickPaper" class="pickBtn" type="button">🖐️ <span>Бумага</span></button>
+          <button id="pickRock" class="pickBtn" type="button">Камень</button>
+          <button id="pickScissors" class="pickBtn" type="button">Ножницы</button>
+          <button id="pickPaper" class="pickBtn" type="button">Бумага</button>
         </div>
 
         <div class="foot muted">
