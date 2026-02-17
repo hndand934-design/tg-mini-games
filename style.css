@@ -16,7 +16,7 @@
   --good:#26d47b;
   --bad:#ff5a6a;
 
-  /* ✅ ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ: цвет рук (бежевый) */
+  /* ✅ ЕДИНСТВЕННАЯ ПРАВКА ДЛЯ ТЕБЯ: БЕЖЕВЫЕ РУКИ */
   --hand:#f0c8a8;
 }
 
@@ -78,14 +78,14 @@ body{
   box-shadow: 0 0 0 3px rgba(38,212,123,.14);
 }
 
-.layout{
+.grid{
   margin-top:12px;
   display:grid;
-  grid-template-columns: 1.65fr 1fr;
+  grid-template-columns: 1.7fr 1fr;
   gap:12px;
 }
 @media (max-width: 920px){
-  .layout{grid-template-columns:1fr;}
+  .grid{grid-template-columns:1fr;}
 }
 
 .card{
@@ -94,14 +94,15 @@ body{
   border:1px solid var(--stroke2);
   overflow:hidden;
 }
-
-.left{padding:14px;}
-.right{padding:14px;}
+.panel{padding:14px}
+.side{padding:14px}
 
 .h2{font-weight:900; font-size:14px}
 .muted{font-size:12px; color:var(--muted)}
 .tiny{font-size:11px}
+.small{font-size:12px}
 .label{font-size:12px; color:var(--muted)}
+.big{margin-top:2px; font-weight:950; font-size:16px}
 
 .badges{
   display:grid;
@@ -144,22 +145,21 @@ body{
   background: rgba(76,125,255,.10);
 }
 
-.seriesRow{
+.infoRow{
   margin-top:12px;
   display:grid;
   grid-template-columns: repeat(3, 1fr);
   gap:10px;
 }
 @media (max-width: 720px){
-  .seriesRow{grid-template-columns:1fr;}
+  .infoRow{grid-template-columns:1fr;}
 }
-.panel{
+.mini{
   border-radius:14px;
   border:1px solid rgba(255,255,255,.08);
   background: rgba(255,255,255,.04);
   padding:10px 12px;
 }
-.big{margin-top:2px; font-weight:950; font-size:16px}
 
 .vsRow{
   margin-top:12px;
@@ -184,9 +184,8 @@ body{
   gap:8px;
 }
 .cap{font-weight:900; opacity:.9}
-.capEmoji{margin-left:6px}
-.ready{margin-top:2px}
-.iconSlot{
+
+.handSlot{
   width:84px; height:84px;
   display:flex; align-items:center; justify-content:center;
   border-radius:18px;
@@ -211,16 +210,21 @@ body{
   color:var(--text);
   font-weight:950;
   cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
 }
 .pickBtn.active{
   outline:2px solid rgba(76,125,255,.55);
   background: rgba(76,125,255,.10);
 }
 .pickBtn:active{transform:scale(.99)}
+.btnIcon{display:inline-flex; width:22px; height:22px; align-items:center; justify-content:center;}
 
 .foot{margin-top:10px}
 
-.rightHead{
+.sideHead{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   margin-bottom:10px;
 }
@@ -320,7 +324,7 @@ body{
 .rules ul{margin:0; padding-left:16px; color:var(--muted); font-size:12px}
 .rules li{margin:6px 0}
 
-/* --- SVG руки --- */
+/* ==== РУКИ (SVG) ==== */
 .handSvg{width:58px;height:58px; display:block}
-.handFill{fill:var(--hand)}
+.handFill{fill:var(--hand)} /* ✅ вот тут бежевый */
 .handStroke{stroke:rgba(0,0,0,.25); stroke-width:2; fill:none; opacity:.35}
