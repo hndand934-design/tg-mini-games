@@ -21,30 +21,29 @@
           <span class="dot"></span>
           <span id="soundText">Звук on</span>
         </button>
-
         <div class="pill pill--balance">Баланс <b id="balance">0 ₽</b></div>
       </div>
     </header>
 
-    <main class="layout">
+    <main class="grid">
       <!-- LEFT -->
-      <section class="left card">
+      <section class="panel card">
         <div class="badges">
           <div class="badge">
             <div class="label">Статус</div>
-            <div id="bStatus" class="value">Ожидание</div>
+            <div id="statusPill" class="value">Ожидание</div>
           </div>
           <div class="badge">
             <div class="label">Твой выбор</div>
-            <div id="bYou" class="value">—</div>
+            <div id="youPickPill" class="value">—</div>
           </div>
           <div class="badge">
             <div class="label">Бот</div>
-            <div id="bBot" class="value">—</div>
+            <div id="botPickPill" class="value">—</div>
           </div>
           <div class="badge">
             <div class="label">Результат</div>
-            <div id="bResult" class="value">—</div>
+            <div id="resultPill" class="value">—</div>
           </div>
         </div>
 
@@ -56,16 +55,16 @@
           <div id="ladder" class="ladder" aria-label="ladder"></div>
         </div>
 
-        <div class="seriesRow">
-          <div class="panel">
+        <div class="infoRow">
+          <div class="mini">
             <div class="label">Серия</div>
             <div id="streakText" class="big">0 побед</div>
           </div>
-          <div class="panel">
+          <div class="mini">
             <div class="label">Текущий X</div>
             <div id="xText" class="big">x1.00</div>
           </div>
-          <div class="panel">
+          <div class="mini">
             <div class="label">Потенциал</div>
             <div id="potentialText" class="big">0 ₽</div>
           </div>
@@ -73,24 +72,33 @@
 
         <div class="vsRow">
           <div class="vsCard">
-            <div class="cap">Бот <span class="capEmoji">🤖</span></div>
-            <div id="botIcon" class="iconSlot">—</div>
-            <div class="ready muted">Готов</div>
+            <div class="cap">Бот</div>
+            <div id="botIcon" class="handSlot">—</div>
+            <div class="muted small">Готов</div>
           </div>
 
           <div class="vsMid">VS</div>
 
           <div class="vsCard">
             <div class="cap">Ты</div>
-            <div id="youIcon" class="iconSlot">—</div>
-            <div class="ready muted">Готов</div>
+            <div id="youIcon" class="handSlot">—</div>
+            <div class="muted small">Готов</div>
           </div>
         </div>
 
         <div class="pickBar">
-          <button id="pickRock" class="pickBtn" type="button">✊ Камень</button>
-          <button id="pickScissors" class="pickBtn" type="button">✌️ Ножницы</button>
-          <button id="pickPaper" class="pickBtn" type="button">✋ Бумага</button>
+          <button id="pickRock" class="pickBtn" type="button">
+            <span class="btnIcon" id="btnRockIcon"></span>
+            Камень
+          </button>
+          <button id="pickScissors" class="pickBtn" type="button">
+            <span class="btnIcon" id="btnScissorsIcon"></span>
+            Ножницы
+          </button>
+          <button id="pickPaper" class="pickBtn" type="button">
+            <span class="btnIcon" id="btnPaperIcon"></span>
+            Бумага
+          </button>
         </div>
 
         <div class="foot muted">
@@ -99,8 +107,8 @@
       </section>
 
       <!-- RIGHT -->
-      <aside class="right card">
-        <div class="rightHead">
+      <aside class="side card">
+        <div class="sideHead">
           <div class="h2">Ставка</div>
           <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 ₽</button>
         </div>
