@@ -4,11 +4,9 @@ function randFloat() {
   crypto.getRandomValues(a);
   return a[0] / 2 ** 32;
 }
-function pickIndex(n){
-  return Math.floor(randFloat() * n);
-}
+function randInt(n) { return Math.floor(randFloat() * n); }
 
-// ===== Telegram WebApp =====
+// ===== Telegram =====
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
@@ -23,67 +21,82 @@ function loadWallet() {
 }
 function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
-
-function setCoins(v) {
+function setCoins(v){
   wallet.coins = Math.max(0, Math.floor(v));
   saveWallet(wallet);
   renderTop();
 }
-function addCoins(d) { setCoins(wallet.coins + d); }
+function addCoins(d){ setCoins(wallet.coins + d); }
 
-// ===== Sound (тихий) =====
+// ===== Sound (лёгкий) =====
 let soundOn = true;
-function beep(freq = 520, ms = 55, vol = 0.03, type = "sine") {
+function beep(freq = 520, ms = 55, vol = 0.03) {
   if (!soundOn) return;
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     const ctx = new AC();
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = type;
+    o.type = "sine";
     o.frequency.value = freq;
     g.gain.value = vol;
-    o.connect(g);
-    g.connect(ctx.destination);
+    o.connect(g); g.connect(ctx.destination);
     o.start();
     setTimeout(() => { o.stop(); ctx.close(); }, ms);
   } catch {}
 }
-const sfx = {
-  click(){ beep(520, 40, 0.02); },
-  start(){ beep(620, 60, 0.03); },
-  egg(){ beep(740, 55, 0.03); beep(920, 55, 0.02); },
-  skull(){ beep(180, 90, 0.035, "triangle"); },
-  cash(){ beep(760, 65, 0.03); beep(980, 65, 0.03); },
-};
+function sfxEgg(){ beep(740, 55, 0.028); beep(980, 55, 0.022); }
+function sfxSkull(){ beep(220, 90, 0.03); beep(160, 110, 0.028); }
 
-// ===== UI =====
+// ===== UI refs =====
 const subTitle = document.getElementById("subTitle");
 const balanceEl = document.getElementById("balance");
-
 const soundBtn = document.getElementById("soundBtn");
 const soundText = document.getElementById("soundText");
 const bonusBtn = document.getElementById("bonusBtn");
 
-const modeEasy = document.getElementById("modeEasy");
+const modeNormal = document.getElementById("modeNormal");
 const modeHard = document.getElementById("modeHard");
 const modeHint = document.getElementById("modeHint");
-const centerHint = document.getElementById("centerHint");
 
 const betInput = document.getElementById("betInput");
 const betMinus = document.getElementById("betMinus");
 const betPlus = document.getElementById("betPlus");
 const startBtn = document.getElementById("startBtn");
-const cashoutBtn = document.getElementById("cashoutBtn");
+const cashBtn = document.getElementById("cashBtn");
 
-const statusText = document.getElementById("statusText");
-const xText = document.getElementById("xText");
-const potText = document.getElementById("potText");
+const statusView = document.getElementById("statusView");
+const xView = document.getElementById("xView");
+const potView = document.getElementById("potView");
 
 const towerEl = document.getElementById("tower");
-const xScaleEl = document.getElementById("xScale");
+const scaleEl = document.getElementById("scale");
 
-// ===== Top render =====
+// ===== config =====
+const COLS_DESKTOP = 4;     // как было (в мобиле CSS сжимает до 3)
+const ROWS = 8;
+const THEME = {
+  normal: { eggs: 3, skulls: 1, label: "Обычный: 3 яйца / 1 череп" },
+  hard:   { eggs: 1, skulls: 3, label: "Сложный: 1 яйцо / 3 черепа" },
+};
+
+// лестница X (пример как в финале: растёт по рядам)
+const X_LADDER = {
+  normal: [1.18, 1.42, 1.72, 2.10, 2.60, 3.30, 4.20, 5.50],
+  hard:   [1.35, 1.75, 2.35, 3.20, 4.20, 5.50, 7.20, 9.40],
+};
+
+// ===== state =====
+let mode = "normal";
+let inGame = false;
+let currentRow = 0;       // 0..ROWS-1
+let bet = 100;
+let currentX = 1.0;
+let reservedBet = 0;      // списана ставка
+let rowMaps = [];         // массив рядов: для каждого ряда массив из "egg"/"skull" по колонкам
+let busy = false;
+
+// ===== render top =====
 function renderTop(){
   const user = tg?.initDataUnsafe?.user;
   subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
@@ -91,7 +104,7 @@ function renderTop(){
 }
 renderTop();
 
-// ===== Sound toggle =====
+// ===== sound toggle =====
 soundBtn.onclick = () => {
   soundOn = !soundOn;
   soundText.textContent = soundOn ? "Звук on" : "Звук off";
@@ -103,362 +116,267 @@ soundBtn.onclick = () => {
   beep(soundOn ? 640 : 240, 60, 0.03);
 };
 
-// ===== Bonus =====
+// ===== bonus =====
 bonusBtn.onclick = () => { addCoins(1000); beep(760, 70, 0.03); };
 
-// ===== Game config =====
-const ROWS = 8;
-const EASY_COLS = 4; // 3 egg / 1 skull
-const HARD_COLS = 4; // 1 egg / 3 skull
+// ===== mode =====
+function setMode(m){
+  if (inGame) return; // как в финале: во время раунда режим не меняем
+  mode = m;
+  modeNormal.classList.toggle("active", mode === "normal");
+  modeHard.classList.toggle("active", mode === "hard");
+  modeHint.textContent = THEME[mode].label;
+  buildScale();
+  beep(520, 50, 0.02);
+}
+modeNormal.onclick = () => setMode("normal");
+modeHard.onclick = () => setMode("hard");
 
-// Финальные множители (лестница X)
-const X_EASY = [1.00, 1.18, 1.42, 1.72, 2.10, 2.60, 3.30, 4.20, 5.50];
-const X_HARD = [1.00, 1.55, 2.40, 3.20, 4.20, 5.50, 7.20, 9.40, 12.20];
-
-let mode = "easy"; // easy|hard
-let inRound = false;
-let betLocked = 0;
-let currentRow = 0;     // 0..ROWS-1
-let currentX = 1.00;
-let revealed = new Set(); // "r-c"
-let map = []; // per row array of "egg"/"skull" length cols
-
-function colsForMode(){ return (mode === "easy") ? EASY_COLS : HARD_COLS; }
-function ladderForMode(){ return (mode === "easy") ? X_EASY : X_HARD; }
-function modeText(){ return (mode === "easy") ? "Обычный: 3 яйца / 1 череп" : "Сложный: 1 яйцо / 3 черепа"; }
-function centerModeText(){ return (mode === "easy") ? "Сложность: обычный" : "Сложность: сложный"; }
-
-// ===== Bet helpers =====
+// ===== bet =====
 function clampBet(){
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
   if (v > wallet.coins) v = wallet.coins;
   betInput.value = String(v);
-  return v;
+  bet = v;
+  updatePotential();
 }
-betInput.addEventListener("input", () => {
-  if (inRound) { betInput.value = String(betLocked); return; }
-  clampBet();
-});
-betMinus.onclick = () => {
-  if (inRound) return;
-  betInput.value = String((Number(betInput.value)||1) - 10);
-  clampBet();
-  sfx.click();
-};
-betPlus.onclick = () => {
-  if (inRound) return;
-  betInput.value = String((Number(betInput.value)||1) + 10);
-  clampBet();
-  sfx.click();
-};
+betInput.addEventListener("input", clampBet);
+betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); };
+betPlus.onclick  = () => { betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); };
 document.querySelectorAll(".chip").forEach((b) => {
   b.onclick = () => {
-    if (inRound) return;
     const val = b.dataset.bet;
     betInput.value = (val === "max") ? String(wallet.coins) : String(val);
     clampBet();
-    sfx.click();
+    beep(540, 55, 0.02);
   };
 });
+clampBet();
 
-// ===== Mode buttons =====
-function setMode(m){
-  if (inRound) return;
-  mode = m;
-  modeEasy.classList.toggle("active", mode === "easy");
-  modeHard.classList.toggle("active", mode === "hard");
-  modeHint.textContent = modeText();
-  centerHint.textContent = centerModeText();
-  renderXScale();
-  buildTower(); // refresh layout
-  sfx.click();
-}
-modeEasy.onclick = () => setMode("easy");
-modeHard.onclick = () => setMode("hard");
-
-// ===== Build tower + x scale =====
-function buildTower(){
-  const cols = colsForMode();
-
-  towerEl.innerHTML = "";
-  towerEl.style.gridTemplateRows = `repeat(${ROWS}, 1fr)`;
-
-  // rows from top to bottom visually: we want active row highlighted at bottom (row 0)
-  for (let r = ROWS - 1; r >= 0; r--){
+// ===== scale (X ladder) =====
+function buildScale(){
+  scaleEl.innerHTML = "";
+  const arr = X_LADDER[mode];
+  // сверху самый высокий ряд
+  for (let i = ROWS - 1; i >= 0; i--){
+    const rowNum = i + 1;
+    const x = arr[i] ?? 1.0;
     const row = document.createElement("div");
-    row.className = "row";
-    row.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    row.className = "scaleRow";
+    row.dataset.row = String(i);
+    row.innerHTML = `
+      <div class="left">Ряд ${rowNum}</div>
+      <div class="right">x${x.toFixed(2)}</div>
+    `;
+    scaleEl.appendChild(row);
+  }
+  highlightScale();
+}
+function highlightScale(){
+  const activeIdx = currentRow; // текущий ряд (0 снизу)
+  [...scaleEl.querySelectorAll(".scaleRow")].forEach((r) => {
+    const idx = Number(r.dataset.row);
+    r.classList.toggle("active", inGame && idx === activeIdx);
+  });
+}
+buildScale();
 
+// ===== tower build =====
+function buildTower(){
+  towerEl.innerHTML = "";
+
+  // кол-во колонок берём “логически” 4 (как было), а на мобиле CSS сожмёт сетку в 3
+  // чтобы на мобиле не ломалось, просто строим 4 колонки, CSS сделает 3 в ряд визуально.
+  const cols = COLS_DESKTOP;
+
+  // строим сверху вниз, чтобы визуально башня была как в примере
+  for (let r = ROWS - 1; r >= 0; r--){
     for (let c = 0; c < cols; c++){
-      const cell = document.createElement("div");
-      cell.className = "cell";
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "tile";
+      tile.dataset.r = String(r);
+      tile.dataset.c = String(c);
 
-      const front = document.createElement("div");
-      front.className = "face3d front3d";
+      tile.innerHTML = `
+        <div class="tileInner">
+          <div class="tileFace faceFront"></div>
+          <div class="tileFace faceBack"><div class="icon"></div></div>
+        </div>
+      `;
 
-      const back = document.createElement("div");
-      back.className = "face3d back3d";
-
-      cell.appendChild(front);
-      cell.appendChild(back);
-
-      const key = `${r}-${c}`;
-      cell.dataset.r = String(r);
-      cell.dataset.c = String(c);
-
-      cell.onclick = () => onPick(r, c, cell);
-
-      row.appendChild(cell);
+      tile.onclick = () => onPickTile(r, c, tile);
+      towerEl.appendChild(tile);
     }
-    towerEl.appendChild(row);
   }
 
-  refreshTowerState();
+  setInteractableRow();
 }
+buildTower();
 
-function renderXScale(){
-  const ladder = ladderForMode();
-  xScaleEl.innerHTML = "";
-
-  // show rows 1..ROWS with X (row 0 is x1.00)
-  for (let i = ROWS; i >= 1; i--){
-    const item = document.createElement("div");
-    item.className = "xItem";
-    item.dataset.row = String(i);
-
-    const left = document.createElement("div");
-    left.className = "r";
-    left.textContent = `Ряд ${i}`;
-
-    const right = document.createElement("div");
-    right.className = "x";
-    right.textContent = `x${ladder[i].toFixed(2)}`;
-
-    item.appendChild(left);
-    item.appendChild(right);
-    xScaleEl.appendChild(item);
-  }
-
-  refreshXActive();
-}
-
-function refreshXActive(){
-  const ladder = ladderForMode();
-  const nextRow = Math.min(ROWS, currentRow + 1); // row number for cashout after beating current row
-  const items = xScaleEl.querySelectorAll(".xItem");
-  items.forEach(el => {
-    const rowNum = Number(el.dataset.row);
-    el.classList.toggle("active", inRound && rowNum === nextRow);
+function setInteractableRow(){
+  const tiles = [...towerEl.querySelectorAll(".tile")];
+  tiles.forEach((t) => {
+    const r = Number(t.dataset.r);
+    const revealed = t.classList.contains("revealed");
+    // кликаем только текущий ряд, и только если не раскрыта
+    const ok = inGame && !busy && r === currentRow && !revealed;
+    t.disabled = !ok;
   });
-
-  // update header stats
-  xText.textContent = `x${currentX.toFixed(2)}`;
-  const pot = Math.floor(betLocked * currentX);
-  potText.textContent = `${inRound ? pot : 0} 🪙`;
+  highlightScale();
 }
 
-// highlight active row cells
-function refreshTowerState(){
-  const cols = colsForMode();
-  const cells = towerEl.querySelectorAll(".cell");
+function updateHUD(){
+  xView.textContent = `x${currentX.toFixed(2)}`;
+  updatePotential();
+}
+function updatePotential(){
+  const pot = inGame ? Math.floor(reservedBet * currentX) : 0;
+  potView.textContent = String(pot);
+}
+function setStatus(s){ statusView.textContent = s; }
 
-  cells.forEach(cell => {
-    const r = Number(cell.dataset.r);
-    const c = Number(cell.dataset.c);
-    const key = `${r}-${c}`;
+// ===== round generation =====
+function generateRowMaps(){
+  const cols = COLS_DESKTOP;
+  rowMaps = [];
+  const cfg = THEME[mode];
 
-    const isRevealed = revealed.has(key);
-    const isActiveRow = inRound && r === currentRow;
-    const isClickable = isActiveRow && !isRevealed;
-
-    cell.classList.toggle("activeRow", isActiveRow);
-    cell.classList.toggle("disabled", !isClickable);
-    if (isRevealed) cell.classList.add("revealed");
-  });
-
-  // adjust row label
-  if (!inRound){
-    statusText.textContent = "Ожидание";
-    currentX = 1.00;
-    xText.textContent = "x1.00";
-    potText.textContent = "0 🪙";
+  for (let r = 0; r < ROWS; r++){
+    const arr = new Array(cols).fill("egg");
+    // ставим черепа
+    for (let k = 0; k < cfg.skulls; k++){
+      let idx;
+      do { idx = randInt(cols); } while (arr[idx] === "skull");
+      arr[idx] = "skull";
+    }
+    rowMaps.push(arr);
   }
 }
 
-// ===== Round generation =====
-function genRow(){
-  const cols = colsForMode();
-  const arr = new Array(cols).fill("skull");
-
-  if (mode === "easy"){
-    // 3 eggs, 1 skull
-    const skullPos = pickIndex(cols);
-    for (let i=0;i<cols;i++) arr[i] = (i === skullPos) ? "skull" : "egg";
-  } else {
-    // 1 egg, 3 skull
-    const eggPos = pickIndex(cols);
-    for (let i=0;i<cols;i++) arr[i] = (i === eggPos) ? "egg" : "skull";
-  }
-  return arr;
-}
-
-function startRound(){
-  if (inRound) return;
-
-  const bet = clampBet();
+// ===== start / cashout =====
+startBtn.onclick = () => {
+  if (inGame) return;
   if (bet <= 0) return alert("Ставка должна быть больше 0");
   if (bet > wallet.coins) return alert("Недостаточно монет");
 
-  inRound = true;
-  betLocked = bet;
-  addCoins(-betLocked);
+  // списываем 1 раз
+  reservedBet = bet;
+  addCoins(-bet);
+
+  inGame = true;
+  busy = false;
+  currentRow = 0;
+  currentX = 1.0;
+
+  generateRowMaps();
+  buildTower();
+  buildScale();
+  setStatus("Игра началась");
+  updateHUD();
 
   startBtn.disabled = true;
-  cashoutBtn.disabled = true;
-  betInput.value = String(betLocked);
+  cashBtn.disabled = true;
 
-  currentRow = 0;
-  currentX = 1.00;
-  revealed = new Set();
-  map = [];
+  beep(520, 55, 0.02);
+};
 
-  for (let r=0; r<ROWS; r++) map.push(genRow());
-
-  statusText.textContent = "Игра";
-  sfx.start();
-
-  // rebuild visuals + active row highlight
-  buildTower();
-  renderXScale();
-  refreshXActive();
-}
-
-function endLose(){
-  inRound = false;
-  startBtn.disabled = false;
-  cashoutBtn.disabled = true;
-
-  statusText.textContent = "Проигрыш";
-  currentX = 1.00;
-
-  // раскрыть текущий ряд (для эффекта)
-  revealRow(currentRow);
-
-  refreshTowerState();
-  refreshXActive();
-  sfx.skull();
-}
-
-function revealRow(r){
-  const cols = colsForMode();
-  for (let c=0;c<cols;c++){
-    const key = `${r}-${c}`;
-    if (!revealed.has(key)){
-      revealed.add(key);
-      const cell = towerEl.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
-      if (cell) revealCellVisual(cell, map[r][c], false);
-    }
-  }
-}
-
-function canCashout(){
-  // доступен после победы ряда (т.е. currentRow > 0)
-  return inRound && currentRow > 0;
-}
-
-function doCashout(){
-  if (!canCashout()) return;
-
-  const payout = Math.floor(betLocked * currentX);
+cashBtn.onclick = () => {
+  if (!inGame) return;
+  // кэшаут доступен только после победы ряда — мы так и включаем кнопку
+  const payout = Math.floor(reservedBet * currentX);
   addCoins(payout);
+  endRound(`Кэшаут: +${payout} 🪙`, true);
+  beep(840, 70, 0.03);
+  beep(980, 70, 0.03);
+};
 
-  inRound = false;
+function endRound(msg, won){
+  inGame = false;
+  busy = false;
+
   startBtn.disabled = false;
-  cashoutBtn.disabled = true;
+  cashBtn.disabled = true;
 
-  statusText.textContent = `Кэшаут x${currentX.toFixed(2)}`;
-  sfx.cash();
-
-  refreshTowerState();
-  refreshXActive();
+  setStatus(msg);
+  updateHUD();
+  setInteractableRow();
 }
 
-// ===== Visual flip =====
-function revealCellVisual(cell, kind, animate=true){
-  if (cell.classList.contains("revealed")) return;
+// ===== reveal animation (egg/skull) =====
+function revealTile(tile, type){
+  tile.classList.add("revealed");
+  tile.classList.toggle("egg", type === "egg");
+  tile.classList.toggle("skull", type === "skull");
 
-  const back = cell.querySelector(".back3d");
-  back.innerHTML = "";
-  if (kind === "egg"){
-    const egg = document.createElement("div");
-    egg.className = "eggIcon";
-    back.appendChild(egg);
-  } else {
-    const skull = document.createElement("div");
-    skull.className = "skullIcon";
-    back.appendChild(skull);
-  }
-
-  cell.classList.add("revealed");
-  if (animate){
-    cell.classList.remove("flip");
-    void cell.offsetWidth; // restart
-    cell.classList.add("flip");
-  } else {
-    // instantly flip state
-    cell.style.transform = "rotateY(180deg)";
-  }
+  const icon = tile.querySelector(".icon");
+  icon.textContent = (type === "egg") ? "🥚" : "💀";
+  icon.classList.remove("pop");
+  // перезапуск поп-анимации
+  void icon.offsetWidth;
+  icon.classList.add("pop");
 }
 
-// ===== Pick handler =====
-function onPick(r, c, cell){
-  if (!inRound) return;
+// ===== pick tile =====
+async function onPickTile(r, c, tile){
+  if (!inGame || busy) return;
   if (r !== currentRow) return;
-  const key = `${r}-${c}`;
-  if (revealed.has(key)) return;
 
-  revealed.add(key);
+  busy = true;
+  setInteractableRow();
 
-  const kind = map[r][c];
-  revealCellVisual(cell, kind, true);
+  const result = rowMaps[r][c]; // "egg" | "skull"
 
-  if (kind === "skull"){
-    statusText.textContent = "Череп!";
-    endLose();
-    return;
+  // раскрываем выбранную клетку
+  revealTile(tile, result);
+
+  if (result === "egg"){
+    sfxEgg();
+
+    // победа ряда
+    const newX = X_LADDER[mode][currentRow] ?? (currentX + 0.2);
+    currentX = newX;
+
+    updateHUD();
+    setStatus(`Ряд ${currentRow + 1} пройден`);
+    cashBtn.disabled = false;
+
+    // переходим выше
+    currentRow++;
+    if (currentRow >= ROWS){
+      // прошёл всё — автокэшаут
+      const payout = Math.floor(reservedBet * currentX);
+      addCoins(payout);
+      endRound(`Башня пройдена! +${payout} 🪙`, true);
+      return;
+    }
+
+    // небольшой тайминг, чтобы анимация успела сыграть
+    setTimeout(() => {
+      busy = false;
+      setInteractableRow();
+    }, 120);
+
+  } else {
+    // skull: раскрыть весь текущий ряд (чтобы было видно, как на примере)
+    sfxSkull();
+
+    // подсветим/раскроем оставшиеся клетки ряда
+    const tiles = [...towerEl.querySelectorAll(".tile")].filter(t => Number(t.dataset.r) === r);
+    tiles.forEach((t) => {
+      if (t === tile) return;
+      if (t.classList.contains("revealed")) return;
+      const cc = Number(t.dataset.c);
+      const tRes = rowMaps[r][cc];
+      revealTile(t, tRes);
+    });
+
+    endRound("Череп! Ставка сгорела.", false);
   }
-
-  // egg = win row
-  statusText.textContent = "Яйцо!";
-  sfx.egg();
-
-  // move up
-  currentRow += 1;
-
-  // update X from ladder
-  const ladder = ladderForMode();
-  currentX = ladder[currentRow] ?? ladder[ladder.length-1];
-
-  cashoutBtn.disabled = !canCashout();
-
-  // auto-win if passed all rows
-  if (currentRow >= ROWS){
-    // final cashout automatically
-    doCashout();
-    return;
-  }
-
-  refreshTowerState();
-  refreshXActive();
 }
 
-// ===== Buttons =====
-startBtn.onclick = startRound;
-cashoutBtn.onclick = doCashout;
-
-// init
-setMode("easy");
-clampBet();
-buildTower();
-renderXScale();
+// ===== initial =====
+setStatus("Ожидание");
+updateHUD();
+setInteractableRow();
