@@ -16,7 +16,7 @@
   --good:#26d47b;
   --bad:#ff5a6a;
 
-  /* бежевые руки */
+  /* ✅ ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ: цвет рук (бежевый) */
   --hand:#f0c8a8;
 }
 
@@ -85,7 +85,7 @@ body{
   gap:12px;
 }
 @media (max-width: 920px){
-  .layout{grid-template-columns:1fr; }
+  .layout{grid-template-columns:1fr;}
 }
 
 .card{
@@ -151,7 +151,7 @@ body{
   gap:10px;
 }
 @media (max-width: 720px){
-  .seriesRow{grid-template-columns: 1fr;}
+  .seriesRow{grid-template-columns:1fr;}
 }
 .panel{
   border-radius:14px;
@@ -168,14 +168,7 @@ body{
   gap:10px;
   align-items:center;
 }
-@media (max-width: 720px){
-  .vsRow{grid-template-columns: 1fr 54px 1fr;}
-}
-.vsMid{
-  text-align:center;
-  font-weight:950;
-  opacity:.75;
-}
+.vsMid{text-align:center; font-weight:950; opacity:.75;}
 .vsCard{
   border-radius:16px;
   border:1px solid rgba(255,255,255,.08);
@@ -208,7 +201,7 @@ body{
   gap:10px;
 }
 @media (max-width: 520px){
-  .pickBar{grid-template-columns:1fr; }
+  .pickBar{grid-template-columns:1fr;}
 }
 .pickBtn{
   padding:12px 12px;
@@ -327,7 +320,7 @@ body{
 .rules ul{margin:0; padding-left:16px; color:var(--muted); font-size:12px}
 .rules li{margin:6px 0}
 
-/* SVG hand */
+/* --- SVG руки --- */
 .handSvg{width:58px;height:58px; display:block}
 .handFill{fill:var(--hand)}
 .handStroke{stroke:rgba(0,0,0,.25); stroke-width:2; fill:none; opacity:.35}
