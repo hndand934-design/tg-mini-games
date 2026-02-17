@@ -1,10 +1,10 @@
-// ===== RPS (бот, финальная логика: ставка списывается 1 раз на старт серии) =====
+// RPS FINAL (как на скрине): ladder, bet списывается 1 раз на старт серии,
+// Play + Cashout, авто-cashout на последнем шаге, звук toggle, localStorage.
 
-// --- Telegram WebApp ---
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
-// --- Wallet ---
+// ===== Wallet =====
 const WALLET_KEY = "mini_wallet_rps_v1";
 function loadWallet(){
   try{
@@ -22,7 +22,14 @@ function setCoins(v){
 }
 function addCoins(d){ setCoins(wallet.coins + d); }
 
-// --- Sound ---
+// ===== RNG =====
+function randInt(n){
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % n;
+}
+
+// ===== Sound =====
 let soundOn = true;
 function beep(freq=520, ms=55, vol=0.03){
   if(!soundOn) return;
@@ -40,14 +47,7 @@ function beep(freq=520, ms=55, vol=0.03){
   }catch{}
 }
 
-// --- RNG ---
-function randInt(n){
-  const a = new Uint32Array(1);
-  crypto.getRandomValues(a);
-  return a[0] % n;
-}
-
-// --- Elements ---
+// ===== UI refs =====
 const balanceEl = document.getElementById("balance");
 const soundBtn = document.getElementById("soundBtn");
 const soundText = document.getElementById("soundText");
@@ -65,12 +65,16 @@ const pickRock = document.getElementById("pickRock");
 const pickScissors = document.getElementById("pickScissors");
 const pickPaper = document.getElementById("pickPaper");
 
+const btnRockIcon = document.getElementById("btnRockIcon");
+const btnScissorsIcon = document.getElementById("btnScissorsIcon");
+const btnPaperIcon = document.getElementById("btnPaperIcon");
+
 const ladderEl = document.getElementById("ladder");
 
-const bStatus = document.getElementById("bStatus");
-const bYou = document.getElementById("bYou");
-const bBot = document.getElementById("bBot");
-const bResult = document.getElementById("bResult");
+const statusPill = document.getElementById("statusPill");
+const youPickPill = document.getElementById("youPickPill");
+const botPickPill = document.getElementById("botPickPill");
+const resultPill = document.getElementById("resultPill");
 
 const streakText = document.getElementById("streakText");
 const xText = document.getElementById("xText");
@@ -79,18 +83,18 @@ const potentialText = document.getElementById("potentialText");
 const youIcon = document.getElementById("youIcon");
 const botIcon = document.getElementById("botIcon");
 
-// --- Ladder ---
+// ===== Ladder =====
 const LADDER = [1.00, 1.20, 1.50, 2.00, 3.00, 5.00, 10.00];
 const MAX_STEP = LADDER.length - 1;
 
-// --- State ---
-let chosen = "rock";
+// ===== State =====
+let chosen = "rock";     // rock|scissors|paper
 let inSeries = false;
 let seriesBet = 0;
 let step = 0;
 let busy = false;
 
-// --- SVG руки (теперь бежевые через CSS переменную --hand) ---
+// ===== Beige hands SVG (только визуал, логика не тронута) =====
 function svgRock(){
   return `
   <svg class="handSvg" viewBox="0 0 64 64" aria-hidden="true">
@@ -125,12 +129,10 @@ function labelFor(choice){
   return "Ножницы";
 }
 
-// --- Render ---
+// ===== Render =====
 function renderTop(){
   balanceEl.textContent = `${wallet.coins} ₽`;
 }
-renderTop();
-
 function renderLadder(){
   ladderEl.innerHTML = "";
   LADDER.forEach((x, i)=>{
@@ -148,12 +150,18 @@ function renderStats(){
   winLine.textContent = inSeries ? `${pot} ₽` : "0 ₽";
   cashBtn.disabled = !(inSeries && step >= 1 && !busy);
 }
-function setBadges(status, you, bot, res){
-  bStatus.textContent = status;
-  bYou.textContent = you;
-  bBot.textContent = bot;
-  bResult.textContent = res;
+function setPills(status, you, bot, res){
+  statusPill.textContent = status;
+  youPickPill.textContent = you;
+  botPickPill.textContent = bot;
+  resultPill.textContent = res;
 }
+
+// ===== Init =====
+renderTop();
+btnRockIcon.innerHTML = svgRock();
+btnScissorsIcon.innerHTML = svgScissors();
+btnPaperIcon.innerHTML = svgPaper();
 
 function setPick(choice){
   chosen = choice;
@@ -161,12 +169,30 @@ function setPick(choice){
   pickScissors.classList.toggle("active", choice==="scissors");
   pickPaper.classList.toggle("active", choice==="paper");
   youIcon.innerHTML = iconFor(choice);
-  bYou.textContent = labelFor(choice);
+  youPickPill.textContent = labelFor(choice);
   beep(520, 45, 0.02);
 }
-setPick("rock");
 
-// --- Bet ---
+setPick("rock");
+botIcon.innerHTML = "—";
+setPills("Ожидание", labelFor(chosen), "—", "—");
+renderLadder();
+renderStats();
+
+// ===== Sound / Bonus =====
+soundBtn.onclick = () => {
+  soundOn = !soundOn;
+  soundText.textContent = soundOn ? "Звук on" : "Звук off";
+  const dot = soundBtn.querySelector(".dot");
+  dot.style.background = soundOn ? "#26d47b" : "#ff5a6a";
+  dot.style.boxShadow = soundOn
+    ? "0 0 0 3px rgba(38,212,123,.14)"
+    : "0 0 0 3px rgba(255,90,106,.14)";
+  beep(soundOn ? 640 : 240, 60, 0.03);
+};
+bonusBtn.onclick = () => { addCoins(1000); beep(760, 70, 0.03); };
+
+// ===== Bet =====
 function clampBet(){
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
@@ -194,25 +220,12 @@ document.querySelectorAll(".chip").forEach(btn=>{
 });
 clampBet();
 
-// --- Sound/bonus ---
-soundBtn.onclick = () => {
-  soundOn = !soundOn;
-  soundText.textContent = soundOn ? "Звук on" : "Звук off";
-  const dot = soundBtn.querySelector(".dot");
-  dot.style.background = soundOn ? "#26d47b" : "#ff5a6a";
-  dot.style.boxShadow = soundOn
-    ? "0 0 0 3px rgba(38,212,123,.14)"
-    : "0 0 0 3px rgba(255,90,106,.14)";
-  beep(soundOn ? 640 : 240, 60, 0.03);
-};
-bonusBtn.onclick = () => { addCoins(1000); beep(760, 70, 0.03); };
-
-// --- Picks ---
+// ===== Picks =====
 pickRock.onclick = () => setPick("rock");
 pickScissors.onclick = () => setPick("scissors");
 pickPaper.onclick = () => setPick("paper");
 
-// --- Game ---
+// ===== Game logic (как было) =====
 function botChoice(){
   const r = randInt(3);
   return r===0 ? "rock" : (r===1 ? "scissors" : "paper");
@@ -227,14 +240,6 @@ function outcome(me, bot){
   return "lose";
 }
 
-function resetUI(){
-  botIcon.innerHTML = "🤖";
-  setBadges(inSeries ? "Серия" : "Ожидание", labelFor(chosen), "—", inSeries ? "Серия растёт" : "—");
-  renderLadder();
-  renderStats();
-}
-resetUI();
-
 function endSeriesLost(){
   inSeries = false;
   seriesBet = 0;
@@ -248,15 +253,19 @@ function cashout(){
   if(!inSeries || step < 1 || busy) return;
   const payout = Math.floor(seriesBet * LADDER[step]);
   addCoins(payout);
+
   inSeries = false;
   seriesBet = 0;
   step = 0;
+
   renderLadder();
   renderStats();
   clampBet();
-  setBadges("Кэшаут", labelFor(chosen), "—", "Забрал");
+
+  setPills("Кэшаут", labelFor(chosen), "—", "Забрал");
   winLine.textContent = `${payout} ₽`;
-  beep(760, 65, 0.03); beep(920, 65, 0.03);
+  beep(760, 65, 0.03);
+  beep(920, 65, 0.03);
 }
 cashBtn.onclick = cashout;
 
@@ -269,6 +278,7 @@ playBtn.onclick = async () => {
     if(bet <= 0) return alert("Ставка должна быть больше 0");
     if(bet > wallet.coins) return alert("Недостаточно средств");
 
+    // ставка списывается ОДИН РАЗ
     addCoins(-bet);
     inSeries = true;
     seriesBet = bet;
@@ -279,18 +289,21 @@ playBtn.onclick = async () => {
   playBtn.disabled = true;
   cashBtn.disabled = true;
 
+  setPills("Серия", labelFor(chosen), "—", "Серия растёт");
+
   const bot = botChoice();
   const res = outcome(chosen, bot);
 
   botIcon.innerHTML = iconFor(bot);
-  bBot.textContent = labelFor(bot);
+  botPickPill.textContent = labelFor(bot);
 
   if(res === "draw"){
-    setBadges("Ничья", labelFor(chosen), labelFor(bot), "Серия без изменений");
+    setPills("Ничья", labelFor(chosen), labelFor(bot), "Серия без изменений");
     beep(520, 50, 0.02);
   } else if(res === "win"){
     step = Math.min(MAX_STEP, step + 1);
-    setBadges("Победа", labelFor(chosen), labelFor(bot), step===MAX_STEP ? "Авто-кэшаут" : "Серия растёт");
+
+    setPills("Победа", labelFor(chosen), labelFor(bot), step===MAX_STEP ? "Авто-cashout" : "Серия растёт");
     beep(760, 55, 0.03);
 
     renderLadder();
@@ -304,7 +317,7 @@ playBtn.onclick = async () => {
       return;
     }
   } else {
-    setBadges("Поражение", labelFor(chosen), labelFor(bot), "Серия в ноль");
+    setPills("Поражение", labelFor(chosen), labelFor(bot), "Серия в ноль");
     beep(220, 85, 0.03);
     endSeriesLost();
   }
@@ -315,6 +328,3 @@ playBtn.onclick = async () => {
   busy = false;
   playBtn.disabled = false;
 };
-
-renderLadder();
-renderStats();
