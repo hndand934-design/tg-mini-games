@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Mini Games — Wheel</title>
+  <title>Mini Games — Dragon Tower</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
   <div class="app">
     <header class="topbar">
       <div class="topbar__left">
-        <div class="title">Wheel</div>
+        <div class="title">Dragon Tower</div>
         <div id="subTitle" class="subtitle">Открыто вне Telegram</div>
       </div>
 
@@ -21,70 +21,32 @@
           <span class="dot"></span>
           <span id="soundText">Звук on</span>
         </button>
-
         <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
-
         <div class="pill pill--balance">🪙 <b id="balance">1000</b></div>
       </div>
     </header>
 
     <main class="layout">
       <!-- LEFT -->
-      <section class="card card--left">
-        <div class="cardHead">
-          <div class="h1">Wheel</div>
-          <div class="hint">Выбери множитель снизу и нажми «Крутить». Выигрыш только при попадании.</div>
-        </div>
-
-        <div class="wheelWrap">
-          <div class="wheelPanel">
-            <div class="pointer" aria-hidden="true"></div>
-            <canvas id="wheel" width="620" height="620"></canvas>
-            <div class="wheelCenter">
-              <div class="centerText">Выбери множитель</div>
-              <div class="centerSub">и нажми «Крутить»</div>
-            </div>
+      <aside class="panel panel--left">
+        <div class="seg">
+          <div class="segTitle">Режим</div>
+          <div class="modeRow">
+            <button id="modeEasy" class="modeBtn active" type="button">Обычный</button>
+            <button id="modeHard" class="modeBtn" type="button">Сложный</button>
           </div>
+          <div class="segHint" id="modeHint">Обычный: 3 яйца / 1 череп</div>
         </div>
 
-        <div class="choiceRow" role="group" aria-label="Выбор множителя">
-          <button class="pick" data-pick="1.5" type="button"><span class="bar bar--green"></span>1.50x</button>
-          <button class="pick" data-pick="1.7" type="button"><span class="bar bar--white"></span>1.70x</button>
-          <button class="pick" data-pick="2.0" type="button"><span class="bar bar--yellow"></span>2.00x</button>
-          <button class="pick" data-pick="3.0" type="button"><span class="bar bar--purple"></span>3.00x</button>
-          <button class="pick" data-pick="4.0" type="button"><span class="bar bar--orange"></span>4.00x</button>
-        </div>
+        <div class="seg">
+          <div class="segTitle">Ставка</div>
 
-        <button id="spinBtn" class="btnPrimary" type="button" disabled>Крутить</button>
-
-        <div class="statusRow">
-          <div class="statusBox">
-            <div class="label">Статус</div>
-            <div class="value" id="statusView">Ожидание</div>
+          <div class="betRow">
+            <button id="betMinus" class="btnSmall" type="button">−</button>
+            <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
+            <button id="betPlus" class="btnSmall" type="button">+</button>
           </div>
-          <div class="statusBox">
-            <div class="label">Твой выбор</div>
-            <div class="value" id="pickView">—</div>
-          </div>
-          <div class="statusBox">
-            <div class="label">Результат</div>
-            <div class="value" id="resultView">—</div>
-          </div>
-        </div>
 
-        <div class="footNote">
-          Правило: если выпало на твой множитель — выигрываешь ×множитель, иначе ставка сгорает.
-        </div>
-      </section>
-
-      <!-- RIGHT -->
-      <aside class="card card--right">
-        <div class="cardHead">
-          <div class="h1">Ставка</div>
-          <div class="hint">Монеты виртуальные, без вывода.</div>
-        </div>
-
-        <div class="betBox">
           <div class="chips" role="group" aria-label="chips">
             <button class="chip" data-bet="10" type="button">10</button>
             <button class="chip" data-bet="50" type="button">50</button>
@@ -94,15 +56,72 @@
             <button class="chip" data-bet="max" type="button">MAX</button>
           </div>
 
-          <div class="betRow">
-            <button id="betMinus" class="btnSmall" type="button">−</button>
-            <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
-            <button id="betPlus" class="btnSmall" type="button">+</button>
+          <div class="btnRow">
+            <button id="startBtn" class="btnPrimary" type="button">Ставка</button>
+            <button id="cashoutBtn" class="btnDanger" type="button" disabled>Кэшаут</button>
           </div>
 
-          <div class="mutedLine">
-            Баланс: <b>🪙 <span id="balance2">1000</span></b>
+          <div class="rules">
+            <div class="rulesTitle">Правила</div>
+            <ul>
+              <li>Ставка списывается 1 раз при старте игры.</li>
+              <li>Выбирай плитку в текущем ряду. Яйцо — идёшь выше, череп — проигрыш.</li>
+              <li>Кэшаут доступен после победы ряда: ставка × X.</li>
+            </ul>
           </div>
+        </div>
+
+        <div class="seg">
+          <div class="segTitle">Статус</div>
+          <div class="statusGrid">
+            <div class="miniStat">
+              <div class="lbl">Статус</div>
+              <div class="val" id="statusText">Ожидание</div>
+            </div>
+            <div class="miniStat">
+              <div class="lbl">Текущий X</div>
+              <div class="val" id="xText">x1.00</div>
+            </div>
+            <div class="miniStat">
+              <div class="lbl">Потенциал</div>
+              <div class="val" id="potText">0 🪙</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER -->
+      <section class="panel panel--center">
+        <div class="panelHead">
+          <div class="panelTitle">Башня</div>
+          <div class="panelSub" id="centerHint">Сложность: обычный</div>
+        </div>
+
+        <div class="towerWrap">
+          <div id="tower" class="tower" aria-label="tower grid"></div>
+          <div class="towerFoot">
+            <div class="legend">
+              <span class="dotLegend egg"></span> яйцо
+              <span class="dotLegend skull"></span> череп
+            </div>
+            <div class="rngTag">Локально • RNG</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT (X SCALE ONLY) -->
+      <aside class="panel panel--right">
+        <div class="panelHead">
+          <div class="panelTitle">Шкала X</div>
+          <div class="panelSub">прокрутка</div>
+        </div>
+
+        <div class="xScale">
+          <div id="xScale" class="xList" aria-label="x scale"></div>
+        </div>
+
+        <div class="note">
+          Прошёл ряд — X растёт. Череп — ставка сгорает.
         </div>
       </aside>
     </main>
