@@ -1,46 +1,44 @@
-// ===== RNG =====
+// ===== RNG (честный) =====
 function randFloat() {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
   return a[0] / 2 ** 32;
 }
-function randInt(max) { return Math.floor(randFloat() * max); }
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = randInt(i + 1);
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
+function randChoice(arr){
+  return arr[Math.floor(randFloat() * arr.length)];
 }
 
-// ===== Telegram =====
+// ===== Telegram WebApp =====
 const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
 
 // ===== Wallet =====
-const WALLET_KEY = "mini_wallet_dragontower_v1";
-function loadWallet() {
-  try {
+const WALLET_KEY = "mini_wallet_rps_v1";
+function loadWallet(){
+  try{
     const w = JSON.parse(localStorage.getItem(WALLET_KEY) || "null");
     if (w && typeof w.coins === "number") return w;
-  } catch {}
+  }catch{}
   return { coins: 1000 };
 }
-function saveWallet(w) { localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
+function saveWallet(w){ localStorage.setItem(WALLET_KEY, JSON.stringify(w)); }
 let wallet = loadWallet();
 
-function setCoins(v) {
+function setCoins(v){
   wallet.coins = Math.max(0, Math.floor(v));
   saveWallet(wallet);
-  renderTop();
+  balanceEl.textContent = `${wallet.coins} ₽`;
 }
-function addCoins(d) { setCoins(wallet.coins + d); }
+function addCoins(d){ setCoins(wallet.coins + d); }
 
-// ===== Sound =====
+// ===== Sound (тихо) =====
 let soundOn = true;
-function beep(freq = 520, ms = 60, vol = 0.03, type = "sine") {
+function beep(freq=520, ms=55, vol=0.03, type="sine"){
   if (!soundOn) return;
-  try {
+  try{
     const AC = window.AudioContext || window.webkitAudioContext;
     const ctx = new AC();
     const o = ctx.createOscillator();
@@ -48,362 +46,199 @@ function beep(freq = 520, ms = 60, vol = 0.03, type = "sine") {
     o.type = type;
     o.frequency.value = freq;
     g.gain.value = vol;
-    o.connect(g); g.connect(ctx.destination);
+    o.connect(g);
+    g.connect(ctx.destination);
     o.start();
-    setTimeout(() => { o.stop(); ctx.close(); }, ms);
-  } catch {}
+    setTimeout(()=>{ o.stop(); ctx.close(); }, ms);
+  }catch{}
 }
-function sPick(){ beep(540, 55, 0.025); }
-function sRowWin(){ beep(720, 70, 0.03); beep(920, 60, 0.028); }
-function sLose(){ beep(240, 120, 0.03, "square"); }
-function sCash(){ beep(760, 70, 0.03); beep(980, 70, 0.03); }
+function sWin(){ beep(760,70,0.03); setTimeout(()=>beep(920,70,0.03), 75); }
+function sLose(){ beep(220,110,0.03, "sine"); }
+function sClick(){ beep(520,45,0.02); }
 
 // ===== UI =====
-const subTitle = document.getElementById("subTitle");
 const balanceEl = document.getElementById("balance");
+
 const soundBtn = document.getElementById("soundBtn");
 const soundText = document.getElementById("soundText");
 const bonusBtn = document.getElementById("bonusBtn");
 
-const modeNormalBtn = document.getElementById("modeNormal");
-const modeHardBtn = document.getElementById("modeHard");
-const modeHint = document.getElementById("modeHint");
-const difficultyTag = document.getElementById("difficultyTag");
+const bStatus = document.getElementById("bStatus");
+const bYou = document.getElementById("bYou");
+const bBot = document.getElementById("bBot");
+const bResult = document.getElementById("bResult");
+
+const ladderEl = document.getElementById("ladder");
+const streakText = document.getElementById("streakText");
+const xText = document.getElementById("xText");
+const potentialText = document.getElementById("potentialText");
+
+const botIcon = document.getElementById("botIcon");
+const youIcon = document.getElementById("youIcon");
+
+const pickRock = document.getElementById("pickRock");
+const pickScissors = document.getElementById("pickScissors");
+const pickPaper = document.getElementById("pickPaper");
 
 const betInput = document.getElementById("betInput");
 const betMinus = document.getElementById("betMinus");
 const betPlus = document.getElementById("betPlus");
 
-const startBtn = document.getElementById("startBtn");
-const cashoutBtn = document.getElementById("cashoutBtn");
+const playBtn = document.getElementById("playBtn");
+const cashBtn = document.getElementById("cashBtn");
+const winLine = document.getElementById("winLine");
 
-const statusText = document.getElementById("statusText");
-const xText = document.getElementById("xText");
-const potentialText = document.getElementById("potentialText");
-
-const towerGridEl = document.getElementById("towerGrid");
-const ladderEl = document.getElementById("ladder");
-
-// ===== Config =====
-const ROWS = 8;
-const COLS = 4;
-const LADDER = {
-  normal: [1.18, 1.42, 1.72, 2.10, 2.60, 3.30, 4.20, 5.50],
-  hard:   [1.35, 1.75, 2.35, 3.20, 4.20, 5.50, 7.20, 9.40],
-};
-function fmtX(x){ return `x${Number(x).toFixed(2)}`; }
+// ===== Game config =====
+const STEPS = [
+  { name:"Старт", x:1.00 },
+  { name:"Шаг 1", x:1.20 },
+  { name:"Шаг 2", x:1.50 },
+  { name:"Шаг 3", x:2.00 },
+  { name:"Шаг 4", x:3.00 },
+  { name:"Шаг 5", x:5.00 },
+  { name:"Шаг 6", x:10.00 },
+];
 
 // ===== State =====
-let mode = "normal";
-let inRound = false;
+let picked = "rock";                 // rock|scissors|paper
+let seriesActive = false;            // ставка уже списана, серия идёт
+let lockedBet = 0;                   // ставка серии
+let stepIndex = 0;                   // 0..6 (текущий уровень)
 let busy = false;
-let lost = false;
 
-let bet = 100;
-let currentRow = 0;
-let cleared = 0;
-let board = [];
-let revealed = [];
-
-// ===== Top render =====
-function renderTop(){
-  const user = tg?.initDataUnsafe?.user;
-  subTitle.textContent = user ? `Привет, ${user.first_name}` : `Открыто вне Telegram`;
-  balanceEl.textContent = String(wallet.coins);
+function choiceLabel(c){
+  if (c === "rock") return "Камень";
+  if (c === "scissors") return "Ножницы";
+  return "Бумага";
 }
-renderTop();
+function choiceIcon(c){
+  if (c === "rock") return "✊";
+  if (c === "scissors") return "✌️";
+  return "🖐️";
+}
+function setPick(v){
+  if (busy) return;
+  picked = v;
+  pickRock.classList.toggle("active", v==="rock");
+  pickScissors.classList.toggle("active", v==="scissors");
+  pickPaper.classList.toggle("active", v==="paper");
 
-// ===== Helpers =====
+  bYou.textContent = choiceLabel(v);
+  youIcon.textContent = choiceIcon(v);
+  sClick();
+}
+
+function renderLadder(){
+  ladderEl.innerHTML = "";
+  STEPS.forEach((s, i) => {
+    const d = document.createElement("div");
+    d.className = "step" + (i === stepIndex ? " active" : "");
+    d.innerHTML = `<div class="sTitle">${s.name}</div><div class="sX">x${s.x.toFixed(2)}</div>`;
+    ladderEl.appendChild(d);
+  });
+}
+
+function canChangeBet(){
+  return !seriesActive && !busy;
+}
+
 function clampBet(){
   let v = Math.floor(Number(betInput.value) || 0);
   if (v < 1) v = 1;
   if (v > wallet.coins) v = wallet.coins;
   betInput.value = String(v);
-  bet = v;
 }
-
-function currentX(){
-  if (!inRound || cleared === 0) return 1.00;
-  return LADDER[mode][cleared - 1];
-}
-
-function renderPotential(){
-  const pot = inRound ? Math.floor(bet * currentX()) : 0;
-  potentialText.textContent = `${pot} 🪙`;
-}
-
-function setXText(){
-  xText.textContent = fmtX(currentX());
-}
-
-function canCashout(){
-  return inRound && !lost && cleared > 0 && !busy;
-}
-
-function updateButtons(){
-  // FIX: Start должен быть доступен, когда раунд завершён (inRound=false)
-  startBtn.disabled = busy || inRound;
-  cashoutBtn.disabled = !canCashout();
-}
-
-// ===== Ladder =====
-function renderLadder(){
-  ladderEl.innerHTML = "";
-  for (let i = ROWS - 1; i >= 0; i--){
-    const rowNum = i + 1;
-    const x = LADDER[mode][i];
-    const item = document.createElement("div");
-    item.className = "ladderItem";
-    item.innerHTML = `
-      <div class="rowName">Ряд ${rowNum}</div>
-      <div class="xVal">${fmtX(x)}</div>
-    `;
-    ladderEl.appendChild(item);
-  }
-  updateLadderActive();
-}
-
-function updateLadderActive(){
-  const items = Array.from(ladderEl.querySelectorAll(".ladderItem"));
-  items.forEach((el) => el.classList.remove("active"));
-  if (!inRound) return;
-  const idx = (ROWS - 1 - currentRow);
-  if (items[idx]) items[idx].classList.add("active");
-}
-
-// ===== Tower UI =====
-function buildEmptyTower(){
-  towerGridEl.innerHTML = "";
-  for (let uiRow = ROWS - 1; uiRow >= 0; uiRow--){
-    const rowEl = document.createElement("div");
-    rowEl.className = "row";
-    rowEl.dataset.row = String(uiRow);
-
-    for (let c = 0; c < COLS; c++){
-      const cell = document.createElement("div");
-      cell.className = "cell disabled";
-      cell.dataset.row = String(uiRow);
-      cell.dataset.col = String(c);
-      cell.innerHTML = `
-        <div class="cellInner">
-          <div class="face face--front"></div>
-          <div class="face face--back">
-            <div class="icon"><span>?</span></div>
-          </div>
-        </div>
-      `;
-      rowEl.appendChild(cell);
-    }
-    towerGridEl.appendChild(rowEl);
-  }
-}
-
-function setCellBack(cell, type){
-  const back = cell.querySelector(".face--back .icon");
-  if (!back) return;
-  back.classList.remove("egg","skull");
-  back.classList.add(type);
-
-  const span = back.querySelector("span");
-  span.textContent = type === "egg" ? "🥚" : "💀";
-}
-
-function applyRowInteractivity(){
-  const cells = Array.from(towerGridEl.querySelectorAll(".cell"));
-  cells.forEach((cell) => {
-    const r = Number(cell.dataset.row);
-    const c = Number(cell.dataset.col);
-    const isRevealed = revealed?.[r]?.[c] === true;
-    cell.classList.toggle("revealed", isRevealed);
-
-    const clickable = inRound && !busy && !lost && r === currentRow && !isRevealed;
-    cell.classList.toggle("disabled", !clickable);
-    cell.style.pointerEvents = clickable ? "auto" : "none";
-  });
-}
-
-function revealRow(r){
-  const rowCells = Array.from(towerGridEl.querySelectorAll(`.cell[data-row="${r}"]`));
-  rowCells.forEach((cell) => {
-    const c = Number(cell.dataset.col);
-    const t = board[r][c];
-    setCellBack(cell, t);
-    cell.classList.add("revealed");
-  });
-}
-
-function markPicked(cell, type){
-  cell.classList.add(type === "egg" ? "hitSafe" : "hitSkull");
-}
-
-// ===== Board generation =====
-function newBoard(){
-  board = Array.from({ length: ROWS }, () => Array(COLS).fill("egg"));
-  revealed = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
-  lost = false;
-
-  const skulls = (mode === "normal") ? 1 : 3;
-  for (let r = 0; r < ROWS; r++){
-    const arr = [];
-    for (let i = 0; i < skulls; i++) arr.push("skull");
-    while (arr.length < COLS) arr.push("egg");
-    shuffle(arr);
-    for (let c = 0; c < COLS; c++) board[r][c] = arr[c];
-  }
-}
-
-// ===== Round lifecycle =====
-function resetToIdleUI(){
-  // чистое состояние для следующего старта
-  busy = false;
-  inRound = false;
-  lost = false;
-  cleared = 0;
-  currentRow = 0;
-
-  setXText();
-  renderPotential();
-  updateLadderActive();
-  applyRowInteractivity();
-  updateButtons();
-}
-
-function endRoundLoss(){
-  // FIX: после проигрыша нужно завершить раунд,
-  // иначе Start остаётся disabled (inRound=true) и игра “залипает”
-  statusText.textContent = "Череп! Ставка сгорела.";
-  sLose();
-
-  // показываем всю башню (красиво), потом сбрасываем в ожидание
-  for (let rr = 0; rr < ROWS; rr++){
-    revealRow(rr);
-    for (let cc = 0; cc < COLS; cc++) revealed[rr][cc] = true;
-  }
-  applyRowInteractivity();
-
-  // через маленькую паузу возвращаем управление и разрешаем старт
-  setTimeout(() => {
-    // остаётся визуал раскрытым, но раунд завершён и можно снова жать "Ставка"
-    inRound = false;
-    busy = false;
-    // потерю фиксируем, но она уже не блокирует старт (т.к. inRound=false)
-    updateButtons();
-    updateLadderActive();
-    // потенциал = 0, X = 1.00 для ожидания
-    xText.textContent = "x1.00";
-    potentialText.textContent = "0 🪙";
-    statusText.textContent += " Можно начать заново.";
-  }, 250);
-}
-
-function startRound(){
-  if (busy) return;
-
+function setBet(v){
+  betInput.value = String(v);
   clampBet();
-  if (bet <= 0) return alert("Ставка должна быть больше 0");
-  if (bet > wallet.coins) return alert("Недостаточно монет");
-
-  // старт
-  busy = false;
-  inRound = true;
-  lost = false;
-  cleared = 0;
-  currentRow = 0;
-
-  addCoins(-bet);
-  newBoard();
-
-  statusText.textContent = "Игра началась. Выбери плитку в ряду 1.";
-  setXText();
-  renderPotential();
-
-  // чистим поле под новый раунд
-  buildEmptyTower();
-  applyRowInteractivity();
-  updateLadderActive();
-  updateButtons();
-  sPick();
 }
 
-async function handlePick(cell){
-  if (!inRound || busy || lost) return;
+function updatePanels(){
+  // streak
+  const streak = Math.max(0, stepIndex); // шаг 0 = 0 побед
+  streakText.textContent = `${streak} побед`;
 
-  const r = Number(cell.dataset.row);
-  const c = Number(cell.dataset.col);
-  if (r !== currentRow) return;
+  // current X
+  xText.textContent = `x${STEPS[stepIndex].x.toFixed(2)}`;
 
-  busy = true;
-  updateButtons();
+  // potential
+  const bet = seriesActive ? lockedBet : Math.floor(Number(betInput.value)||0);
+  const potential = seriesActive ? Math.floor(bet * STEPS[stepIndex].x) : bet;
+  potentialText.textContent = `${potential} ₽`;
 
-  revealed[r][c] = true;
-  const pickedType = board[r][c];
-
-  setCellBack(cell, pickedType);
-  sPick();
-
-  cell.classList.add("revealed");
-  markPicked(cell, pickedType);
-
-  await new Promise(res => setTimeout(res, 180));
-  revealRow(r);
-  for (let k = 0; k < COLS; k++) revealed[r][k] = true;
-
-  await new Promise(res => setTimeout(res, 520));
-
-  if (pickedType === "skull"){
-    lost = true;
-    busy = false;
-    // ФИКС: завершаем раунд корректно
-    endRoundLoss();
-    return;
+  // status line
+  if (!seriesActive){
+    bStatus.textContent = "Ожидание";
+    bResult.textContent = "—";
+    bBot.textContent = "—";
+    botIcon.textContent = "🤖";
+    winLine.textContent = "0 ₽";
+    cashBtn.disabled = true;
+  } else {
+    bStatus.textContent = "Серия";
+    cashBtn.disabled = (stepIndex === 0);
+    const cashNow = Math.floor(lockedBet * STEPS[stepIndex].x);
+    winLine.textContent = `${cashNow} ₽`;
   }
 
-  // safe row
-  cleared += 1;
-  setXText();
-  renderPotential();
-  sRowWin();
+  // lock bet UI
+  const lock = !canChangeBet();
+  betInput.disabled = lock;
+  betMinus.disabled = lock;
+  betPlus.disabled = lock;
+  document.querySelectorAll(".chip").forEach(b => b.disabled = lock);
 
-  if (cleared >= ROWS){
-    const payout = Math.floor(bet * LADDER[mode][ROWS - 1]);
-    addCoins(payout);
-    statusText.textContent = `Башня пройдена! Авто-кэшаут: +${payout} 🪙`;
-    inRound = false;
-    busy = false;
-    updateButtons();
-    updateLadderActive();
-    sCash();
-    applyRowInteractivity();
-    return;
-  }
-
-  currentRow += 1;
-  statusText.textContent = `Ряд ${cleared} пройден. Выбери плитку в ряду ${cleared + 1}.`;
-  busy = false;
-
-  applyRowInteractivity();
-  updateButtons();
-  updateLadderActive();
+  // play enabled (нужен выбор + ставка)
+  playBtn.disabled = busy || (!picked) || (Math.floor(Number(betInput.value)||0) <= 0 && !seriesActive);
 }
 
-// cashout
-function cashout(){
-  if (!canCashout()) return;
-  const x = currentX();
-  const payout = Math.floor(bet * x);
+function setMessage(status, resultText){
+  bStatus.textContent = status;
+  bResult.textContent = resultText || "—";
+}
+
+function startSeriesIfNeeded(){
+  if (seriesActive) return true;
+  const bet = Math.floor(Number(betInput.value)||0);
+  if (bet <= 0) { alert("Ставка должна быть больше 0"); return false; }
+  if (bet > wallet.coins) { alert("Недостаточно средств"); return false; }
+
+  lockedBet = bet;
+  addCoins(-bet);            // списываем 1 раз
+  seriesActive = true;
+  stepIndex = 0;
+  renderLadder();
+  updatePanels();
+  return true;
+}
+
+function endSeriesLose(){
+  seriesActive = false;
+  lockedBet = 0;
+  stepIndex = 0;
+  renderLadder();
+  updatePanels();
+}
+
+function cashout(reason="Cashout"){
+  if (!seriesActive) return;
+  const payout = Math.floor(lockedBet * STEPS[stepIndex].x);
   addCoins(payout);
+  seriesActive = false;
+  lockedBet = 0;
+  stepIndex = 0;
 
-  statusText.textContent = `Кэшаут: +${payout} 🪙 (${fmtX(x)})`;
-  inRound = false;
-  busy = false;
-  lost = false;
+  renderLadder();
+  updatePanels();
+  setMessage(reason, "Серия завершена");
+}
 
-  xText.textContent = "x1.00";
-  potentialText.textContent = "0 🪙";
-  updateButtons();
-  updateLadderActive();
-  applyRowInteractivity();
-  sCash();
+function decide(bot, you){
+  if (bot === you) return "draw";
+  if (you === "rock" && bot === "scissors") return "win";
+  if (you === "scissors" && bot === "paper") return "win";
+  if (you === "paper" && bot === "rock") return "win";
+  return "lose";
 }
 
 // ===== Events =====
@@ -415,64 +250,101 @@ soundBtn.onclick = () => {
   dot.style.boxShadow = soundOn
     ? "0 0 0 3px rgba(38,212,123,.14)"
     : "0 0 0 3px rgba(255,90,106,.14)";
-  beep(soundOn ? 640 : 240, 60, 0.03);
+  sClick();
 };
 
-bonusBtn.onclick = () => { addCoins(1000); beep(760, 70, 0.03); };
+bonusBtn.onclick = () => { addCoins(1000); sWin(); };
 
-betInput.addEventListener("input", () => {
-  clampBet();
-  if (!inRound && !busy) { xText.textContent = "x1.00"; potentialText.textContent = "0 🪙"; }
-});
-betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); betInput.dispatchEvent(new Event("input")); };
-betPlus.onclick  = () => { betInput.value = String((Number(betInput.value)||1) + 10); betInput.dispatchEvent(new Event("input")); };
+pickRock.onclick = () => setPick("rock");
+pickScissors.onclick = () => setPick("scissors");
+pickPaper.onclick = () => setPick("paper");
+
+betInput.addEventListener("input", () => { if (canChangeBet()) clampBet(); updatePanels(); });
+betMinus.onclick = () => { if (!canChangeBet()) return; setBet((Number(betInput.value)||1) - 10); sClick(); updatePanels(); };
+betPlus.onclick  = () => { if (!canChangeBet()) return; setBet((Number(betInput.value)||1) + 10); sClick(); updatePanels(); };
 
 document.querySelectorAll(".chip").forEach((b) => {
   b.onclick = () => {
+    if (!canChangeBet()) return;
     const val = b.dataset.bet;
-    betInput.value = (val === "max") ? String(wallet.coins) : String(val);
-    betInput.dispatchEvent(new Event("input"));
-    beep(540, 55, 0.02);
+    setBet(val === "max" ? wallet.coins : Number(val));
+    sClick();
+    updatePanels();
   };
 });
 
-function setMode(m){
+cashBtn.onclick = () => {
   if (busy) return;
-  if (inRound) return;
-  mode = m;
+  if (!seriesActive || stepIndex === 0) return;
+  cashout("Cashout");
+  sWin();
+};
 
-  modeNormalBtn.classList.toggle("active", m === "normal");
-  modeHardBtn.classList.toggle("active", m === "hard");
+// play
+playBtn.onclick = async () => {
+  if (busy) return;
+  busy = true;
+  updatePanels();
 
-  modeHint.textContent = m === "normal"
-    ? "Обычный: 3 яйца / 1 череп"
-    : "Сложный: 1 яйцо / 3 черепа";
+  if (!startSeriesIfNeeded()){
+    busy = false; updatePanels(); return;
+  }
 
-  difficultyTag.textContent = `Сложность: ${m === "normal" ? "обычный" : "сложный"}`;
-  renderLadder();
-  buildEmptyTower();
-  resetToIdleUI();
-  sPick();
-}
-modeNormalBtn.onclick = () => setMode("normal");
-modeHardBtn.onclick = () => setMode("hard");
+  setMessage("Игра", "—");
+  bYou.textContent = choiceLabel(picked);
+  youIcon.textContent = choiceIcon(picked);
 
-startBtn.onclick = startRound;
-cashoutBtn.onclick = cashout;
+  const bot = randChoice(["rock","scissors","paper"]);
+  bBot.textContent = choiceLabel(bot);
+  botIcon.textContent = choiceIcon(bot);
 
-towerGridEl.addEventListener("click", (e) => {
-  const cell = e.target.closest(".cell");
-  if (!cell) return;
-  if (cell.classList.contains("disabled")) return;
-  handlePick(cell);
-});
+  // небольшой “тайминг”
+  await new Promise(r => setTimeout(r, 220));
 
-// ===== init =====
-function init(){
-  clampBet();
-  renderLadder();
-  buildEmptyTower();
-  resetToIdleUI();
-  renderTop();
-}
-init();
+  const r = decide(bot, picked);
+
+  if (r === "draw"){
+    bResult.textContent = "Ничья";
+    setMessage("Ничья", "Ничья — шаг не меняется");
+    beep(420, 80, 0.02);
+    busy = false;
+    updatePanels();
+    return;
+  }
+
+  if (r === "win"){
+    stepIndex = Math.min(stepIndex + 1, STEPS.length - 1);
+    renderLadder();
+
+    bResult.textContent = "Победа";
+    setMessage("Победа", stepIndex === (STEPS.length - 1) ? "Максимум!" : "Серия растёт");
+
+    // авто-cashout на максимальном шаге
+    if (stepIndex === (STEPS.length - 1)){
+      sWin();
+      cashout("Авто-cashout");
+    } else {
+      sWin();
+    }
+
+    busy = false;
+    updatePanels();
+    return;
+  }
+
+  // lose
+  bResult.textContent = "Серия в ноль";
+  setMessage("Поражение", "Проиграл — серия в ноль");
+  sLose();
+
+  endSeriesLose();
+  busy = false;
+  updatePanels();
+};
+
+// ===== Init =====
+setCoins(wallet.coins);
+setPick("rock");
+clampBet();
+renderLadder();
+updatePanels();
