@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Dragon Tower</title>
+  <title>Mini Games — Dragon Tower</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -23,33 +23,33 @@
         </button>
 
         <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 🪙</button>
+
         <div class="pill pill--balance">Баланс <b id="balance">1000</b> 🪙</div>
       </div>
     </header>
 
     <main class="layout">
       <!-- LEFT -->
-      <section class="panel">
-        <div class="panelHead">
-          <div class="h1">Режим</div>
+      <aside class="panel">
+        <div class="panel__block">
+          <div class="blockTitle">Режим</div>
+          <div class="modeRow" role="group" aria-label="mode">
+            <button id="modeNormal" class="seg active" type="button">Обычный</button>
+            <button id="modeHard" class="seg" type="button">Сложный</button>
+          </div>
+          <div id="modeHint" class="tiny muted">Обычный: 3 яйца / 1 череп</div>
         </div>
 
-        <div class="modeRow">
-          <button id="modeNormal" class="seg active" type="button">Обычный</button>
-          <button id="modeHard" class="seg" type="button">Сложный</button>
-        </div>
-        <div id="modeHint" class="muted small">Обычный: 3 яйца / 1 череп</div>
-
-        <div class="block">
-          <div class="h2">Ставка</div>
+        <div class="panel__block">
+          <div class="blockTitle">Ставка</div>
 
           <div class="betRow">
-            <button id="betMinus" class="btnSmall" type="button">−</button>
+            <button id="betMinus" class="btnMini" type="button">−</button>
             <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
-            <button id="betPlus" class="btnSmall" type="button">+</button>
+            <button id="betPlus" class="btnMini" type="button">+</button>
           </div>
 
-          <div class="chips">
+          <div class="chips" role="group" aria-label="chips">
             <button class="chip" data-bet="10" type="button">10</button>
             <button class="chip" data-bet="50" type="button">50</button>
             <button class="chip" data-bet="100" type="button">100</button>
@@ -58,70 +58,84 @@
             <button class="chip" data-bet="max" type="button">MAX</button>
           </div>
 
-          <div class="btnRow">
+          <div class="actionRow">
             <button id="startBtn" class="btnPrimary" type="button">Ставка</button>
-            <button id="cashBtn" class="btnDanger" type="button" disabled>Кэшаут</button>
+            <button id="cashoutBtn" class="btnDanger" type="button" disabled>Кэшаут</button>
           </div>
 
           <div class="rules">
-            <div class="h2">Правила</div>
-            <ul>
-              <li>Ставка списывается <b>1 раз</b> при старте игры.</li>
-              <li>Выбирай плитку в текущем ряду: 🥚 — идёшь выше, 💀 — проигрыш.</li>
-              <li>Кэшаут доступен <b>после победы ряда</b>: ставка × X.</li>
-            </ul>
+            <div class="rule">• Ставка списывается 1 раз при старте игры.</div>
+            <div class="rule">• Выбирай плитку в текущем ряду. Яйцо — идёшь выше, череп — проигрыш.</div>
+            <div class="rule">• Кэшаут доступен после победы ряда: ставка × X.</div>
           </div>
         </div>
 
-        <div class="block">
-          <div class="h2">Статус</div>
+        <div class="panel__block">
+          <div class="blockTitle">Статус</div>
+
           <div class="statusGrid">
             <div class="stat">
-              <div class="label">Статус</div>
-              <div class="value"><b id="statusView">Ожидание</b></div>
+              <div class="stat__label">Статус</div>
+              <div id="statusText" class="stat__value">Ожидание</div>
             </div>
+
             <div class="stat">
-              <div class="label">Текущий X</div>
-              <div class="value"><b id="xView">x1.00</b></div>
+              <div class="stat__label">Текущий X</div>
+              <div id="xText" class="stat__value">x1.00</div>
             </div>
+
             <div class="stat">
-              <div class="label">Потенциал</div>
-              <div class="value"><b id="potView">0</b> 🪙</div>
+              <div class="stat__label">Потенциал</div>
+              <div id="potentialText" class="stat__value">0 🪙</div>
             </div>
           </div>
         </div>
-      </section>
+      </aside>
 
       <!-- CENTER -->
-      <section class="center">
-        <div class="centerHead">
-          <div class="h1">Башня</div>
-          <div class="muted small">Локально • RNG</div>
+      <section class="boardCard">
+        <div class="boardHead">
+          <div class="boardHead__left">
+            <div class="h1">Башня</div>
+          </div>
+
+          <!-- decorative 3 towers -->
+          <div class="towers" aria-hidden="true">
+            <div class="towerPip"></div>
+            <div class="towerPip"></div>
+            <div class="towerPip"></div>
+          </div>
+
+          <div class="boardHead__right">
+            <div id="rngTag" class="tag">Локально • RNG</div>
+            <div id="difficultyTag" class="tag tag--muted">Сложность: обычный</div>
+          </div>
         </div>
 
-        <div class="towerWrap">
-          <div id="tower" class="tower" aria-label="tower grid"></div>
+        <div id="towerGrid" class="towerGrid" aria-label="tower grid"></div>
 
-          <div class="legend">
-            <span class="dotLegend dotEgg"></span> яйцо
-            <span class="dotLegend dotSkull"></span> череп
-          </div>
+        <div class="legend">
+          <span class="legendDot legendDot--egg"></span> яйцо
+          <span class="legendDot legendDot--skull"></span> череп
+          <span class="legendDot legendDot--rng"></span> локально RNG
         </div>
       </section>
 
       <!-- RIGHT -->
-      <section class="panel">
-        <div class="panelHead">
-          <div class="h1">Шкала X</div>
-          <div class="muted small">прокрутка</div>
-        </div>
+      <aside class="panel panel--right">
+        <div class="panel__block">
+          <div class="blockTitleRow">
+            <div class="blockTitle">Шкала X</div>
+            <div class="tiny muted">прокрутка</div>
+          </div>
 
-        <div id="scale" class="scale" aria-label="scale"></div>
+          <div id="ladder" class="ladder" aria-label="ladder"></div>
 
-        <div class="note">
-          Прошёл ряд — X растёт. Череп — ставка сгорает.
+          <div class="tip">
+            Прошёл ряд — X растёт. Череп — ставка сгорает.
+          </div>
         </div>
-      </section>
+      </aside>
     </main>
   </div>
 
