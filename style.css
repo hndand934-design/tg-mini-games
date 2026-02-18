@@ -186,8 +186,6 @@ body{
   line-height:1;
   filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 }
-.ready{ margin-top:2px; }
-
 .vsMid{
   text-align:center;
   font-weight:950;
