@@ -1,4 +1,4 @@
-// ===== Penalty FINAL (логика как у тебя: 15 зон, 2 зоны сейва, бесконечно до сейва/кэшаута) =====
+// ===== Penalty FINAL =====
 
 // RNG (crypto)
 function randInt(n){
@@ -30,7 +30,7 @@ function setCoins(v){
 }
 function addCoins(d){ setCoins(wallet.coins + d); }
 
-// Sound (тихий, как у тебя)
+// ===== Sound (тихий) =====
 let soundOn = true;
 function beep(freq=520, ms=60, vol=0.03, type="sine"){
   if (!soundOn) return;
@@ -48,10 +48,11 @@ function beep(freq=520, ms=60, vol=0.03, type="sine"){
     setTimeout(()=>{ o.stop(); ctx.close(); }, ms);
   }catch{}
 }
-function sfxGoal(){ beep(720,60,0.028); beep(920,70,0.028); }
-function sfxSave(){ beep(220,120,0.03,"triangle"); beep(160,140,0.028,"sine"); }
+function sfxGoal(){ beep(720,60,0.03); beep(920,70,0.03); }
+function sfxSave(){ beep(220,120,0.034,"triangle"); beep(160,140,0.03,"sine"); }
+function sfxClick(){ beep(520,45,0.015); }
 
-// UI refs
+// ===== UI refs =====
 const balanceEl = document.getElementById("balance");
 const bal2 = document.getElementById("bal2");
 
@@ -90,8 +91,9 @@ const cashView = document.getElementById("cashView");
 const zonesEl = document.getElementById("zones");
 const ballEl = document.getElementById("ball");
 const goalieEl = document.getElementById("goalie");
+const goalEl = document.querySelector(".goal");
 
-// Ladders (фиксированные, “эксперт выше”)
+// ===== ladders =====
 const LADDERS = {
   easy:   [1.10, 1.25, 1.45, 1.70, 2.05, 2.55, 3.25, 4.20, 5.60, 7.80, 11.0, 16.0],
   mid:    [1.15, 1.35, 1.60, 1.95, 2.40, 3.05, 3.95, 5.30, 7.40, 10.8, 16.5, 25.0],
@@ -99,21 +101,99 @@ const LADDERS = {
   expert: [1.25, 1.55, 1.95, 2.50, 3.30, 4.45, 6.20, 9.10, 14.0, 22.5, 38.0, 65.0]
 };
 const DIFF_LABEL = { easy:"Низкий", mid:"Средний", hard:"Сложный", expert:"Эксперт" };
-
 function fmtX(x){ return "x" + x.toFixed(2); }
 
-// State
+// ===== State =====
 let diff = "expert";
 let betLocked = false;
 let inRound = false;
 let busy = false;
 
-let baseBet = 100;     // ставка в начале серии
-let step = 0;          // голов подряд
+let baseBet = 100;
+let step = 0;
 let currentX = 1.0;
 
 let goalieA = 0;
 let goalieB = 0;
+
+// ===== goalie roaming (движение по радиусу клеток) =====
+let roamRAF = 0;
+let roamEnabled = true;
+let roam = {
+  x: 0, y: 0,
+  tx: 0, ty: 0,
+  vx: 0, vy: 0,
+  tNext: 0
+};
+
+function getZonesRectInGoal(){
+  const z = zonesEl.getBoundingClientRect();
+  const g = goalEl.getBoundingClientRect();
+  return {
+    x: z.left - g.left,
+    y: z.top - g.top,
+    w: z.width,
+    h: z.height
+  };
+}
+
+function setGoalieOffset(px, py){
+  // translateX(-50%) + offset
+  goalieEl.style.transform = `translateX(-50%) translate3d(${px}px, ${py}px, 0)`;
+}
+
+function pickRoamTarget(){
+  const r = getZonesRectInGoal();
+  // держим вратаря в пределах зон (легко “гуляет”)
+  const padX = r.w * 0.12;
+  const padY = r.h * 0.10;
+
+  const x = (Math.random() * (r.w - padX*2)) + (r.x + padX) - (goalEl.clientWidth/2);
+  const y = (Math.random() * (r.h - padY*2)) + (r.y + padY) - 250; // 250 ≈ baseline top of goalie
+  // ограничение по вертикали чтобы не улетал
+  const yClamped = Math.max(-18, Math.min(22, y));
+  roam.tx = x;
+  roam.ty = yClamped;
+  roam.tNext = performance.now() + 420 + Math.random()*420;
+}
+
+function startRoam(){
+  stopRoam();
+  roamEnabled = true;
+  roam.x = 0; roam.y = 0; roam.tx = 0; roam.ty = 0;
+  pickRoamTarget();
+
+  const tick = (t)=>{
+    if (!roamEnabled) return;
+
+    // плавная “физика” к цели
+    const dx = roam.tx - roam.x;
+    const dy = roam.ty - roam.y;
+
+    roam.vx = (roam.vx + dx * 0.015) * 0.86;
+    roam.vy = (roam.vy + dy * 0.015) * 0.86;
+
+    roam.x += roam.vx;
+    roam.y += roam.vy;
+
+    // только когда не в сейве и не в полёте
+    if (goalieEl.classList.contains("idle")){
+      setGoalieOffset(roam.x, roam.y);
+    }
+
+    if (t > roam.tNext){
+      pickRoamTarget();
+    }
+    roamRAF = requestAnimationFrame(tick);
+  };
+  roamRAF = requestAnimationFrame(tick);
+}
+
+function stopRoam(){
+  roamEnabled = false;
+  if (roamRAF) cancelAnimationFrame(roamRAF);
+  roamRAF = 0;
+}
 
 // ===== render =====
 function renderTop(){
@@ -146,7 +226,7 @@ soundBtn.onclick = () => {
   soundDot.style.boxShadow = soundOn
     ? "0 0 0 3px rgba(38,212,123,.14)"
     : "0 0 0 3px rgba(255,90,106,.14)";
-  beep(soundOn ? 640 : 240, 60, 0.028);
+  beep(soundOn ? 640 : 240, 60, 0.03);
 };
 
 // bonus
@@ -163,8 +243,8 @@ function clampBet(){
 }
 betInput.addEventListener("input", clampBet);
 
-betMinus.onclick = () => { betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); };
-betPlus.onclick  = () => { betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); };
+betMinus.onclick = () => { if (betLocked) return; betInput.value = String((Number(betInput.value)||1) - 10); clampBet(); sfxClick(); };
+betPlus.onclick  = () => { if (betLocked) return; betInput.value = String((Number(betInput.value)||1) + 10); clampBet(); sfxClick(); };
 
 document.querySelectorAll(".chip").forEach((b) => {
   b.onclick = () => {
@@ -172,7 +252,7 @@ document.querySelectorAll(".chip").forEach((b) => {
     const val = b.dataset.bet;
     betInput.value = (val === "max") ? String(wallet.coins) : String(val);
     clampBet();
-    beep(540, 55, 0.02);
+    sfxClick();
   };
 });
 
@@ -198,7 +278,7 @@ function setDiff(v){
 
   buildLadder();
   renderSide();
-  beep(520, 50, 0.02);
+  sfxClick();
 }
 diffBtns.forEach(b => b.onclick = () => setDiff(b.dataset.diff));
 
@@ -246,7 +326,6 @@ function disableZones(dis){
 
 // ===== goalie: choose 2 save zones =====
 function pickGoalieZones(){
-  // База + соседи (чтобы было “человечно”)
   const base = randInt(15);
   const r = Math.floor(base / 5);
   const c = base % 5;
@@ -258,7 +337,6 @@ function pickGoalieZones(){
   goalieA = pool[randInt(pool.length)];
   do{ goalieB = pool[randInt(pool.length)]; } while (goalieB === goalieA);
 
-  // На expert — иногда “подкручиваем”, чтоб было сложнее
   if (diff === "expert" && randInt(100) < 35){
     const alt = goalieA + (randInt(2) ? 1 : -1);
     if (alt >= 0 && alt < 15) goalieB = alt;
@@ -271,6 +349,7 @@ function goaliePoseFor(idx){
   if (col >= 3) return "save-right";
   return "save-mid";
 }
+
 function setGoaliePose(pose){
   goalieEl.classList.remove("save-left","save-right","save-mid");
   goalieEl.classList.add("idle");
@@ -280,17 +359,38 @@ function setGoaliePose(pose){
   }
 }
 
+// прыжок в центр конкретной зоны (чтобы сейв смотрелся реалистично)
+function jumpGoalieToZone(idx){
+  const cell = zonesEl.children[idx];
+  if (!cell) return;
+
+  const cellRect = cell.getBoundingClientRect();
+  const goalRect = goalEl.getBoundingClientRect();
+
+  const cx = (cellRect.left + cellRect.width/2) - goalRect.left;
+  const cy = (cellRect.top + cellRect.height/2) - goalRect.top;
+
+  // переводим к координатам offset относительно центра (translateX(-50%))
+  const offsetX = cx - (goalEl.clientWidth/2);
+  // слегка ниже центра клетки (перчатки)
+  const offsetY = (cy - 250);
+
+  // ограничение
+  const oy = Math.max(-18, Math.min(22, offsetY));
+  setGoalieOffset(offsetX, oy);
+}
+
 // ===== ball flight =====
 function flyBallTo(zoneEl){
   return new Promise((resolve)=>{
     const zRect = zoneEl.getBoundingClientRect();
-    const gRect = document.querySelector(".goal").getBoundingClientRect();
+    const gRect = goalEl.getBoundingClientRect();
 
     const zx = (zRect.left + zRect.width/2) - gRect.left;
     const zy = (zRect.top + zRect.height/2) - gRect.top;
 
     const startX = gRect.width/2;
-    const startY = gRect.height - 43; // near bottom where ball sits
+    const startY = gRect.height - 43;
 
     const dx = zx - startX;
     const dy = zy - startY;
@@ -311,7 +411,7 @@ function flyBallTo(zoneEl){
         ballEl.style.opacity = "0";
         ballEl.getAnimations().forEach(a=>a.cancel());
         resolve();
-      }, 120);
+      }, 110);
     };
   });
 }
@@ -339,8 +439,7 @@ function startStake(){
   pickGoalieZones();
 
   cashBtn.disabled = true;
-  setGoaliePose(""); // idle hands moving
-
+  setGoaliePose(""); // idle
   setStatus("Ставка принята. Кликни по зоне ворот (3×5).");
   beep(620, 55, 0.02);
   renderSide();
@@ -351,7 +450,7 @@ function endRoundLose(){
   lockBetUI(false);
   cashBtn.disabled = true;
   disableZones(false);
-  setGoaliePose(""); // back to idle
+  setGoaliePose(""); // idle
   setStatus("Сейв! Ставка сгорела. Нажми «Ставка» чтобы начать снова.");
   renderSide();
 }
@@ -369,7 +468,7 @@ function onGoal(){
 
   setStatus(`ГОЛ! Шаг ${step}. Можно продолжать или забрать ${Math.floor(baseBet * currentX)} 🪙.`);
   pickGoalieZones();
-  setGoaliePose(""); // idle again
+  setGoaliePose(""); // обратно в idle (и он снова “гуляет”)
   disableZones(false);
   renderSide();
 }
@@ -380,8 +479,11 @@ async function onZoneClick(idx, el){
   busy = true;
   disableZones(true);
 
-  // Goalie shows where he “dives” (closest of 2 saved zones)
+  // вратарь выбирает ближайшую из своих 2 зон для “нырка”
   const closest = Math.abs(idx - goalieA) <= Math.abs(idx - goalieB) ? goalieA : goalieB;
+
+  // прыжок к зоне сейва + поза
+  jumpGoalieToZone(closest);
   setGoaliePose(goaliePoseFor(closest));
 
   await flyBallTo(el);
@@ -428,7 +530,6 @@ function cashout(){
 function resetAll(){
   if (busy) return;
 
-  // Сброс — как у тебя было: просто вернуть UI, ставка НЕ возвращается (потому что ставка уже “в игре”)
   inRound = false;
   lockBetUI(false);
   resetZones();
@@ -449,15 +550,18 @@ stakeBtn.onclick = startStake;
 cashBtn.onclick = cashout;
 resetBtn.onclick = resetAll;
 
-streakToggle.onchange = () => { renderSide(); beep(520, 50, 0.02); };
+streakToggle.onchange = () => { renderSide(); sfxClick(); };
 
-// init
+// ===== init =====
 function init(){
   setDiff(diff);
   clampBet();
   buildLadder();
   renderSide();
-  setGoaliePose(""); // idle hands moving always
+  setGoaliePose(""); // idle
   setStatus("Выбери ставку и сложность, затем нажми «Ставка».");
+
+  // стартуем постоянное “гуляние” вратаря в радиусе клеток
+  startRoam();
 }
 init();
