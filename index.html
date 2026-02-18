@@ -7,102 +7,139 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <div class="bg"></div>
 
-<div class="bg"></div>
-
-<div class="app">
-  <header class="topbar">
-    <div>
-      <div class="title">RPS</div>
-      <div class="subtitle">Камень • Ножницы • Бумага</div>
-    </div>
-
-    <div class="topbar__right">
-      <button id="soundBtn" class="pill"><span class="dot"></span>Звук on</button>
-      <div class="pill pill--balance">Баланс <b id="balance">1000</b> ₽</div>
-    </div>
-  </header>
-
-  <div class="layout">
-    <section class="card left">
-
-      <div class="badges">
-        <div class="badge"><div class="label">Статус</div><div id="status" class="value">Ожидание</div></div>
-        <div class="badge"><div class="label">Твой выбор</div><div id="youPick" class="value">—</div></div>
-        <div class="badge"><div class="label">Бот</div><div id="botPick" class="value">—</div></div>
-        <div class="badge"><div class="label">Результат</div><div id="result" class="value">—</div></div>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar__left">
+        <div class="title">RPS</div>
+        <div class="subtitle">Камень • Ножницы • Бумага</div>
       </div>
 
-      <div class="ladderWrap">
-        <div class="ladderHead">
-          <div class="h2">Лестница</div>
-          <div class="muted">Выигрывай подряд — X растёт.</div>
-        </div>
-        <div id="ladder" class="ladder"></div>
+      <div class="topbar__right">
+        <button id="soundBtn" class="pill" type="button" aria-label="Звук">
+          <span class="dot"></span><span id="soundText">Звук on</span>
+        </button>
+        <div class="pill pill--balance">Баланс <b id="balance">1000</b> ₽</div>
       </div>
+    </header>
 
-      <div class="seriesRow">
-        <div class="panel"><div class="label">Серия</div><div id="series" class="big">0 побед</div></div>
-        <div class="panel"><div class="label">Текущий X</div><div id="mult" class="big">x1.00</div></div>
-        <div class="panel"><div class="label">Потенциал</div><div id="potential" class="big">0 ₽</div></div>
-      </div>
-
-      <div class="vsRow">
-        <div class="vsCard">
-          <div class="cap">Бот</div>
-          <div id="botIcon" class="icon">✊🏻</div>
-          <div class="ready">Готов</div>
+    <main class="card layout">
+      <!-- LEFT -->
+      <section class="left">
+        <div class="badges">
+          <div class="badge">
+            <div class="label">Статус</div>
+            <div id="statusView" class="value">Ожидание</div>
+          </div>
+          <div class="badge">
+            <div class="label">Твой выбор</div>
+            <div id="youPickView" class="value">—</div>
+          </div>
+          <div class="badge">
+            <div class="label">Бот</div>
+            <div id="botPickView" class="value">—</div>
+          </div>
+          <div class="badge">
+            <div class="label">Результат</div>
+            <div id="resultView" class="value">—</div>
+          </div>
         </div>
 
-        <div class="vsMid">VS</div>
-
-        <div class="vsCard">
-          <div class="cap">Ты</div>
-          <div id="youIcon" class="icon">✊🏻</div>
-          <div class="ready">Готов</div>
+        <div class="ladderWrap">
+          <div class="ladderHead">
+            <div class="h2">Лестница</div>
+            <div class="muted">Выигрывай подряд — X растёт. Проиграл — серия в ноль.</div>
+          </div>
+          <div id="ladder" class="ladder"></div>
         </div>
-      </div>
 
-      <div class="pickBar">
-        <button class="pickBtn" data-move="rock">✊🏻 Камень</button>
-        <button class="pickBtn" data-move="scissors">✌🏻 Ножницы</button>
-        <button class="pickBtn" data-move="paper">✋🏻 Бумага</button>
-      </div>
+        <div class="seriesRow">
+          <div class="panel">
+            <div class="label">Серия</div>
+            <div id="seriesView" class="big">0 побед</div>
+          </div>
+          <div class="panel">
+            <div class="label">Текущий X</div>
+            <div id="multView" class="big">x1.00</div>
+          </div>
+          <div class="panel">
+            <div class="label">Потенциал</div>
+            <div id="potentialView" class="big">0 ₽</div>
+          </div>
+        </div>
 
-      <div class="foot muted">Нажми выбор → Играть.</div>
-    </section>
+        <div class="vsRow">
+          <div class="vsCard">
+            <div class="cap">Бот</div>
+            <div id="botIcon" class="icon">✊🏻</div>
+            <div class="cap muted">Готов</div>
+          </div>
 
-    <section class="card right">
-      <div class="rightHead"><div class="h2">Ставка</div></div>
+          <div class="vsMid">VS</div>
 
-      <div class="chips">
-        <button class="chip" data-bet="10">10</button>
-        <button class="chip" data-bet="50">50</button>
-        <button class="chip" data-bet="100">100</button>
-        <button class="chip" data-bet="250">250</button>
-        <button class="chip" data-bet="500">500</button>
-        <button class="chip" data-bet="max">MAX</button>
-      </div>
+          <div class="vsCard">
+            <div class="cap">Ты</div>
+            <div id="youIcon" class="icon">✊🏻</div>
+            <div class="cap muted">Готов</div>
+          </div>
+        </div>
 
-      <div class="betRow">
-        <button id="minus" class="btnSmall">−</button>
-        <input id="bet" class="betInput" value="100" />
-        <button id="plus" class="btnSmall">+</button>
-      </div>
+        <div class="pickBar">
+          <button class="pickBtn active" data-move="rock" type="button">✊🏻 Камень</button>
+          <button class="pickBtn" data-move="scissors" type="button">✌🏻 Ножницы</button>
+          <button class="pickBtn" data-move="paper" type="button">✋🏻 Бумага</button>
+        </div>
 
-      <div class="actions">
-        <button id="play" class="btnPrimary">Играть</button>
-        <button id="cashout" class="btnGhost" disabled>Забрать</button>
-      </div>
+        <div class="foot muted">Нажми выбор → «Играть». После победы можно «Забрать» (Cashout).</div>
+      </section>
 
-      <div class="winBox">
-        <div>Выигрыш:</div>
-        <div id="win" class="winValue">0 ₽</div>
-      </div>
-    </section>
+      <!-- RIGHT -->
+      <aside class="right">
+        <div class="rightHead">
+          <div class="h2">Ставка</div>
+          <button id="bonusBtn" class="pill pill--bonus" type="button">+1000 ₽</button>
+        </div>
+
+        <div class="chips" role="group" aria-label="chips">
+          <button class="chip" data-bet="10" type="button">10</button>
+          <button class="chip" data-bet="50" type="button">50</button>
+          <button class="chip" data-bet="100" type="button">100</button>
+          <button class="chip" data-bet="250" type="button">250</button>
+          <button class="chip" data-bet="500" type="button">500</button>
+          <button class="chip" data-bet="max" type="button">MAX</button>
+        </div>
+
+        <div class="betRow">
+          <button id="betMinus" class="btnSmall" type="button">−</button>
+          <input id="betInput" class="betInput" type="number" min="1" step="1" value="100" />
+          <button id="betPlus" class="btnSmall" type="button">+</button>
+        </div>
+
+        <div class="actions">
+          <button id="playBtn" class="btnPrimary" type="button">Играть</button>
+          <button id="cashoutBtn" class="btnGhost" type="button" disabled>Забрать</button>
+        </div>
+
+        <div class="winBox">
+          <div>Выигрыш:</div>
+          <div id="winView" class="winValue">0 ₽</div>
+        </div>
+
+        <div class="rules">
+          <ul>
+            <li>Ставка списывается один раз при старте серии.</li>
+            <li>Нельзя менять ставку пока серия идёт.</li>
+            <li>Победа — серия растёт, можно «Забрать».</li>
+            <li>Проигрыш — серия в ноль, ставка сгорает.</li>
+            <li>На последнем шаге — авто-cashout.</li>
+          </ul>
+          <div class="tiny muted">Монеты виртуальные. RNG: crypto.getRandomValues.</div>
+        </div>
+      </aside>
+    </main>
   </div>
-</div>
 
-<script src="./app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
