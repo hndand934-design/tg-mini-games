@@ -161,15 +161,8 @@ body{
 }
 .chip:active{transform:scale(.98)}
 
-.diffRow{
-  margin-top:10px;
-  display:grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap:8px;
-}
-@media (max-width: 420px){
-  .diffRow{ grid-template-columns: repeat(2, 1fr); }
-}
+.diffRow{ margin-top:10px; display:grid; gap:8px; }
+.diffRow2{ grid-template-columns: 1fr 1fr; }
 .diffBtn{
   padding:10px 10px;
   border-radius: 14px;
@@ -186,7 +179,6 @@ body{
   outline:2px solid rgba(76,125,255,.55);
   background: linear-gradient(180deg, rgba(76,125,255,.16), rgba(255,255,255,.04));
 }
-
 .footNote{ margin-top:8px; font-size:12px; color:var(--muted); }
 
 .ladderHead{
@@ -370,7 +362,7 @@ body{
   border-radius: 16px;
   background: var(--goalBg);
   border:1px solid rgba(255,255,255,.10);
-  overflow:hidden; /* ВАЖНО: ничего не вылезает за ворота */
+  overflow:hidden;
 }
 
 .goalFrame{
@@ -392,7 +384,6 @@ body{
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap:10px;
-  pointer-events:auto;
 }
 @media (max-width: 520px){
   .grid{ left: 18px; right: 18px; top: 18px; bottom: 40px; gap:8px; }
@@ -460,7 +451,20 @@ body{
 }
 .ball.fly{
   opacity:1;
-  transition: left .28s cubic-bezier(.2,.9,.2,1), top .28s cubic-bezier(.2,.9,.2,1), transform .28s cubic-bezier(.2,.9,.2,1);
+  transition: left .28s cubic-bezier(.2,.9,.2,1),
+              top .28s cubic-bezier(.2,.9,.2,1),
+              transform .28s cubic-bezier(.2,.9,.2,1);
+}
+
+.flash{
+  position:absolute; inset:0;
+  opacity:0;
+  pointer-events:none;
+  background: radial-gradient(260px 160px at 50% 65%, rgba(255,255,255,.10), transparent 60%);
+}
+.flash.on{
+  opacity:1;
+  transition: opacity .12s ease;
 }
 
 .arenaFooter{
@@ -493,14 +497,12 @@ body{
 .infoKey{ font-size:12px; color: var(--muted); }
 .infoVal{ font-weight:900; }
 
-/* mobile compact */
 @media (max-width: 520px){
   .left,.center,.right{ padding:12px; }
   .seriesRow{ grid-template-columns: 1fr; }
   .actions{ grid-template-columns: 1fr; }
 }
 
-/* reduce motion */
 @media (prefers-reduced-motion: reduce){
   .glove, .ball { transition:none !important; }
 }
