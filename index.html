@@ -58,13 +58,11 @@
 
         <div class="block">
           <div class="h2">Уровень сложности</div>
-          <div class="diffRow" role="group" aria-label="difficulty">
-            <button class="diffBtn" data-diff="easy" type="button">Низкий</button>
-            <button class="diffBtn" data-diff="mid" type="button">Средний</button>
+          <div class="diffRow diffRow2" role="group" aria-label="difficulty">
+            <button class="diffBtn" data-diff="easy" type="button">Лёгкий</button>
             <button class="diffBtn" data-diff="hard" type="button">Сложный</button>
-            <button class="diffBtn" data-diff="expert" type="button">Эксперт</button>
           </div>
-          <div id="diffHint" class="footNote">Эксперт: вратарь агрессивнее, X самый высокий.</div>
+          <div id="diffHint" class="footNote">Лёгкий: вратарь перекрывает только 2 зоны.</div>
         </div>
 
         <div class="block">
@@ -117,7 +115,7 @@
           <ul>
             <li>Нажми «Ставка» — ставка списывается 1 раз.</li>
             <li>Клик по зоне в воротах (3×5) — мяч летит туда.</li>
-            <li>Вратарь перекрывает 2 зоны (сейв).</li>
+            <li>Вратарь перекрывает 2 зоны (две “руки”).</li>
             <li>Гол → шаг растёт, X растёт, можно кэшаут.</li>
             <li>Сейв → ставка сгорает, серия завершается.</li>
           </ul>
@@ -141,12 +139,15 @@
             <div class="goalFrame"></div>
             <div id="grid" class="grid" aria-label="grid"></div>
 
-            <!-- moving gloves (white) -->
+            <!-- synced gloves -->
             <div id="gloveA" class="glove" aria-hidden="true"></div>
             <div id="gloveB" class="glove" aria-hidden="true"></div>
 
             <!-- ball -->
             <div id="ball" class="ball" aria-hidden="true"></div>
+
+            <!-- subtle flash -->
+            <div id="flash" class="flash" aria-hidden="true"></div>
           </div>
 
           <div class="arenaFooter">
@@ -166,7 +167,7 @@
 
         <div class="infoTable">
           <div class="infoRow"><div class="infoKey">Режим</div><div class="infoVal">Penalty</div></div>
-          <div class="infoRow"><div class="infoKey">Сложность</div><div id="infoDiff" class="infoVal">Эксперт</div></div>
+          <div class="infoRow"><div class="infoKey">Сложность</div><div id="infoDiff" class="infoVal">Лёгкий</div></div>
           <div class="infoRow"><div class="infoKey">Ставка</div><div class="infoVal"><span id="infoBet">100</span> 🪙</div></div>
           <div class="infoRow"><div class="infoKey">Кэшаут</div><div class="infoVal"><span id="infoCash">—</span></div></div>
           <div class="infoRow"><div class="infoKey">Серия</div><div id="infoSeries" class="infoVal">ON</div></div>
