@@ -50,7 +50,6 @@ function beep(freq = 520, ms = 55, vol = 0.03, type = "sine") {
   } catch {}
 }
 
-// небольшой “взрыв” шумом
 function noiseBurst(ms = 130, vol = 0.05) {
   if (!soundOn) return;
   try {
@@ -66,7 +65,6 @@ function noiseBurst(ms = 130, vol = 0.05) {
     const g = ctx.createGain();
     g.gain.value = vol;
 
-    // лёгкий фильтр, чтобы был “хлопок”
     const biquad = ctx.createBiquadFilter();
     biquad.type = "lowpass";
     biquad.frequency.value = 900;
@@ -80,21 +78,19 @@ function noiseBurst(ms = 130, vol = 0.05) {
   } catch {}
 }
 
-// ===================== Multipliers (fixed ladders) =====================
+// ===================== Multipliers =====================
 // 10 шагов (0..10). На шаге 0 — x1.00
 const LADDERS = {
-  easy:   [1.00, 1.20, 1.45, 1.75, 2.15, 2.70, 3.45, 4.55, 6.20, 9.10, 14.00],
-  mid:    [1.00, 1.25, 1.55, 1.95, 2.50, 3.30, 4.50, 6.40, 9.80, 15.50, 25.00],
-  hard:   [1.00, 1.30, 1.70, 2.25, 3.05, 4.20, 6.10, 9.30, 15.00, 26.00, 45.00],
-  expert: [1.00, 1.35, 1.80, 2.45, 3.40, 4.90, 7.40, 11.80, 20.00, 38.00, 70.00],
+  easy: [1.00, 1.18, 1.42, 1.75, 2.20, 2.85, 3.80, 5.30, 7.80, 12.0, 18.0],
+  hard: [1.00, 1.25, 1.60, 2.10, 2.85, 3.90, 5.80, 9.20, 15.0, 27.0, 50.0],
 };
-const DIFF_LABEL = { easy:"Низкий", mid:"Средний", hard:"Сложный", expert:"Эксперт" };
+const DIFF_LABEL = { easy:"Лёгкий", hard:"Сложный" };
 const DIFF_HINT = {
-  easy:"Низкий: спокойный вратарь, X ниже.",
-  mid:"Средний: стандартная агрессия, X средний.",
-  hard:"Сложный: вратарь быстрее, X выше.",
-  expert:"Эксперт: вратарь агрессивнее, X самый высокий."
+  easy:"Лёгкий: вратарь перекрывает только 2 зоны (две руки).",
+  hard:"Сложный: вратарь перекрывает 2 зоны, но «дотягивается» на 1 клетку вокруг рук."
 };
+// сложный — радиус сейва вокруг рук
+const HARD_REACH = 1; // манхэттен 1
 
 // ===================== UI refs =====================
 const subTitle = document.getElementById("subTitle");
@@ -138,17 +134,17 @@ const gridEl = document.getElementById("grid");
 const gloveA = document.getElementById("gloveA");
 const gloveB = document.getElementById("gloveB");
 const ballEl = document.getElementById("ball");
+const flashEl = document.getElementById("flash");
 
 // ===================== State =====================
-let diff = "expert";
-let step = 0;                 // goals in a row
+let diff = "easy";
+let step = 0;
 let bet = 100;
-let inRound = false;          // bet placed (armed)
-let busy = false;             // anim lock
-let lastCovered = null;       // {a: idx, b: idx}
+let inRound = false;
+let busy = false;
 
 let patrolTimer = null;
-let patrolEnabled = true;
+let lastPair = null; // {a,b} indices (adjacent)
 
 // ===================== Render top =====================
 function renderTop(){
@@ -174,8 +170,17 @@ soundBtn.onclick = () => {
 // bonus
 bonusBtn.onclick = () => { addCoins(1000); beep(760, 70, 0.03); };
 
-// ===================== Build grid =====================
-const CELLS = 15; // 3x5
+// ===================== Grid =====================
+const ROWS = 3, COLS = 5;
+const CELLS = ROWS * COLS;
+
+function idxToRC(i){ return { r: Math.floor(i / COLS), c: i % COLS }; }
+function rcToIdx(r,c){ return r * COLS + c; }
+function manhattan(a,b){
+  const A = idxToRC(a), B = idxToRC(b);
+  return Math.abs(A.r - B.r) + Math.abs(A.c - B.c);
+}
+
 function buildGrid(){
   gridEl.innerHTML = "";
   for (let i = 0; i < CELLS; i++){
@@ -197,7 +202,8 @@ function clampBet(){
   betInput.value = String(v);
   bet = v;
   infoBet.textContent = String(bet);
-  // если в раунде — ставку менять нельзя
+
+  // блокируем изменение ставки в раунде
   betInput.disabled = inRound;
   betMinus.disabled = inRound;
   betPlus.disabled = inRound;
@@ -219,7 +225,7 @@ clampBet();
 
 // ===================== Difficulty =====================
 function setDiff(d){
-  if (inRound) return; // блокируем смену сложности в раунде
+  if (inRound) return;
   diff = d;
   diffBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.diff === d));
   diffHint.textContent = DIFF_HINT[d];
@@ -228,13 +234,12 @@ function setDiff(d){
   beep(520, 50, 0.02);
 }
 diffBtns.forEach(btn => btn.addEventListener("click", () => setDiff(btn.dataset.diff)));
-setDiff("expert");
+setDiff("easy");
 
 // ===================== Ladder =====================
 function renderLadder(){
   const arr = LADDERS[diff];
   ladderEl.innerHTML = "";
-  // показываем шаги 1..10 (без шага 0), но подсветка по step
   for (let i = 1; i < arr.length; i++){
     const el = document.createElement("div");
     el.className = "lStep" + (i === step ? " active" : "");
@@ -250,31 +255,8 @@ seriesToggle.addEventListener("change", () => {
   beep(520, 50, 0.02);
 });
 
-// ===================== Helpers: UI state =====================
+// ===================== UI helpers =====================
 function setStatus(t){ statusText.textContent = t; }
-
-function setRoundUI(){
-  // enable/disable cells
-  const cells = gridEl.querySelectorAll(".cell");
-  cells.forEach(c => c.classList.toggle("disabled", !inRound || busy));
-  // actions
-  betBtn.disabled = busy || inRound;
-  cashBtn.disabled = busy || !inRound || step < 1;
-  resetBtn.disabled = busy;
-  // info
-  infoCash.textContent = (inRound && step >= 1) ? `${calcCashout()} 🪙` : "—";
-  infoBet.textContent = String(bet);
-  stepView.textContent = String(step);
-  stepMini.textContent = String(step);
-  const x = currentX();
-  xView.textContent = `x${x.toFixed(2)}`;
-  xMini.textContent = `x${x.toFixed(2)}`;
-  potView.textContent = String(calcCashout());
-  // bet controls lock in round
-  clampBet();
-  // ladder highlight
-  renderLadder();
-}
 
 function currentX(){
   const arr = LADDERS[diff];
@@ -286,7 +268,30 @@ function calcCashout(){
   return Math.floor(bet * currentX());
 }
 
-// ===================== Goal geometry (centers) =====================
+function setRoundUI(){
+  const cells = gridEl.querySelectorAll(".cell");
+  cells.forEach(c => c.classList.toggle("disabled", !inRound || busy));
+
+  betBtn.disabled = busy || inRound;
+  cashBtn.disabled = busy || !inRound || step < 1;
+  resetBtn.disabled = busy;
+
+  infoCash.textContent = (inRound && step >= 1) ? `${calcCashout()} 🪙` : "—";
+
+  stepView.textContent = String(step);
+  stepMini.textContent = String(step);
+
+  const x = currentX();
+  xView.textContent = `x${x.toFixed(2)}`;
+  xMini.textContent = `x${x.toFixed(2)}`;
+
+  potView.textContent = String(calcCashout());
+
+  clampBet();
+  renderLadder();
+}
+
+// ===================== Geometry =====================
 function cellCenter(idx){
   const cell = gridEl.querySelector(`.cell[data-idx="${idx}"]`);
   const rGoal = goalEl.getBoundingClientRect();
@@ -297,9 +302,7 @@ function cellCenter(idx){
   };
 }
 
-// keep gloves strictly inside goal (absolute px)
 function placeGlove(el, x, y, rot=8){
-  // clamp inside goal bounds, leaving half size margin
   const rGoal = goalEl.getBoundingClientRect();
   const size = el.getBoundingClientRect();
   const halfW = size.width / 2;
@@ -318,65 +321,16 @@ function placeGlove(el, x, y, rot=8){
   el.style.transform = `translate(-50%,-50%) rotate(${rot}deg)`;
 }
 
-// ===================== Gloves patrol (inside goal only) =====================
-function startPatrol(){
-  stopPatrol();
-  patrolEnabled = true;
-
-  const moveOnce = () => {
-    if (!patrolEnabled) return;
-    if (busy) return;
-
-    // random point within the grid area (not outside)
-    const rg = goalEl.getBoundingClientRect();
-    const rr = gridEl.getBoundingClientRect();
-    const localLeft = rr.left - rg.left;
-    const localTop  = rr.top  - rg.top;
-
-    const x = localLeft + randFloat() * rr.width;
-    const y = localTop  + randFloat() * rr.height;
-
-    const x2 = localLeft + randFloat() * rr.width;
-    const y2 = localTop  + randFloat() * rr.height;
-
-    placeGlove(gloveA, x, y, randInt(-10, 10));
-    placeGlove(gloveB, x2, y2, randInt(-10, 10));
-  };
-
-  moveOnce();
-  patrolTimer = setInterval(moveOnce, 650);
-}
-function stopPatrol(){
-  patrolEnabled = false;
-  if (patrolTimer) clearInterval(patrolTimer);
-  patrolTimer = null;
+// СИНХРОННОЕ движение рук: две клетки (a,b) всегда рядом
+function placeHands(pair, rotA, rotB){
+  const ca = cellCenter(pair.a);
+  const cb = cellCenter(pair.b);
+  placeGlove(gloveA, ca.x, ca.y, rotA);
+  placeGlove(gloveB, cb.x, cb.y, rotB);
 }
 
-// ===================== Choose keeper zones =====================
-// returns {a, b} two distinct indices
-function keeperZones(){
-  // всегда 2 зоны, но “агрессия” = чаще рядом с центром
-  const weightCenter = (diff === "expert") ? 0.65 : (diff === "hard") ? 0.55 : (diff === "mid") ? 0.45 : 0.35;
-
-  const pickOne = () => {
-    if (randFloat() < weightCenter){
-      // bias to middle cells
-      const midCandidates = [6,7,8, 11,12,13, 1,2,3]; // по центру/вокруг
-      return midCandidates[randInt(0, midCandidates.length-1)];
-    }
-    return randInt(0, 14);
-  };
-
-  let a = pickOne();
-  let b = pickOne();
-  while (b === a) b = pickOne();
-
-  return { a, b };
-}
-
-// ===================== Ball animation (no trails) =====================
+// ===================== Ball (no trails) =====================
 function resetBall(){
-  // стартовая точка — низ по центру
   const rg = goalEl.getBoundingClientRect();
   const startX = rg.width / 2;
   const startY = rg.height - 18;
@@ -389,6 +343,11 @@ function resetBall(){
 }
 resetBall();
 
+function flash(){
+  flashEl.classList.add("on");
+  setTimeout(() => flashEl.classList.remove("on"), 130);
+}
+
 function flyBallTo(idx){
   return new Promise((resolve) => {
     const rg = goalEl.getBoundingClientRect();
@@ -396,30 +355,73 @@ function flyBallTo(idx){
     const startY = rg.height - 18;
     const target = cellCenter(idx);
 
-    // reset instant
     ballEl.classList.remove("fly");
     ballEl.style.opacity = "0";
     ballEl.style.left = `${startX}px`;
     ballEl.style.top  = `${startY}px`;
     ballEl.style.transform = "translate(-50%,-50%) scale(1)";
 
-    // reflow
     void ballEl.offsetWidth;
 
-    // fly
     ballEl.classList.add("fly");
     ballEl.style.opacity = "1";
     ballEl.style.left = `${target.x}px`;
     ballEl.style.top  = `${target.y}px`;
     ballEl.style.transform = "translate(-50%,-50%) scale(0.88)";
 
-    // end
     setTimeout(() => {
-      // скрываем мяч после удара (без следов)
       ballEl.style.opacity = "0";
       resolve();
     }, 290);
   });
+}
+
+// ===================== Adjacent pair generator =====================
+function randomAdjacentPair(){
+  // выбираем случайную клетку и случайное направление, пока не получится сосед
+  while (true){
+    const a = randInt(0, CELLS - 1);
+    const { r, c } = idxToRC(a);
+    const dirs = [];
+    if (c > 0) dirs.push([0,-1]);
+    if (c < COLS-1) dirs.push([0, 1]);
+    if (r > 0) dirs.push([-1,0]);
+    if (r < ROWS-1) dirs.push([ 1,0]);
+    const d = dirs[randInt(0, dirs.length-1)];
+    const b = rcToIdx(r + d[0], c + d[1]);
+    if (b !== a) return { a, b };
+  }
+}
+
+// ===================== Patrol (hands move together) =====================
+function startPatrol(){
+  stopPatrol();
+  // стартовая пара
+  lastPair = randomAdjacentPair();
+  placeHands(lastPair, randInt(-10,10), randInt(-10,10));
+
+  patrolTimer = setInterval(() => {
+    if (busy) return;
+    lastPair = randomAdjacentPair();
+    placeHands(lastPair, randInt(-10,10), randInt(-10,10));
+  }, 700);
+}
+function stopPatrol(){
+  if (patrolTimer) clearInterval(patrolTimer);
+  patrolTimer = null;
+}
+
+// ===================== “Save area” rules =====================
+function isSaved(targetIdx, pair){
+  // базово: попал в одну из 2 клеток рук
+  if (targetIdx === pair.a || targetIdx === pair.b) return true;
+
+  // сложный: +радиус досягаемости 1 клетка вокруг каждой руки
+  if (diff === "hard"){
+    if (manhattan(targetIdx, pair.a) <= HARD_REACH) return true;
+    if (manhattan(targetIdx, pair.b) <= HARD_REACH) return true;
+  }
+  return false;
 }
 
 // ===================== Round actions =====================
@@ -428,16 +430,15 @@ betBtn.onclick = () => {
   if (bet <= 0) return alert("Ставка должна быть больше 0");
   if (bet > wallet.coins) return alert("Недостаточно монет");
 
-  // списываем ставку 1 раз
   addCoins(-bet);
 
   inRound = true;
   step = 0;
-  lastCovered = null;
+
   setStatus("Ставка принята. Выбери точку удара в воротах.");
   beep(520, 55, 0.02);
 
-  // блокируем настройки
+  // lock settings
   diffBtns.forEach(b => b.disabled = true);
   seriesToggle.disabled = true;
 
@@ -454,28 +455,28 @@ cashBtn.onclick = () => {
   beep(760, 70, 0.03);
   beep(920, 70, 0.03);
 
-  endRound(true);
+  endRound(false);
 };
 
 resetBtn.onclick = () => {
   if (busy) return;
-  // если раунд активен и step==0 — вернем ставку (как в наших режимах)
+
+  // возврат ставки при сбросе до первого гола
   if (inRound && step === 0){
     addCoins(bet);
     setStatus("Сброс: ставка возвращена. Выбери ставку и нажми «Ставка».");
   } else {
     setStatus("Сброс. Выбери ставку и нажми «Ставка».");
   }
-  endRound(false);
+
+  endRound(true);
 };
 
-function endRound(keepStep){
+function endRound(resetStep){
   inRound = false;
   busy = false;
-  lastCovered = null;
-  if (!keepStep) step = 0;
+  if (resetStep) step = 0;
 
-  // разблокируем настройки
   diffBtns.forEach(b => b.disabled = false);
   seriesToggle.disabled = false;
 
@@ -491,52 +492,49 @@ async function onShoot(idx){
   busy = true;
   setRoundUI();
 
-  // перед ударом выбираем зоны сейва и двигаем перчатки ТОЛЬКО в них
-  const cover = keeperZones();
-  lastCovered = cover;
+  // руки выбирают 2 соседние клетки (СИНХРОННО)
+  const pair = randomAdjacentPair();
+  lastPair = pair;
 
-  const ca = cellCenter(cover.a);
-  const cb = cellCenter(cover.b);
+  // движение рук "к сейву" (вдвоём)
+  placeHands(pair, randInt(-12,12), randInt(-12,12));
 
-  placeGlove(gloveA, ca.x, ca.y, randInt(-12, 12));
-  placeGlove(gloveB, cb.x, cb.y, randInt(-12, 12));
-
-  // удар
-  setStatus("Удар...");
+  // звук удара
   beep(520, 45, 0.02);
 
   await flyBallTo(idx);
 
-  const saved = (idx === cover.a || idx === cover.b);
+  const saved = isSaved(idx, pair);
 
   if (saved){
-    // сейв: ставка сгорает, раунд конец
     setStatus("Сейв! Ставка сгорела.");
+    flash();
     noiseBurst(140, 0.055);
     beep(220, 90, 0.03, "triangle");
 
-    // мгновенный сброс без “следов”
     busy = false;
-    endRound(false);
+    endRound(true);
     return;
   }
 
-  // гол
+  // goal
   step = Math.min(step + 1, LADDERS[diff].length - 1);
   const x = currentX();
 
   setStatus(`Гол! Серия: ${step}. X вырос до x${x.toFixed(2)}. Можно кэшаут.`);
+  flash();
   beep(760, 65, 0.03);
   beep(920, 65, 0.03);
 
-  // авто-логика серии OFF: после гола сразу кэшаут и конец
+  // серия OFF = авто-кэшаут
   if (!seriesToggle.checked){
     const payout = calcCashout();
     addCoins(payout);
     setStatus(`Гол! Авто-кэшаут: +${payout} 🪙 (x${x.toFixed(2)}).`);
     beep(880, 70, 0.03);
+
     busy = false;
-    endRound(false);
+    endRound(true);
     return;
   }
 
@@ -544,28 +542,19 @@ async function onShoot(idx){
   setRoundUI();
 }
 
-// ===================== Init / patrol =====================
+// ===================== Init =====================
 function init(){
-  // subtitle
   renderTop();
+  infoSeries.textContent = seriesToggle.checked ? "ON" : "OFF";
+  infoDiff.textContent = DIFF_LABEL[diff];
 
-  // start patrol (visual life)
   startPatrol();
-
-  // initial UI
   setRoundUI();
 
-  // resize safety
   window.addEventListener("resize", () => {
-    // на ресайзе просто мягко возвращаем в рамки
-    if (lastCovered){
-      const ca = cellCenter(lastCovered.a);
-      const cb = cellCenter(lastCovered.b);
-      placeGlove(gloveA, ca.x, ca.y, 6);
-      placeGlove(gloveB, cb.x, cb.y, -6);
-    } else {
-      // перезапуск патруля
-      startPatrol();
+    // на ресайзе просто безопасно пересадим руки в актуальную пару
+    if (lastPair){
+      placeHands(lastPair, 6, -6);
     }
     resetBall();
   });
