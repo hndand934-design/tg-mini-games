@@ -19,6 +19,11 @@
     crypto.getRandomValues(u);
     return u[0] % n;
   }
+  function rngFloat() {
+    const u = new Uint32Array(1);
+    crypto.getRandomValues(u);
+    return u[0] / 2 ** 32;
+  }
 
   // ===== AUDIO =====
   let soundOn = true;
@@ -63,6 +68,7 @@
     currentX: 1.0,
     cashoutEnabled: false,
 
+    // визуально всё равно 2 клетки
     goalieCells: [0, 1],
     goalieCover: [0, 1],
 
@@ -73,6 +79,7 @@
     ballHome: null,
     animLock: false,
 
+    // “память” ударов игрока
     heat: new Array(15).fill(0),
   };
 
@@ -93,7 +100,7 @@
   const ladderEl = $("#ladder");
   const stepTxt = $("#stepTxt");
   const xTxt = $("#xTxt");
-  const potTxt = $("#potTxt"); // может отсутствовать в этой разметке — ок
+  const potTxt = $("#potTxt"); // может отсутствовать — ок
   const stepMini = $("#stepMini");
   const xMini = $("#xMini");
   const cashLabel = $("#cashLabel");
@@ -244,18 +251,20 @@
     return out;
   }
 
-  // ===== smart goalie (2 клетки, но умнее) =====
-  const HEAT_DECAY = 0.92;
+  // ===== HARDER “BRAIN” SETTINGS (НЕ ВИЗУАЛЬНО) =====
+  // 1) “память” ударов держится дольше (меньше затухает)
+  const HEAT_DECAY = 0.88; // было ~0.92 (дольше помнит) => сложнее
 
+  // 2) сильнее запоминает твой выбор
+  function bumpHeat(idx) {
+    state.heat[idx] += 1.65;               // было слабее
+    for (const nb of neighbors(idx)) state.heat[nb] += 0.55;
+  }
   function decayHeat() {
     for (let i = 0; i < state.heat.length; i++) state.heat[i] *= HEAT_DECAY;
   }
 
-  function bumpHeat(idx) {
-    state.heat[idx] += 1.2;
-    for (const nb of neighbors(idx)) state.heat[nb] += 0.35;
-  }
-
+  // ===== base pair picker =====
   function randomAdjacentPair() {
     const base = rngInt(ROWS * COLS);
     const nbs = neighbors(base);
@@ -281,16 +290,18 @@
     const [a, b] = pair;
     const heat = state.heat[a] + state.heat[b];
 
+    // лёгкий центр-бонус оставляем (чтобы выглядело естественно)
     const center = 7;
     const distA = Math.abs(a - center);
     const distB = Math.abs(b - center);
     const centerBias = (1 / (1 + distA)) + (1 / (1 + distB));
 
+    // 3) сильнее “интеллект” с ростом шага
     const aggro = (state.diff === "hard")
-      ? clamp(0.35 + state.step * 0.13, 0.35, 1.35)
-      : clamp(0.22 + state.step * 0.08, 0.22, 0.95);
+      ? clamp(0.55 + state.step * 0.18, 0.55, 1.60)
+      : clamp(0.38 + state.step * 0.12, 0.38, 1.20);
 
-    return 0.20 + heat * aggro + centerBias * 0.18;
+    return 0.18 + heat * aggro + centerBias * 0.16;
   }
 
   function weightedPickPair() {
@@ -304,7 +315,7 @@
       sum += ww;
     }
 
-    const r = (rngInt(1_000_000) / 1_000_000) * sum;
+    const r = rngFloat() * sum;
     let acc = 0;
     for (let i = 0; i < pairs.length; i++) {
       acc += w[i];
@@ -315,7 +326,7 @@
 
   function updateGoalieState(pair) {
     state.goalieCells = pair;
-    state.goalieCover = pair.slice(); // 2 клетки
+    state.goalieCover = pair.slice(); // ВИЗУАЛ: 2 клетки, ЛОГИКА: тоже 2
     moveGlovesToPair(pair);
   }
 
@@ -332,9 +343,9 @@
 
       let pair = weightedPickPair();
 
-      // хаос — чтобы не было 100% угадывания
-      const chaos = (state.diff === "hard") ? 0.20 : 0.33;
-      if ((rngInt(1000) / 1000) < chaos) pair = randomAdjacentPair();
+      // 4) меньше хаоса => умнее => сложнее
+      const chaos = (state.diff === "hard") ? 0.12 : 0.24; // было больше
+      if (rngFloat() < chaos) pair = randomAdjacentPair();
 
       updateGoalieState(pair);
     }, cfg.moveEveryMs);
@@ -345,6 +356,19 @@
       clearInterval(state.goalieTimer);
       state.goalieTimer = null;
     }
+  }
+
+  // ===== СКРЫТЫЙ “РЕФЛЕКС” СЕЙВА (НЕ ВИЗУАЛЬНО) =====
+  // Иногда вратарь “угадывает” удар даже если не перекрывал эту клетку.
+  // Визуально ничего не меняется (перчатки те же).
+  function reflexSaveChance() {
+    // Чем дальше серия — тем опаснее
+    // Лёгкий: до ~28%
+    // Сложный: до ~45%
+    if (state.diff === "hard") {
+      return clamp(0.18 + state.step * 0.05, 0.18, 0.45);
+    }
+    return clamp(0.10 + state.step * 0.03, 0.10, 0.28);
   }
 
   // ===== ball animation =====
@@ -412,7 +436,7 @@
 
     requestAnimationFrame(() => {
       measureRects();
-      for (let i = 0; i < state.heat.length; i++) state.heat[i] *= 0.35;
+      for (let i = 0; i < state.heat.length; i++) state.heat[i] *= 0.30; // меньше сброса => сложнее
       startGoalie();
     });
 
@@ -502,12 +526,20 @@
     if (state.animLock) return;
     state.animLock = true;
 
+    // запоминаем твой выбор (чтобы дальше сложнее)
     bumpHeat(idx);
 
     beep("kick");
     await animateBallToZone(idx);
 
-    const saved = state.goalieCover.includes(idx);
+    // базовая проверка: стоит ли он в этой зоне
+    let saved = state.goalieCover.includes(idx);
+
+    // скрытый рефлекс: если НЕ перекрывал — иногда “угадывает”
+    if (!saved) {
+      const p = reflexSaveChance();
+      if (rngFloat() < p) saved = true;
+    }
 
     if (saved) {
       setMsg("Сейв! Ставка сгорела.");
