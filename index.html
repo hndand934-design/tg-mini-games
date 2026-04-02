@@ -1,141 +1,594 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Mini Games — Penalty</title>
-  <link rel="stylesheet" href="./style.css" />
+  <meta name="viewport"
+        content="width=device-width,
+                 initial-scale=1,
+                 maximum-scale=1,
+                 minimum-scale=1,
+                 viewport-fit=cover">
+  <title>Triniti</title>
+
+  <link rel="stylesheet" href="./shared/theme.css">
+  <script src="./shared/wallet.js"></script>
+  <link rel="stylesheet" href="./triniti.css" />
 </head>
 <body>
-  <div class="bg"></div>
+  <div class="siteBg"></div>
+  <div class="siteNoise" aria-hidden="true"></div>
 
-  <div class="app">
+  <div class="shell">
     <header class="topbar">
       <div class="topbar__left">
-        <div class="title">Mini Games</div>
-        <div class="subtitle">Penalty</div>
-      </div>
-
-      <div class="topbar__right">
-        <button id="soundBtn" class="pill" type="button" aria-label="Звук">
-          <span id="soundDot" class="dot"></span>
-          <span id="soundTxt">Звук on</span>
+        <button id="menuBtn" class="menuBtn pressable" type="button" aria-label="Меню">
+          <span></span>
+          <span></span>
+          <span></span>
         </button>
 
-        <button id="bonusBtn" class="pill pill--bonus" type="button">+1000</button>
+        <a href="#" class="brand">
+          <div class="brandLogo" aria-hidden="true">
+            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="trinitiGoldDesktopNew" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#fff1be"/>
+                  <stop offset="45%" stop-color="#efc86e"/>
+                  <stop offset="100%" stop-color="#b57e28"/>
+                </linearGradient>
+              </defs>
+              <rect x="8" y="8" width="48" height="48" rx="16"
+                    fill="rgba(10,14,24,.88)"
+                    stroke="url(#trinitiGoldDesktopNew)"
+                    stroke-width="2.8"/>
+              <path d="M18 20H46L40.6 25.4H35V42.5L32 46L29 42.5V25.4H23.4L18 20Z"
+                    fill="url(#trinitiGoldDesktopNew)"/>
+            </svg>
+          </div>
 
-        <div class="pill pill--balance">Баланс: <b id="bal">1000</b> ₽</div>
+          <div class="brandText">
+            <div class="brandTitle">Triniti</div>
+          </div>
+        </a>
+      </div>
+
+      <nav class="topbar__nav">
+        <button class="topNavLink pressable" type="button" data-jump="#heroTop">Главная</button>
+        <button class="topNavLink pressable" type="button" data-jump="#gamesSec">Игры</button>
+        <button class="topNavLink pressable" type="button" data-open="promo">Бонусы</button>
+        <button class="topNavLink pressable" type="button" data-open="free">Халява</button>
+        <button class="topNavLink pressable" type="button" data-open="support">Поддержка</button>
+      </nav>
+
+      <div class="topbar__right">
+        <div class="topBalance">
+          <div class="topBalance__label">Баланс</div>
+          <div class="topBalance__value"><b id="balanceRail">1000</b> ₽</div>
+        </div>
+
+        <button class="authBtn authBtn--ghost pressable" type="button">Войти</button>
+        <button class="authBtn authBtn--primary pressable" type="button">Регистрация</button>
       </div>
     </header>
 
-    <main class="card">
-      <div class="head">
-        <div class="h1">Пенальти</div>
-        <div class="hint" id="diffHint">Лёгкий: вратарь угадывает реже.</div>
-      </div>
+    <main class="layout layout--sidebar-closed" id="mainLayout">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebarDock">
+          <button class="sideIcon pressable active" type="button" data-jump="#heroTop" aria-label="Главная">⌂</button>
+          <button class="sideIcon pressable" type="button" data-jump="#gamesSec" aria-label="Игры">🎮</button>
+          <button class="sideIcon pressable" type="button" data-open="promo" aria-label="Промокоды">％</button>
+          <button class="sideIcon pressable" type="button" data-open="free" aria-label="Халява">🎁</button>
+          <button class="sideIcon pressable" type="button" data-open="support" aria-label="Поддержка">?</button>
+        </div>
+      </aside>
 
-      <div class="layout">
-        <!-- LEFT: Goal -->
-        <section class="left">
-          <div class="goalWrap">
-            <div class="goalTitle">
-              <div class="mini">Выбери зону удара</div>
-              <div class="miniRight">
-                Шаг: <b id="stepMini">0</b> · <span id="xMini">x1.00</span>
-              </div>
+      <section class="content">
+        <section id="heroTop" class="mobileTop">
+          <div class="mobileTop__row">
+            <div class="mobileBrand">
+              <a href="#" class="mBrandWrap">
+                <div class="mBrandLogo" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id="trinitiGoldMobileNew" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#fff1be"/>
+                        <stop offset="45%" stop-color="#efc86e"/>
+                        <stop offset="100%" stop-color="#b57e28"/>
+                      </linearGradient>
+                    </defs>
+                    <rect x="8" y="8" width="48" height="48" rx="16"
+                          fill="rgba(10,14,24,.88)"
+                          stroke="url(#trinitiGoldMobileNew)"
+                          stroke-width="2.8"/>
+                    <path d="M18 20H46L40.6 25.4H35V42.5L32 46L29 42.5V25.4H23.4L18 20Z"
+                          fill="url(#trinitiGoldMobileNew)"/>
+                  </svg>
+                </div>
+
+                <div class="mBrandText">
+                  <div class="mTitle">Triniti</div>
+                </div>
+              </a>
             </div>
 
-            <div id="goalFrame" class="goalFrame">
-              <div class="goalNet"></div>
-
-              <div id="zones" class="zones" aria-label="goal zones"></div>
-
-              <!-- gloves group -->
-              <div id="gloves" class="gloves" aria-label="goalie gloves">
-                <div class="glove g1"></div>
-                <div class="glove g2"></div>
-              </div>
-
-              <!-- ball -->
-              <div id="ball" class="ball" aria-label="ball"></div>
+            <div class="mobileAuth">
+              <button class="authBtn authBtn--ghost pressable" type="button">Войти</button>
+              <button class="authBtn authBtn--primary pressable" type="button">Регистрация</button>
             </div>
-
-            <div id="msg" class="msg">Выбери ставку и сложность, затем нажми «Ставка».</div>
           </div>
         </section>
 
-        <!-- RIGHT: Controls -->
-        <aside class="right">
-          <div class="panel">
-            <div class="row">
-              <div class="lab">Сложность</div>
-              <div class="val"><b id="diffLabel">Лёгкий</b></div>
-            </div>
-
-            <div class="diffRow">
-              <button id="easyBtn" class="seg active" type="button">Лёгкий</button>
-              <button id="hardBtn" class="seg" type="button">Сложный</button>
-            </div>
-
-            <div class="hr"></div>
-
-            <div class="row">
-              <div class="lab">Ставка</div>
-              <div class="val"><b id="betLabel">100</b> ₽</div>
-            </div>
-
-            <div class="betRow">
-              <button id="minus" class="btnSmall" type="button">−</button>
-              <input id="bet" class="betInput" type="number" min="1" step="1" value="100" />
-              <button id="plus" class="btnSmall" type="button">+</button>
-            </div>
-
-            <div class="chips">
-              <button class="chip" data-chip="10" type="button">10</button>
-              <button class="chip" data-chip="50" type="button">50</button>
-              <button class="chip" data-chip="100" type="button">100</button>
-              <button class="chip" data-chip="250" type="button">250</button>
-              <button class="chip" data-chip="500" type="button">500</button>
-              <button class="chip" data-chip="max" type="button">MAX</button>
-            </div>
-
-            <div class="hr"></div>
-
-            <div class="stats">
-              <div class="s">
-                <div class="lab">Шаг</div>
-                <div class="val"><b id="stepTxt">0</b></div>
+        <section class="heroPromoArea">
+          <div class="promoGrid">
+            <a class="promoBanner promoBanner--welcome pressable" href="#" id="depositBanner">
+              <div class="promoBanner__content">
+                <div class="promoBanner__eyebrow">Приветственный бонус</div>
+                <h1 class="promoBanner__title">
+                  <span class="promoBanner__accent">X2</span><br>
+                  На первый<br>
+                  депозит
+                </h1>
+                <span class="promoBanner__btn">Депозит</span>
               </div>
-              <div class="s">
-                <div class="lab">X</div>
-                <div class="val"><b id="xTxt">x1.00</b></div>
-              </div>
-              <div class="s">
-                <div class="lab">Забрать</div>
-                <div class="val"><b id="cashLabel">—</b></div>
-              </div>
-            </div>
 
-            <div class="actions">
-              <button id="placeBtn" class="btnPrimary" type="button">Ставка</button>
-              <button id="cashBtn" class="btnGhost" type="button">Забрать</button>
-              <button id="resetBtn" class="btnGhost2" type="button">Сброс</button>
+              <div class="promoDragon promoDragon--welcome" aria-hidden="true">
+                <div class="promoDragon__halo"></div>
+                <div class="promoDragon__coin"></div>
+                <div class="promoDragon__face"></div>
+                <div class="promoDragon__eye promoDragon__eye--left"></div>
+                <div class="promoDragon__eye promoDragon__eye--right"></div>
+                <div class="promoDragon__horn promoDragon__horn--left"></div>
+                <div class="promoDragon__horn promoDragon__horn--right"></div>
+                <div class="promoDragon__body"></div>
+                <div class="promoDragon__card"></div>
+              </div>
+            </a>
+
+            <button class="promoBanner promoBanner--promo pressable" type="button" data-open="promo">
+              <div class="promoBanner__content">
+                <div class="promoBanner__eyebrow">Активируйте ваучер</div>
+                <h2 class="promoBanner__title promoBanner__title--mid">
+                  Активируйте<br>
+                  промокод
+                </h2>
+                <span class="promoBanner__btn">Активировать</span>
+              </div>
+
+              <div class="promoDragon promoDragon--mini" aria-hidden="true">
+                <div class="promoDragon__halo"></div>
+                <div class="promoDragon__face promoDragon__face--small"></div>
+                <div class="promoDragon__eye promoDragon__eye--left promoDragon__eye--small"></div>
+                <div class="promoDragon__eye promoDragon__eye--right promoDragon__eye--small"></div>
+                <div class="promoDragon__wing"></div>
+                <div class="promoDragon__body promoDragon__body--small"></div>
+              </div>
+            </button>
+
+            <a class="promoBanner promoBanner--mode pressable" href="./mines/">
+              <div class="promoBanner__content">
+                <div class="promoBanner__eyebrow">MINES</div>
+                <h2 class="promoBanner__title promoBanner__title--mid">
+                  Открывай<br>
+                  ячейки и избегай<br>
+                  мин
+                </h2>
+                <span class="promoBanner__btn">Играть</span>
+              </div>
+
+              <div class="promoTorchDragon" aria-hidden="true">
+                <div class="promoTorchDragon__flame"></div>
+                <div class="promoTorchDragon__staff"></div>
+                <div class="promoTorchDragon__head"></div>
+                <div class="promoTorchDragon__neck"></div>
+                <div class="promoTorchDragon__eye"></div>
+              </div>
+            </a>
+          </div>
+        </section>
+
+        <section class="walletRow">
+          <div class="walletRow__left">
+            <div class="walletCard walletCard--balance">
+              <div class="walletCard__label">Общий баланс</div>
+              <div class="walletCard__value"><b id="balance">1000</b> <span class="rubSign">₽</span></div>
             </div>
           </div>
 
-          <div class="ladderWrap">
-            <div class="ladderHead">
-              <div class="h2">Лестница X</div>
-              <div class="muted">Активный шаг подсвечен</div>
-            </div>
-            <div id="ladder" class="ladder"></div>
-            <div class="tiny">Монеты виртуальные. Вывода нет.</div>
+          <div class="walletRow__right">
+            <button id="depositBtn" class="walletAction walletAction--deposit pressable" type="button">
+              <span class="walletAction__title">Пополнить</span>
+              <span class="walletAction__desc">быстрый вход в игру</span>
+            </button>
+
+            <button id="withdrawBtn" class="walletAction walletAction--withdraw pressable" type="button">
+              <span class="walletAction__title">Вывести</span>
+              <span class="walletAction__desc">запрос на вывод</span>
+            </button>
+
+            <button id="onlineCard" class="walletAction walletAction--online pressable" type="button">
+              <div class="walletAction__onlineTop">
+                <span class="onlineBadge">
+                  <span class="onlineDot"></span>
+                  LIVE
+                </span>
+              </div>
+
+              <div class="walletAction__onlineMain">
+                <b id="onlineCount">186</b>
+                <span>игроков онлайн</span>
+              </div>
+
+              <div class="onlineBars" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span>
+              </div>
+            </button>
           </div>
-        </aside>
-      </div>
+        </section>
+
+        <section class="mobileWalletPanel">
+          <div class="mobileWalletPanel__balance">
+            <div class="mobileWalletPanel__label">Общий баланс</div>
+            <div class="mobileWalletPanel__value"><b id="balance2">1000</b> <span class="rubSign">₽</span></div>
+          </div>
+
+          <div class="mobileWalletPanel__actions">
+            <button id="depositBtnMobile" class="mobileWalletPanel__btn mobileWalletPanel__btn--primary pressable" type="button">
+              <span>Пополнить</span>
+              <small>быстрый вход в игру</small>
+            </button>
+
+            <button id="withdrawBtnMobile" class="mobileWalletPanel__btn mobileWalletPanel__btn--withdraw pressable" type="button">
+              <span>Вывести</span>
+              <small>запрос на вывод</small>
+            </button>
+          </div>
+
+          <button id="onlineCardMobile" class="mobileWalletPanel__online pressable" type="button">
+            <div class="mobileWalletPanel__onlineTop">
+              <span class="onlineBadge">
+                <span class="onlineDot"></span>
+                LIVE
+              </span>
+            </div>
+
+            <div class="mobileWalletPanel__onlineValue">
+              <b id="onlineCountMobile">186</b>
+              <span>игроков онлайн</span>
+            </div>
+
+            <div class="onlineBars onlineBars--mobile" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </button>
+        </section>
+
+        <section class="switchTabs">
+          <button class="switchTabs__btn switchTabs__btn--active pressable" type="button">Все игры</button>
+          <button class="switchTabs__btn pressable" type="button">Слоты</button>
+        </section>
+
+        <section id="gamesSec" class="section section--ourGames">
+          <div class="sectionHead sectionHead--icon">
+            <div class="sectionHead__icon">🎮</div>
+            <div class="sectionTitle">Наши игры</div>
+          </div>
+
+          <section id="games" class="gamesGrid">
+            <a class="gameTile gameTile--mines pressable" href="./mines/">
+              <div class="gameTile__icon gameTile__icon--bomb"></div>
+              <div class="gameTile__title">МИНЫ</div>
+            </a>
+
+            <a class="gameTile gameTile--tower pressable" href="./tower/">
+              <div class="gameTile__icon gameTile__icon--tower"></div>
+              <div class="gameTile__title">БАШНЯ</div>
+            </a>
+
+            <a class="gameTile gameTile--dice pressable" href="./dice/">
+              <div class="gameTile__icon gameTile__icon--dice"></div>
+              <div class="gameTile__title">ДАЙС</div>
+            </a>
+
+            <a class="gameTile gameTile--coin pressable" href="./coinflip/">
+              <div class="gameTile__icon gameTile__icon--coin"></div>
+              <div class="gameTile__title">МОНЕТКА</div>
+            </a>
+
+            <a class="gameTile gameTile--wheel pressable" href="./wheel/">
+              <div class="gameTile__icon gameTile__icon--wheel"></div>
+              <div class="gameTile__title">КОЛЕСО</div>
+            </a>
+          </section>
+        </section>
+
+        <section id="featuredSec" class="section section--popular">
+          <div class="sectionHead sectionHead--icon">
+            <div class="sectionHead__icon">📈</div>
+            <div class="sectionTitle">Популярные</div>
+          </div>
+
+          <div class="popularGrid">
+            <div class="tournamentCard">
+              <div class="tournamentCard__content">
+                <div class="tournamentCard__eyebrow">Турнир</div>
+                <div class="tournamentCard__title">Еженедельный<br>везунчик</div>
+                <button class="tournamentCard__btn pressable" type="button">Больше</button>
+
+                <div class="countdown">
+                  <div class="countdown__label">До завершения:</div>
+                  <div class="countdown__grid">
+                    <div class="countdown__box">
+                      <b>24</b>
+                      <span>Дней</span>
+                    </div>
+                    <div class="countdown__box">
+                      <b>12</b>
+                      <span>Часов</span>
+                    </div>
+                    <div class="countdown__box">
+                      <b>06</b>
+                      <span>Минут</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="winners">
+                <div class="winner winner--second">
+                  <div class="winner__place">2 место</div>
+                  <div class="winner__egg winner__egg--silver"></div>
+                  <div class="winner__name">Nickname</div>
+                  <div class="winner__score">128 000</div>
+                  <div class="winner__prize">2500 ₽</div>
+                </div>
+
+                <div class="winner winner--first">
+                  <div class="winner__place">1 место</div>
+                  <div class="winner__egg winner__egg--blue"></div>
+                  <div class="winner__name">Nickname</div>
+                  <div class="winner__score">128 000</div>
+                  <div class="winner__prize">2500 ₽</div>
+                </div>
+
+                <div class="winner winner--third">
+                  <div class="winner__place">3 место</div>
+                  <div class="winner__egg winner__egg--orange"></div>
+                  <div class="winner__name">Nickname</div>
+                  <div class="winner__score">128 000</div>
+                  <div class="winner__prize">2500 ₽</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="wheelPromo">
+              <div class="wheelPromo__eyebrow">Колесо</div>
+              <div class="wheelPromo__title">
+                Крути колесо<br>
+                каждые 24 часа
+              </div>
+
+              <div class="wheelPromo__wheel" aria-hidden="true">
+                <div class="wheelPromo__ring">
+                  <span>25 ₽</span>
+                  <span>25 ₽</span>
+                  <span>25 ₽</span>
+                  <span>25 ₽</span>
+                  <span>25 ₽</span>
+                  <span>25 ₽</span>
+                </div>
+                <div class="wheelPromo__center">T</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="paymentsGrid">
+          <div class="payBox">VISA</div>
+          <div class="payBox">MASTERCARD</div>
+          <div class="payBox">МИР</div>
+          <div class="payBox">ЮMoney</div>
+          <div class="payBox">СБП</div>
+          <div class="payBox">BTC</div>
+          <div class="payBox">USDT</div>
+          <div class="payBox">TON</div>
+        </section>
+
+        <footer class="footer">
+          <div class="footer__left">
+            <div class="footerSocial">TG</div>
+            <div class="footerSocial">VK</div>
+            <div class="footerText">18+</div>
+            <div class="footerText">© 2026 Triniti</div>
+          </div>
+
+          <div class="footer__nav">
+            <button class="footerLink pressable" type="button" data-jump="#heroTop">Главная</button>
+            <button class="footerLink pressable" type="button" data-open="promo">Бонусы</button>
+            <button class="footerLink pressable" type="button" data-open="free">Халява</button>
+            <button class="footerLink pressable" type="button" data-open="support">Поддержка</button>
+          </div>
+        </footer>
+      </section>
     </main>
   </div>
 
-  <script src="./app.js"></script>
+  <nav class="mobileBottomNav" aria-label="Мобильная навигация">
+    <button class="mobileBottomNav__item pressable active" type="button" data-jump="#heroTop">Главная</button>
+    <button class="mobileBottomNav__item pressable" type="button" data-jump="#gamesSec">Игры</button>
+    <button class="mobileBottomNav__item pressable" type="button" data-open="promo">Бонусы</button>
+    <button class="mobileBottomNav__item pressable" type="button" data-open="free">Халява</button>
+    <button class="mobileBottomNav__item pressable" type="button" data-open="support">Поддержка</button>
+  </nav>
+
+  <div id="freeModal" class="modal" aria-hidden="true">
+    <div class="modal__backdrop" data-close="1"></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Халява">
+      <div class="modal__head">
+        <div class="modal__title">Халява</div>
+        <button class="modal__close pressable" id="freeClose" type="button" aria-label="Закрыть">✕</button>
+      </div>
+
+      <div class="tabs">
+        <button id="tabDaily" class="tab pressable active" type="button">Ежедневное колесо</button>
+        <button id="tabSocial" class="tab pressable" type="button">Подписки</button>
+      </div>
+
+      <section id="paneDaily" class="pane">
+        <div class="dailyTopRow">
+          <div>
+            <div class="dailyTitle">Ежедневное колесо</div>
+            <div class="dailyHint">1 попытка в сутки. Приз сразу в кошелёк.</div>
+          </div>
+          <div class="timerBox">
+            <div class="timerLabel">Следующая попытка через</div>
+            <div class="timerVal" id="dailyTimer">00:00:00</div>
+          </div>
+        </div>
+
+        <div class="dailyWrap">
+          <div class="dailyLeft">
+            <div class="wheelBox">
+              <div class="pointer"></div>
+              <canvas id="dailyWheel" width="520" height="520"></canvas>
+              <div class="wheelCenter">
+                <div class="centerBig" id="wheelCenterTxt">SPIN</div>
+                <div class="centerSmall" id="wheelCenterSub">сегодня</div>
+              </div>
+            </div>
+
+            <button id="spinBtn" class="btnPrimary pressable" type="button">Крутить</button>
+            <div class="dailyMsg" id="dailyMsg">Жми “Крутить” и забирай приз.</div>
+          </div>
+
+          <div class="dailyRight">
+            <div class="listCard">
+              <div class="listTitle">Призы</div>
+              <div id="prizeList" class="prizeList"></div>
+              <div class="listNote">RNG: <code>crypto.getRandomValues</code></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="paneSocial" class="pane hidden">
+        <div class="socialCard">
+          <div class="dailyTitle">Бонусы за подписку</div>
+          <div class="dailyHint">Один раз на браузер (локально).</div>
+
+          <div class="socialGrid">
+            <div class="socItem">
+              <div class="socTop">
+                <div class="socIcon">VK</div>
+                <div>
+                  <div class="socName">Подписка ВК</div>
+                  <div class="socDesc">+10 ₽</div>
+                </div>
+              </div>
+              <div class="socBtns">
+                <a class="btnGhost pressable" href="#" onclick="return false;">Открыть ВК</a>
+                <button id="claimVK" class="btnPrimary pressable" type="button">Я подписался</button>
+              </div>
+              <div class="socState" id="vkState">Не получено</div>
+            </div>
+
+            <div class="socItem">
+              <div class="socTop">
+                <div class="socIcon">TG</div>
+                <div>
+                  <div class="socName">Подписка Telegram</div>
+                  <div class="socDesc">+10 ₽</div>
+                </div>
+              </div>
+              <div class="socBtns">
+                <a class="btnGhost pressable" href="#" onclick="return false;">Открыть TG</a>
+                <button id="claimTG" class="btnPrimary pressable" type="button">Я подписался</button>
+              </div>
+              <div class="socState" id="tgState">Не получено</div>
+            </div>
+          </div>
+
+          <div class="finePrint">
+            * Реальная проверка подписки делается через сервер/бота. Сейчас логика локальная.
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="promoModal" class="modal" aria-hidden="true">
+    <div class="modal__backdrop" data-close="1"></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Промокоды">
+      <div class="modal__head">
+        <div class="modal__title">Промокоды</div>
+        <button class="modal__close pressable" id="promoClose" type="button" aria-label="Закрыть">✕</button>
+      </div>
+
+      <section class="pane">
+        <div class="promoCard">
+          <div>
+            <div class="promoTitle">Активация промокода</div>
+            <div class="promoSub">Введите код — начислим деньги в общий баланс.</div>
+          </div>
+
+          <div class="promoBody">
+            <div class="promoLogoSlot" aria-hidden="true"></div>
+            <div class="promoForm">
+              <input id="promoInput" class="promoInput" type="text" placeholder="Введите промокод" autocomplete="off">
+              <button id="promoApply" class="promoBtn pressable" type="button">Активировать</button>
+              <div id="promoMsg" class="promoMsg"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="supportModal" class="modal" aria-hidden="true">
+    <div class="modal__backdrop" data-close="1"></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Поддержка">
+      <div class="modal__head">
+        <div class="modal__title">Поддержка</div>
+        <button class="modal__close pressable" id="supportClose" type="button" aria-label="Закрыть">✕</button>
+      </div>
+
+      <section class="pane">
+        <div class="supportCard">
+          <div>
+            <div class="supportTitle">Поддержка</div>
+            <div class="supportSub">Ответим по вопросам режимов и бонусов.</div>
+          </div>
+
+          <div class="supportGrid">
+            <div class="supportItem">
+              <div class="supportIcon">TG</div>
+              <div class="supportTxt">
+                <div class="supportName">Telegram</div>
+                <div class="supportDesc">Написать в поддержку</div>
+              </div>
+              <button class="supportBtn btnGhost pressable" type="button" data-beep="1">Открыть</button>
+            </div>
+
+            <div class="supportItem">
+              <div class="supportIcon">VK</div>
+              <div class="supportTxt">
+                <div class="supportName">ВКонтакте</div>
+                <div class="supportDesc">Написать в поддержку</div>
+              </div>
+              <button class="supportBtn btnGhost pressable" type="button" data-beep="1">Открыть</button>
+            </div>
+          </div>
+
+          <div class="supportNote">
+            * Сейчас это локальная заглушка (без сервера).
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="./triniti.js"></script>
 </body>
 </html>
