@@ -1,660 +1,1027 @@
 (() => {
-  const WALLET_KEY = "mini_wallet_penalty_v1";
+  const API_BASE = "http://localhost:4000/api";
+  const TOKEN_KEY = "triniti_token_v1";
+  const EMAIL = "test@test.com";
+  const PASSWORD = "12345678";
 
-  const LADDER_EASY = [1.25, 1.55, 1.95, 2.50, 3.30, 4.40, 6.20, 9.10, 14.00, 22.50, 38.00, 70.00];
-  const LADDER_HARD = [1.35, 1.75, 2.30, 3.20, 4.60, 6.80, 10.50, 16.50, 26.00, 41.00, 70.00, 120.00];
+  const PROMO_KEY_USED = "triniti_promo_used_v1";
+  const DAILY_NEXT_KEY = "triniti_daily_next_ms_v3";
+  const VK_KEY = "triniti_bonus_vk_v2";
+  const TG_KEY = "triniti_bonus_tg_v2";
+  const ONLINE_STATE_KEY = "triniti_online_state_v2";
 
-  const GOALIE = {
-    easy: { moveEveryMs: 520, tweenMs: 220 },
-    hard: { moveEveryMs: 340, tweenMs: 200 },
+  const PROMOS = {
+    TRINITI5: 5,
+    TRINITI10: 10,
+    TRINITI25: 25
   };
 
-  const $ = (s) => document.querySelector(s);
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const fmtX = (x) => "x" + (Math.round(x * 100) / 100).toFixed(2);
-  const fmtRub = (n) => Math.round(n) + " ₽";
+  const PRIZES = [
+    { label: "+0 ₽", coins: 0 },
+    { label: "+5 ₽", coins: 5 },
+    { label: "+10 ₽", coins: 10 },
+    { label: "+15 ₽", coins: 15 },
+    { label: "+20 ₽", coins: 20 },
+    { label: "+25 ₽", coins: 25 }
+  ];
 
-  function rngInt(n) {
-    const u = new Uint32Array(1);
-    crypto.getRandomValues(u);
-    return u[0] % n;
-  }
-  function rngFloat() {
-    const u = new Uint32Array(1);
-    crypto.getRandomValues(u);
-    return u[0] / 2 ** 32;
-  }
+  const $ = (id) => document.getElementById(id);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+  let audioCtx = null;
+  let spinning = false;
+  let lastRotation = 0;
+
+  const mainLayout = $("mainLayout");
+  const menuBtn = $("menuBtn");
+  const menuBtnMobile = $("menuBtnMobile");
 
   // ===== AUDIO =====
-  let soundOn = true;
-  let audioCtx = null;
+  function getCtx() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!audioCtx) audioCtx = new AC();
+    return audioCtx;
+  }
 
-  function beep(type = "click") {
-    if (!soundOn) return;
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function beep(freq = 520, ms = 60, vol = 0.03) {
+    try {
+      const ctx = getCtx();
+      if (!ctx) return;
 
-    const t0 = audioCtx.currentTime;
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const now = ctx.currentTime;
 
-    const presets = {
-      click: { f1: 520, f2: 420, dur: 0.07, vol: 0.08 },
-      kick:  { f1: 240, f2: 150, dur: 0.10, vol: 0.11 },
-      goal:  { f1: 660, f2: 920, dur: 0.14, vol: 0.10 },
-      save:  { f1: 180, f2: 120, dur: 0.16, vol: 0.10 },
+      osc.type = "sine";
+      osc.frequency.value = freq;
+
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + ms / 1000);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + ms / 1000);
+    } catch {}
+  }
+
+  // ===== API =====
+  async function api(path, options = {}) {
+    const token = localStorage.getItem(TOKEN_KEY);
+
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
     };
-    const p = presets[type] || presets.click;
 
-    o.type = "sine";
-    o.frequency.setValueAtTime(p.f1, t0);
-    o.frequency.exponentialRampToValueAtTime(p.f2, t0 + p.dur);
+    if (token) {
+      headers.Authorization = "Bearer " + token;
+    }
 
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(p.vol, t0 + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + p.dur);
-
-    o.start(t0);
-    o.stop(t0 + p.dur + 0.02);
-  }
-
-  // ===== STATE =====
-  const state = {
-    wallet: 0,
-    bet: 100,
-    diff: "easy",
-    inRound: false,
-    step: 0,
-    currentX: 1.0,
-    cashoutEnabled: false,
-
-    // визуально всё равно 2 клетки
-    goalieCells: [0, 1],
-    goalieCover: [0, 1],
-
-    goalieTimer: null,
-
-    goalRect: null,
-    zoneRects: [],
-    ballHome: null,
-    animLock: false,
-
-    // “память” ударов игрока
-    heat: new Array(15).fill(0),
-  };
-
-  // ===== DOM =====
-  const balEl = $("#bal");
-  const betEl = $("#bet");
-  const betLabel = $("#betLabel");
-  const diffLabel = $("#diffLabel");
-  const diffHint = $("#diffHint");
-
-  const easyBtn = $("#easyBtn");
-  const hardBtn = $("#hardBtn");
-
-  const minusBtn = $("#minus");
-  const plusBtn = $("#plus");
-  const chips = document.querySelectorAll(".chip");
-
-  const ladderEl = $("#ladder");
-  const stepTxt = $("#stepTxt");
-  const xTxt = $("#xTxt");
-  const potTxt = $("#potTxt"); // может отсутствовать — ок
-  const stepMini = $("#stepMini");
-  const xMini = $("#xMini");
-  const cashLabel = $("#cashLabel");
-
-  const placeBtn = $("#placeBtn");
-  const cashBtn = $("#cashBtn");
-  const resetBtn = $("#resetBtn");
-  const msgEl = $("#msg");
-
-  const zonesEl = $("#zones");
-  const glovesEl = $("#gloves");
-  const ballEl = $("#ball");
-
-  const soundBtn = $("#soundBtn");
-  const soundTxt = $("#soundTxt");
-  const soundDot = $("#soundDot");
-  const bonusBtn = $("#bonusBtn");
-
-  // ===== WALLET =====
-  function loadWallet() {
-    const raw = localStorage.getItem(WALLET_KEY);
-    const n = raw ? Number(raw) : 1000;
-    state.wallet = Number.isFinite(n) ? n : 1000;
-  }
-  function saveWallet() {
-    localStorage.setItem(WALLET_KEY, String(state.wallet));
-  }
-
-  // ===== UI =====
-  function ladderArr() {
-    return state.diff === "hard" ? LADDER_HARD : LADDER_EASY;
-  }
-  function computeX(step) {
-    const arr = ladderArr();
-    if (step <= 0) return 1.0;
-    const idx = clamp(step - 1, 0, arr.length - 1);
-    return arr[idx];
-  }
-
-  function renderLadder() {
-    ladderEl.innerHTML = "";
-    const arr = ladderArr();
-    arr.forEach((x, i) => {
-      const s = document.createElement("div");
-      s.className = "lStep" + ((state.step === i + 1) ? " active" : "");
-      s.innerHTML = `<div class="t">Шаг ${i + 1}</div><div class="x">${fmtX(x)}</div>`;
-      ladderEl.appendChild(s);
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers
     });
+
+    const text = await res.text();
+    let data = {};
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!res.ok) {
+      throw new Error(data.error || data.message || "Ошибка запроса");
+    }
+
+    return data;
   }
 
-  function setMsg(t) { msgEl.textContent = t; }
+  async function ensureAuth() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) return token;
 
-  function updateTexts() {
-    balEl.textContent = Math.round(state.wallet);
+    try {
+      await api("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          email: EMAIL,
+          password: PASSWORD
+        })
+      });
+    } catch {}
 
-    betEl.value = String(state.bet);
-    betLabel.textContent = String(state.bet);
+    const loginData = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: EMAIL,
+        password: PASSWORD
+      })
+    });
 
-    diffLabel.textContent = state.diff === "hard" ? "Сложный" : "Лёгкий";
-    diffHint.textContent = state.diff === "hard"
-      ? "Сложный: вратарь угадывает чаще."
-      : "Лёгкий: вратарь угадывает реже.";
-
-    stepTxt.textContent = String(state.step);
-    xTxt.textContent = fmtX(state.currentX);
-    stepMini.textContent = String(state.step);
-    xMini.textContent = fmtX(state.currentX);
-
-    const potential = state.inRound ? Math.round(state.bet * state.currentX) : 0;
-    if (potTxt) potTxt.textContent = fmtRub(potential);
-    cashLabel.textContent = state.cashoutEnabled ? fmtRub(potential) : "—";
-
-    placeBtn.disabled = state.inRound;
-    cashBtn.disabled = !state.cashoutEnabled;
-
-    const lockBet = state.inRound;
-    betEl.disabled = lockBet;
-    minusBtn.disabled = lockBet;
-    plusBtn.disabled = lockBet;
-    chips.forEach(b => (b.disabled = lockBet));
-    easyBtn.disabled = lockBet;
-    hardBtn.disabled = lockBet;
+    localStorage.setItem(TOKEN_KEY, loginData.token);
+    return loginData.token;
   }
 
-  // ===== ZONES / MEASURE =====
-  function buildZones() {
-    zonesEl.innerHTML = "";
-    for (let i = 0; i < 15; i++) {
-      const z = document.createElement("div");
-      z.className = "zone";
-      z.dataset.idx = String(i);
-      z.addEventListener("click", () => onShoot(i));
-      zonesEl.appendChild(z);
+  async function fetchBalance() {
+    const data = await api("/wallet/balance", {
+      method: "GET"
+    });
+
+    return Number(data.balance || 0);
+  }
+
+  async function syncBalanceUI() {
+    try {
+      await ensureAuth();
+      const balance = await fetchBalance();
+
+      [$("balance"), $("balance2"), $("balanceRail")]
+        .filter(Boolean)
+        .forEach((el) => {
+          el.textContent = String(balance);
+        });
+    } catch (e) {
+      console.error("syncBalanceUI error:", e);
     }
   }
 
-  function measureRects() {
-    const zoneNodes = [...zonesEl.querySelectorAll(".zone")];
-    state.zoneRects = zoneNodes.map(n => n.getBoundingClientRect());
-    state.goalRect = zonesEl.getBoundingClientRect();
+  // ===== PAYMENTS =====
+  async function depositReal() {
+    try {
+      await ensureAuth();
 
-    const gr = state.goalRect;
-    const homeX = gr.left + gr.width / 2;
-    const homeY = gr.top + gr.height + Math.min(92, gr.height * 0.45);
-    state.ballHome = { x: homeX, y: homeY };
+      const amountStr = prompt("Введите сумму пополнения:");
+      if (amountStr === null) return;
+
+      const amount = Number(amountStr);
+      if (!amount || amount <= 0) {
+        alert("Введите корректную сумму.");
+        beep(240, 80, 0.03);
+        return;
+      }
+
+      const created = await api("/deposit/create", {
+        method: "POST",
+        body: JSON.stringify({ amount })
+      });
+
+      await api("/deposit/confirm-test", {
+        method: "POST",
+        body: JSON.stringify({ depositId: created.depositId })
+      });
+
+      await syncBalanceUI();
+
+      beep(760, 70, 0.03);
+      setTimeout(() => beep(920, 70, 0.03), 90);
+
+      alert(`Баланс пополнен на ${amount} ₽`);
+    } catch (e) {
+      console.error(e);
+      alert("Ошибка пополнения: " + e.message);
+      beep(240, 80, 0.03);
+    }
   }
 
-  function zoneCenter(idx) {
-    const r = state.zoneRects[idx];
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  async function withdrawReal() {
+    try {
+      await ensureAuth();
+
+      const balance = await fetchBalance();
+
+      const amountStr = prompt("Введите сумму вывода:");
+      if (amountStr === null) return;
+
+      const amount = Number(amountStr);
+      if (!amount || amount <= 0) {
+        alert("Введите корректную сумму.");
+        beep(240, 80, 0.03);
+        return;
+      }
+
+      if (amount > balance) {
+        alert("Недостаточно средств.");
+        beep(240, 80, 0.03);
+        return;
+      }
+
+      const requisites = prompt("Введите реквизиты для тестового вывода:", "test-card");
+      if (requisites === null) return;
+
+      const created = await api("/withdraw/create", {
+        method: "POST",
+        body: JSON.stringify({
+          amount,
+          requisites
+        })
+      });
+
+      await api("/withdraw/confirm-test", {
+        method: "POST",
+        body: JSON.stringify({
+          withdrawalId: created.withdrawalId
+        })
+      });
+
+      await syncBalanceUI();
+
+      beep(760, 70, 0.03);
+      setTimeout(() => beep(520, 70, 0.03), 90);
+
+      alert(`Вывод на ${amount} ₽ выполнен`);
+    } catch (e) {
+      console.error(e);
+      alert("Ошибка вывода: " + e.message);
+      beep(240, 80, 0.03);
+    }
   }
 
-  function moveGlovesToPair(pair) {
-    if (!state.goalRect || state.zoneRects.length !== 15) return;
-
-    const a = zoneCenter(pair[0]);
-    const b = zoneCenter(pair[1]);
-    const cx = (a.x + b.x) / 2;
-    const cy = (a.y + b.y) / 2;
-
-    const gx = cx - (state.goalRect.left + state.goalRect.width / 2);
-    const gy = cy - (state.goalRect.top + state.goalRect.height / 2);
-
-    const maxX = state.goalRect.width * 0.38;
-    const maxY = state.goalRect.height * 0.30;
-    const tx = clamp(gx, -maxX, maxX);
-    const ty = clamp(gy, -maxY, maxY);
-
-    glovesEl.style.transitionDuration =
-      (state.diff === "hard" ? GOALIE.hard.tweenMs : GOALIE.easy.tweenMs) + "ms";
-    glovesEl.style.translate = `${tx}px ${ty}px`;
+  function initPaymentButtons() {
+    $("depositBtn")?.addEventListener("click", depositReal);
+    $("withdrawBtn")?.addEventListener("click", withdrawReal);
+    $("depositBtnMobile")?.addEventListener("click", depositReal);
+    $("withdrawBtnMobile")?.addEventListener("click", withdrawReal);
+    $("depositBanner")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      depositReal();
+    });
   }
 
-  function setZonesEnabled(on) {
-    zonesEl.querySelectorAll(".zone").forEach(z => z.classList.toggle("disabled", !on));
+  // ===== ONLINE COUNTER =====
+  function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
   }
 
-  // ===== GRID HELPERS =====
-  const ROWS = 3, COLS = 5;
-  function neighbors(idx) {
-    const r = Math.floor(idx / COLS);
-    const c = idx % COLS;
-    const out = [];
-    if (c > 0) out.push(idx - 1);
-    if (c < COLS - 1) out.push(idx + 1);
-    if (r > 0) out.push(idx - COLS);
-    if (r < ROWS - 1) out.push(idx + COLS);
-    return out;
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
   }
 
-  // ===== HARDER “BRAIN” SETTINGS (НЕ ВИЗУАЛЬНО) =====
-  // 1) “память” ударов держится дольше (меньше затухает)
-  const HEAT_DECAY = 0.88; // было ~0.92 (дольше помнит) => сложнее
-
-  // 2) сильнее запоминает твой выбор
-  function bumpHeat(idx) {
-    state.heat[idx] += 1.65;               // было слабее
-    for (const nb of neighbors(idx)) state.heat[nb] += 0.55;
-  }
-  function decayHeat() {
-    for (let i = 0; i < state.heat.length; i++) state.heat[i] *= HEAT_DECAY;
+  function hashNoise(seed) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
   }
 
-  // ===== base pair picker =====
-  function randomAdjacentPair() {
-    const base = rngInt(ROWS * COLS);
-    const nbs = neighbors(base);
-    const nb = nbs[rngInt(nbs.length)];
-    return base < nb ? [base, nb] : [nb, base];
+  function getDayKey(date = new Date()) {
+    return Number(
+      `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
+    );
   }
 
-  let ALL_PAIRS = null;
-  function allPairs() {
-    if (ALL_PAIRS) return ALL_PAIRS;
-    const pairs = [];
-    for (let i = 0; i < 15; i++) {
-      for (const nb of neighbors(i)) {
-        const a = Math.min(i, nb), b = Math.max(i, nb);
-        if (!pairs.some(p => p[0] === a && p[1] === b)) pairs.push([a, b]);
+  function getBucketTs(ts = Date.now()) {
+    const step = 5 * 60 * 1000;
+    return Math.floor(ts / step) * step;
+  }
+
+  function getMinutesOfDay(date = new Date()) {
+    return date.getHours() * 60 + date.getMinutes();
+  }
+
+  function getOnlineCurveBase(date = new Date()) {
+    const m = getMinutesOfDay(date);
+
+    const points = [
+      { m: 0, val: 128 },
+      { m: 180, val: 102 },
+      { m: 300, val: 92 },
+      { m: 420, val: 126 },
+      { m: 540, val: 170 },
+      { m: 660, val: 214 },
+      { m: 780, val: 246 },
+      { m: 900, val: 292 },
+      { m: 1020, val: 348 },
+      { m: 1140, val: 392 },
+      { m: 1260, val: 322 },
+      { m: 1380, val: 236 },
+      { m: 1439, val: 198 }
+    ];
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+
+      if (m >= a.m && m <= b.m) {
+        const t = (m - a.m) / Math.max(1, b.m - a.m);
+        return Math.round(lerp(a.val, b.val, t));
       }
     }
-    ALL_PAIRS = pairs;
-    return pairs;
+
+    return 180;
   }
 
-  function pairWeight(pair) {
-    const [a, b] = pair;
-    const heat = state.heat[a] + state.heat[b];
+  function computeLiveOnline(date = new Date()) {
+    const dayKey = getDayKey(date);
+    const bucketIndex = Math.floor(getBucketTs(date.getTime()) / (5 * 60 * 1000));
+    const base = getOnlineCurveBase(date);
 
-    // лёгкий центр-бонус оставляем (чтобы выглядело естественно)
-    const center = 7;
-    const distA = Math.abs(a - center);
-    const distB = Math.abs(b - center);
-    const centerBias = (1 / (1 + distA)) + (1 / (1 + distB));
+    const n1 = hashNoise(dayKey * 0.137 + bucketIndex * 1.173);
+    const n2 = hashNoise(dayKey * 0.071 + bucketIndex * 2.417);
+    const n3 = hashNoise(dayKey * 0.049 + bucketIndex * 0.619);
 
-    // 3) сильнее “интеллект” с ростом шага
-    const aggro = (state.diff === "hard")
-      ? clamp(0.55 + state.step * 0.18, 0.55, 1.60)
-      : clamp(0.38 + state.step * 0.12, 0.38, 1.20);
+    const waveShort = Math.sin(bucketIndex * 0.85 + dayKey * 0.003) * 16;
+    const waveMid = Math.sin(bucketIndex * 0.31 + dayKey * 0.009) * 24;
+    const jitter = (n1 - 0.5) * 34 + (n2 - 0.5) * 22 + (n3 - 0.5) * 14;
 
-    return 0.18 + heat * aggro + centerBias * 0.16;
+    let value = Math.round(base + waveShort + waveMid + jitter);
+
+    if (date.getHours() >= 18 && date.getHours() <= 22) value += 6;
+    if (date.getHours() >= 2 && date.getHours() <= 5) value -= 10;
+
+    return clamp(value, 90, 400);
   }
 
-  function weightedPickPair() {
-    const pairs = allPairs();
-    let sum = 0;
-    const w = new Array(pairs.length);
-
-    for (let i = 0; i < pairs.length; i++) {
-      const ww = pairWeight(pairs[i]);
-      w[i] = ww;
-      sum += ww;
-    }
-
-    const r = rngFloat() * sum;
-    let acc = 0;
-    for (let i = 0; i < pairs.length; i++) {
-      acc += w[i];
-      if (acc >= r) return pairs[i];
-    }
-    return pairs[pairs.length - 1];
-  }
-
-  function updateGoalieState(pair) {
-    state.goalieCells = pair;
-    state.goalieCover = pair.slice(); // ВИЗУАЛ: 2 клетки, ЛОГИКА: тоже 2
-    moveGlovesToPair(pair);
-  }
-
-  function startGoalie() {
-    stopGoalie();
-    updateGoalieState(weightedPickPair());
-
-    const cfg = state.diff === "hard" ? GOALIE.hard : GOALIE.easy;
-
-    state.goalieTimer = setInterval(() => {
-      if (!state.inRound) return;
-
-      decayHeat();
-
-      let pair = weightedPickPair();
-
-      // 4) меньше хаоса => умнее => сложнее
-      const chaos = (state.diff === "hard") ? 0.12 : 0.24; // было больше
-      if (rngFloat() < chaos) pair = randomAdjacentPair();
-
-      updateGoalieState(pair);
-    }, cfg.moveEveryMs);
-  }
-
-  function stopGoalie() {
-    if (state.goalieTimer) {
-      clearInterval(state.goalieTimer);
-      state.goalieTimer = null;
+  function readOnlineState() {
+    try {
+      return JSON.parse(localStorage.getItem(ONLINE_STATE_KEY) || "null");
+    } catch {
+      return null;
     }
   }
 
-  // ===== СКРЫТЫЙ “РЕФЛЕКС” СЕЙВА (НЕ ВИЗУАЛЬНО) =====
-  // Иногда вратарь “угадывает” удар даже если не перекрывал эту клетку.
-  // Визуально ничего не меняется (перчатки те же).
-  function reflexSaveChance() {
-    // Чем дальше серия — тем опаснее
-    // Лёгкий: до ~28%
-    // Сложный: до ~45%
-    if (state.diff === "hard") {
-      return clamp(0.18 + state.step * 0.05, 0.18, 0.45);
-    }
-    return clamp(0.10 + state.step * 0.03, 0.10, 0.28);
+  function writeOnlineState(state) {
+    try {
+      localStorage.setItem(ONLINE_STATE_KEY, JSON.stringify(state));
+    } catch {}
   }
 
-  // ===== ball animation =====
-  async function animateBallToZone(idx) {
-    measureRects();
-    if (!state.ballHome) return;
-
-    const br = ballEl.getBoundingClientRect();
-    const curX = br.left + br.width / 2;
-    const curY = br.top + br.height / 2;
-
-    const homeDx = state.ballHome.x - curX;
-    const homeDy = state.ballHome.y - curY;
-
-    ballEl.style.transition = "none";
-    ballEl.style.transform = `translate3d(${homeDx}px, ${homeDy}px, 0) scale(1)`;
-    void ballEl.offsetWidth;
-
-    const target = zoneCenter(idx);
-    const dx = target.x - state.ballHome.x;
-    const dy = target.y - state.ballHome.y;
-
-    ballEl.style.transition = "";
-    ballEl.classList.remove("shoot");
-    void ballEl.offsetWidth;
-
-    ballEl.classList.add("shoot");
-    ballEl.style.transform = `translate3d(${homeDx + dx}px, ${homeDy + dy}px, 0) scale(0.60)`;
-
-    await new Promise(r => setTimeout(r, 280));
-
-    ballEl.style.transform = `translate3d(${homeDx}px, ${homeDy}px, 0) scale(1)`;
-    await new Promise(r => setTimeout(r, 170));
-
-    ballEl.classList.remove("shoot");
+  function getNextOnlineUpdateTs(fromTs = Date.now()) {
+    return getBucketTs(fromTs) + 5 * 60 * 1000;
   }
 
-  // ===== FLOW =====
-  function beginRound() {
-    if (state.inRound) return;
+  function getLiveOnlineValue() {
+    const nowTs = Date.now();
+    const state = readOnlineState();
 
-    const b = Math.round(Number(betEl.value || state.bet));
-    state.bet = clamp(Number.isFinite(b) ? b : 100, 1, 1e9);
-
-    if (state.bet > state.wallet) {
-      setMsg("Недостаточно баланса для ставки.");
-      beep("save");
-      updateTexts();
-      return;
+    if (
+      state &&
+      Number.isFinite(state.value) &&
+      Number.isFinite(state.nextUpdateTs) &&
+      nowTs < state.nextUpdateTs
+    ) {
+      return state.value;
     }
 
-    state.wallet -= state.bet;
-    saveWallet();
+    const newValue = computeLiveOnline(new Date(nowTs));
 
-    state.inRound = true;
-    state.step = 0;
-    state.currentX = 1.0;
-    state.cashoutEnabled = false;
-    state.animLock = false;
-
-    setZonesEnabled(true);
-    setMsg("Серия началась. Выбери зону удара.");
-    renderLadder();
-    updateTexts();
-
-    requestAnimationFrame(() => {
-      measureRects();
-      for (let i = 0; i < state.heat.length; i++) state.heat[i] *= 0.30; // меньше сброса => сложнее
-      startGoalie();
+    writeOnlineState({
+      value: newValue,
+      nextUpdateTs: getNextOnlineUpdateTs(nowTs)
     });
 
-    beep("click");
+    return newValue;
   }
 
-  function endRoundLose() {
-    state.inRound = false;
-    state.cashoutEnabled = false;
-    state.animLock = false;
+  function renderOnline() {
+    const value = getLiveOnlineValue();
 
-    stopGoalie();
-    setZonesEnabled(false);
-
-    state.step = 0;
-    state.currentX = 1.0;
-
-    renderLadder();
-    updateTexts();
+    [$("onlineCount"), $("onlineCountMobile")]
+      .filter(Boolean)
+      .forEach((el) => {
+        el.textContent = String(value);
+      });
   }
 
-  function nextStepWin() {
-    const arr = ladderArr();
-    state.step = clamp(state.step + 1, 0, arr.length);
-    state.currentX = computeX(state.step);
-    state.cashoutEnabled = state.step >= 1;
+  function initOnlineCounter() {
+    renderOnline();
 
-    renderLadder();
-    updateTexts();
-
-    if (state.step >= arr.length) doCashout(true);
+    setInterval(() => {
+      renderOnline();
+    }, 60 * 1000);
   }
 
-  function doCashout(auto = false) {
-    if (!state.inRound || !state.cashoutEnabled) return;
+  // ===== MODALS =====
+  const modals = {
+    free: $("freeModal"),
+    promo: $("promoModal"),
+    support: $("supportModal")
+  };
 
-    const payout = Math.round(state.bet * state.currentX);
-    state.wallet += payout;
-    saveWallet();
+  function openModal(name) {
+    const modal = modals[name];
+    if (!modal) return;
 
-    stopGoalie();
-    setZonesEnabled(false);
-
-    setMsg(auto ? `Авто-кэшаут: +${fmtRub(payout)}.` : `Кэшаут: +${fmtRub(payout)}.`);
-
-    state.inRound = false;
-    state.cashoutEnabled = false;
-    state.animLock = false;
-
-    state.step = 0;
-    state.currentX = 1.0;
-
-    renderLadder();
-    updateTexts();
-    beep("goal");
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    beep(520, 50, 0.02);
   }
 
-  function resetAll() {
-    if (state.inRound) {
-      state.wallet += state.bet;
-      saveWallet();
-    }
+  function closeModal(name) {
+    const modal = modals[name];
+    if (!modal) return;
 
-    stopGoalie();
-    setZonesEnabled(false);
-
-    state.inRound = false;
-    state.step = 0;
-    state.currentX = 1.0;
-    state.cashoutEnabled = false;
-    state.animLock = false;
-
-    setMsg("Выбери ставку и сложность, затем нажми «Ставка».");
-    renderLadder();
-    updateTexts();
-    beep("click");
-
-    requestAnimationFrame(() => measureRects());
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    beep(420, 50, 0.02);
   }
 
-  async function onShoot(idx) {
-    if (!state.inRound) {
-      setMsg("Сначала нажми «Ставка».");
-      beep("click");
+  // ===== ACTIVE STATES =====
+  function setActiveInGroup(selector, activeEl) {
+    $$(selector).forEach((el) => {
+      el.classList.toggle("active", el === activeEl);
+    });
+  }
+
+  function clearActiveInGroup(selector) {
+    $$(selector).forEach((el) => el.classList.remove("active"));
+  }
+
+  function setSideActive(el) {
+    if (!el) return;
+    setActiveInGroup(".sideIcon, .sideItem", el);
+  }
+
+  function setBottomActive(el) {
+    if (!el) return;
+    setActiveInGroup(".mobileBottomNav__item", el);
+  }
+
+  function setHeaderActive(el) {
+    if (!el) return;
+    setActiveInGroup(".navPill, .topNavLink", el);
+  }
+
+  function syncActiveByModal(name) {
+    const headerMap = {
+      promo: document.querySelector('.topNavLink[data-open="promo"], .navPill[data-open="promo"]'),
+      support: document.querySelector('.topNavLink[data-open="support"], .navPill[data-open="support"]'),
+      free: document.querySelector('.topNavLink[data-open="free"], .navPill[data-open="free"]')
+    };
+
+    const sideMap = {
+      promo: document.querySelector('.sideIcon[data-open="promo"], .sideItem[data-open="promo"]'),
+      support: document.querySelector('.sideIcon[data-open="support"], .sideItem[data-open="support"]'),
+      free: document.querySelector('.sideIcon[data-open="free"], .sideItem[data-open="free"]')
+    };
+
+    const bottomMap = {
+      promo: document.querySelector('.mobileBottomNav__item[data-open="promo"]'),
+      support: document.querySelector('.mobileBottomNav__item[data-open="support"]'),
+      free: document.querySelector('.mobileBottomNav__item[data-open="free"]')
+    };
+
+    clearActiveInGroup(".topNavLink");
+    clearActiveInGroup(".mobileBottomNav__item");
+    clearActiveInGroup(".sideIcon");
+    clearActiveInGroup(".sideItem");
+
+    if (headerMap[name]) setHeaderActive(headerMap[name]);
+    if (sideMap[name]) setSideActive(sideMap[name]);
+    if (bottomMap[name]) setBottomActive(bottomMap[name]);
+  }
+
+  function updateMenuStateByTarget(targetSelector) {
+    if (!targetSelector) return;
+
+    clearActiveInGroup(".topNavLink");
+    clearActiveInGroup(".mobileBottomNav__item");
+    clearActiveInGroup(".sideIcon");
+    clearActiveInGroup(".sideItem");
+
+    if (targetSelector === "#heroTop") {
+      const sideHome = document.querySelector('.sideIcon[data-jump="#heroTop"], .sideItem[data-jump="#heroTop"]');
+      const bottomHome = document.querySelector('.mobileBottomNav__item[data-jump="#heroTop"]');
+      const headerHome = document.querySelector('.topNavLink[data-jump="#heroTop"]');
+
+      if (sideHome) setSideActive(sideHome);
+      if (bottomHome) setBottomActive(bottomHome);
+      if (headerHome) setHeaderActive(headerHome);
       return;
     }
-    if (state.animLock) return;
-    state.animLock = true;
 
-    // запоминаем твой выбор (чтобы дальше сложнее)
-    bumpHeat(idx);
+    if (targetSelector === "#featuredSec") {
+      const sideFeatured = document.querySelector('.sideIcon[data-jump="#featuredSec"], .sideItem[data-jump="#featuredSec"]');
+      const headerFeatured = document.querySelector('.topNavLink[data-jump="#featuredSec"]');
 
-    beep("kick");
-    await animateBallToZone(idx);
-
-    // базовая проверка: стоит ли он в этой зоне
-    let saved = state.goalieCover.includes(idx);
-
-    // скрытый рефлекс: если НЕ перекрывал — иногда “угадывает”
-    if (!saved) {
-      const p = reflexSaveChance();
-      if (rngFloat() < p) saved = true;
-    }
-
-    if (saved) {
-      setMsg("Сейв! Ставка сгорела.");
-      beep("save");
-      endRoundLose();
+      if (sideFeatured) setSideActive(sideFeatured);
+      if (headerFeatured) setHeaderActive(headerFeatured);
       return;
     }
 
-    setMsg("ГОООЛ! X вырос — можно продолжать или «Забрать».");
-    beep("goal");
-    nextStepWin();
+    if (targetSelector === "#gamesSec" || targetSelector === "#games") {
+      const headerGames = document.querySelector('.topNavLink[data-jump="#gamesSec"], .navPill[data-jump="#gamesSec"], .navPill[data-jump="#games"]');
+      const sideGames = document.querySelector('.sideIcon[data-jump="#gamesSec"], .sideItem[data-jump="#gamesSec"]');
+      const bottomGames = document.querySelector('.mobileBottomNav__item[data-jump="#gamesSec"]');
 
-    state.animLock = false;
+      if (headerGames) setHeaderActive(headerGames);
+      if (sideGames) setSideActive(sideGames);
+      if (bottomGames) setBottomActive(bottomGames);
+    }
   }
 
-  function setDiff(d) {
-    if (state.inRound) return;
-    state.diff = d;
-
-    easyBtn.classList.toggle("active", d === "easy");
-    hardBtn.classList.toggle("active", d === "hard");
-
-    renderLadder();
-    updateTexts();
-    beep("click");
+  // ===== SIDEBAR =====
+  function openSidebar() {
+    if (!mainLayout) return;
+    mainLayout.classList.remove("layout--sidebar-closed");
+    menuBtn?.classList.add("active");
+    menuBtnMobile?.classList.add("active");
   }
 
-  function updateSoundUI() {
-    soundTxt.textContent = soundOn ? "Звук on" : "Звук off";
-    soundDot.style.background = soundOn ? "var(--good)" : "rgba(255,255,255,.35)";
-    soundDot.style.boxShadow = soundOn ? "0 0 0 3px rgba(38,212,123,.14)" : "none";
+  function closeSidebar() {
+    if (!mainLayout) return;
+    mainLayout.classList.add("layout--sidebar-closed");
+    menuBtn?.classList.remove("active");
+    menuBtnMobile?.classList.remove("active");
+  }
+
+  function toggleSidebar() {
+    if (!mainLayout) return;
+    const closed = mainLayout.classList.contains("layout--sidebar-closed");
+    if (closed) openSidebar();
+    else closeSidebar();
+    beep(520, 45, 0.02);
+  }
+
+  function initSidebar() {
+    if (!mainLayout) return;
+
+    menuBtn?.addEventListener("click", toggleSidebar);
+    menuBtnMobile?.addEventListener("click", toggleSidebar);
+
+    if (window.innerWidth > 1180) {
+      closeSidebar();
+    }
+
+    window.addEventListener("resize", () => {
+      if (window.innerWidth <= 1180) {
+        closeSidebar();
+      }
+    });
+  }
+
+  // ===== MODAL INIT =====
+  function initModals() {
+    $("freeClose")?.addEventListener("click", () => closeModal("free"));
+    $("promoClose")?.addEventListener("click", () => closeModal("promo"));
+    $("supportClose")?.addEventListener("click", () => closeModal("support"));
+
+    Object.entries(modals).forEach(([name, modal]) => {
+      modal?.addEventListener("click", (e) => {
+        if (e.target?.dataset?.close) {
+          closeModal(name);
+        }
+      });
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+
+      Object.entries(modals).forEach(([name, modal]) => {
+        if (modal?.classList.contains("open")) {
+          closeModal(name);
+        }
+      });
+    });
+
+    $$("[data-open]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        const name = el.getAttribute("data-open");
+        if (!name) return;
+
+        e.preventDefault();
+        openModal(name);
+        syncActiveByModal(name);
+      });
+    });
+  }
+
+  // ===== JUMPS =====
+  function initJumpButtons() {
+    $$("[data-jump]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+
+        const selector = btn.getAttribute("data-jump");
+        const target = selector ? document.querySelector(selector) : null;
+
+        if (target) {
+          target.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
+        }
+
+        if (btn.classList.contains("topNavLink") || btn.classList.contains("navPill")) {
+          setHeaderActive(btn);
+        }
+
+        if (btn.classList.contains("sideIcon") || btn.classList.contains("sideItem")) {
+          setSideActive(btn);
+        }
+
+        if (btn.classList.contains("mobileBottomNav__item")) {
+          setBottomActive(btn);
+        }
+
+        updateMenuStateByTarget(selector);
+        beep(520, 45, 0.02);
+      });
+    });
+  }
+
+  // ===== PRESS FEEDBACK =====
+  function initPressFeedback() {
+    $$(".pressable").forEach((el) => {
+      el.addEventListener("pointerdown", () => {
+        el.classList.add("is-pressed");
+      });
+
+      const clear = () => el.classList.remove("is-pressed");
+      el.addEventListener("pointerup", clear);
+      el.addEventListener("pointerleave", clear);
+      el.addEventListener("pointercancel", clear);
+    });
+  }
+
+  // ===== PROMO =====
+  function initPromo() {
+    $("promoApply")?.addEventListener("click", async () => {
+      const input = ($("promoInput")?.value || "").trim().toUpperCase();
+      const msg = $("promoMsg");
+
+      if (!input) {
+        if (msg) msg.textContent = "Введите промокод.";
+        beep(240, 80, 0.03);
+        return;
+      }
+
+      let used = {};
+      try {
+        used = JSON.parse(localStorage.getItem(PROMO_KEY_USED) || "{}");
+      } catch {}
+
+      if (used[input]) {
+        if (msg) msg.textContent = "Этот промокод уже использован.";
+        beep(240, 80, 0.03);
+        return;
+      }
+
+      const reward = PROMOS[input];
+      if (!reward) {
+        if (msg) msg.textContent = "Неверный промокод.";
+        beep(240, 80, 0.03);
+        return;
+      }
+
+      used[input] = 1;
+      localStorage.setItem(PROMO_KEY_USED, JSON.stringify(used));
+
+      try {
+        await ensureAuth();
+
+        const created = await api("/deposit/create", {
+          method: "POST",
+          body: JSON.stringify({ amount: reward })
+        });
+
+        await api("/deposit/confirm-test", {
+          method: "POST",
+          body: JSON.stringify({ depositId: created.depositId })
+        });
+
+        await syncBalanceUI();
+
+        if (msg) msg.textContent = `Промокод активирован: +${reward} ₽ ✅`;
+
+        beep(760, 70, 0.03);
+        setTimeout(() => beep(920, 70, 0.03), 90);
+      } catch (e) {
+        console.error(e);
+        if (msg) msg.textContent = "Ошибка активации промокода.";
+        beep(240, 80, 0.03);
+      }
+    });
+  }
+
+  // ===== DAILY WHEEL =====
+  function rngInt(n) {
+    const a = new Uint32Array(1);
+    crypto.getRandomValues(a);
+    return a[0] % n;
+  }
+
+  function getNextTs() {
+    const value = Number(localStorage.getItem(DAILY_NEXT_KEY) || 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function setNextTs24h() {
+    const next = Date.now() + 24 * 60 * 60 * 1000;
+    localStorage.setItem(DAILY_NEXT_KEY, String(next));
+    return next;
+  }
+
+  function canSpinNow() {
+    return Date.now() >= getNextTs();
+  }
+
+  function fmt(ms) {
+    const safe = Math.max(0, ms);
+    const s = Math.floor(safe / 1000);
+    const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+    const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+  }
+
+  function renderTimer() {
+    const timer = $("dailyTimer");
+    if (!timer) return;
+    timer.textContent = canSpinNow() ? "00:00:00" : fmt(getNextTs() - Date.now());
+  }
+
+  function renderPrizes() {
+    const prizeList = $("prizeList");
+    if (!prizeList) return;
+
+    prizeList.innerHTML = "";
+    PRIZES.forEach((p) => {
+      const el = document.createElement("div");
+      el.className = "prizeItem";
+      el.innerHTML = `<div class="p">${p.label}</div><div class="t">в кошелёк</div>`;
+      prizeList.appendChild(el);
+    });
+  }
+
+  function drawWheel() {
+    const wheelCanvas = $("dailyWheel");
+    if (!wheelCanvas) return;
+
+    const ctx = wheelCanvas.getContext("2d");
+    if (!ctx) return;
+
+    const W = wheelCanvas.width;
+    const H = wheelCanvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const r = Math.min(W, H) * 0.48;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const n = PRIZES.length;
+    const step = (Math.PI * 2) / n;
+
+    const colors = [
+      "rgba(76,125,255,.35)",
+      "rgba(255,86,186,.30)",
+      "rgba(54,220,170,.28)",
+      "rgba(255,196,66,.28)",
+      "rgba(176,64,255,.30)",
+      "rgba(76,125,255,.28)"
+    ];
+
+    for (let i = 0; i < n; i++) {
+      const a0 = -Math.PI / 2 + i * step;
+      const a1 = a0 + step;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, a0, a1);
+      ctx.closePath();
+
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255,255,255,.14)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a0 + step / 2);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.font = "950 26px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+      ctx.fillText(PRIZES[i].label, r - 16, 10);
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,.18)";
+    ctx.lineWidth = 6;
+    ctx.stroke();
+  }
+
+  function spinToIndex(winIndex) {
+    const wheelCanvas = $("dailyWheel");
+
+    return new Promise((resolve) => {
+      if (!wheelCanvas) {
+        resolve();
+        return;
+      }
+
+      const n = PRIZES.length;
+      const step = (Math.PI * 2) / n;
+      const ideal = -((winIndex + 0.5) * step);
+      const fullTurns = 5 + rngInt(3);
+      const target = lastRotation + fullTurns * (Math.PI * 2) + ideal;
+
+      wheelCanvas.style.transition = "transform 1400ms cubic-bezier(.16,.9,.18,1)";
+      wheelCanvas.style.transform = `rotate(${target}rad)`;
+
+      const onEnd = () => {
+        wheelCanvas.removeEventListener("transitionend", onEnd);
+        lastRotation = target % (Math.PI * 2);
+        resolve();
+      };
+
+      wheelCanvas.addEventListener("transitionend", onEnd, { once: true });
+    });
+  }
+
+  async function onSpin() {
+    const spinBtn = $("spinBtn");
+    const wheelCenterTxt = $("wheelCenterTxt");
+    const wheelCenterSub = $("wheelCenterSub");
+    const dailyMsg = $("dailyMsg");
+
+    if (spinning) return;
+
+    if (!canSpinNow()) {
+      renderTimer();
+      if (dailyMsg) dailyMsg.textContent = "Пока нельзя. Дождись таймера 😉";
+      beep(220, 90, 0.03);
+      return;
+    }
+
+    spinning = true;
+    if (spinBtn) spinBtn.disabled = true;
+
+    if (wheelCenterTxt) wheelCenterTxt.textContent = "…";
+    if (wheelCenterSub) wheelCenterSub.textContent = "крутим";
+    if (dailyMsg) dailyMsg.textContent = "Крутим колесо…";
+    beep(520, 55, 0.02);
+
+    const winIndex = rngInt(PRIZES.length);
+    await spinToIndex(winIndex);
+
+    const prize = PRIZES[winIndex];
+
+    try {
+      await ensureAuth();
+
+      if (prize.coins > 0) {
+        const created = await api("/deposit/create", {
+          method: "POST",
+          body: JSON.stringify({ amount: prize.coins })
+        });
+
+        await api("/deposit/confirm-test", {
+          method: "POST",
+          body: JSON.stringify({ depositId: created.depositId })
+        });
+      }
+
+      await syncBalanceUI();
+    } catch (e) {
+      console.error(e);
+    }
+
+    setNextTs24h();
+    renderTimer();
+
+    if (wheelCenterTxt) wheelCenterTxt.textContent = `+${prize.coins}`;
+    if (wheelCenterSub) wheelCenterSub.textContent = "₽ начислено";
+    if (dailyMsg) dailyMsg.textContent = `Выпало: ${prize.label} — начислено ✅`;
+
+    beep(760, 70, 0.03);
+    setTimeout(() => beep(920, 70, 0.03), 90);
+
+    spinning = false;
+    if (spinBtn) spinBtn.disabled = false;
+  }
+
+  function initWheel() {
+    $("spinBtn")?.addEventListener("click", onSpin);
+  }
+
+  // ===== SOCIAL =====
+  function renderSocial() {
+    const vkDone = localStorage.getItem(VK_KEY) === "1";
+    const tgDone = localStorage.getItem(TG_KEY) === "1";
+
+    if ($("vkState")) $("vkState").textContent = vkDone ? "Получено ✅" : "Не получено";
+    if ($("tgState")) $("tgState").textContent = tgDone ? "Получено ✅" : "Не получено";
+
+    if ($("claimVK")) $("claimVK").disabled = vkDone;
+    if ($("claimTG")) $("claimTG").disabled = tgDone;
+  }
+
+  async function claimOnce(key, amount) {
+    if (localStorage.getItem(key) === "1") return;
+
+    try {
+      await ensureAuth();
+
+      const created = await api("/deposit/create", {
+        method: "POST",
+        body: JSON.stringify({ amount })
+      });
+
+      await api("/deposit/confirm-test", {
+        method: "POST",
+        body: JSON.stringify({ depositId: created.depositId })
+      });
+
+      localStorage.setItem(key, "1");
+      renderSocial();
+      await syncBalanceUI();
+
+      beep(760, 70, 0.03);
+      setTimeout(() => beep(920, 70, 0.03), 90);
+    } catch (e) {
+      console.error(e);
+      alert("Ошибка начисления бонуса");
+    }
+  }
+
+  function initSocial() {
+    $("claimVK")?.addEventListener("click", () => claimOnce(VK_KEY, 10));
+    $("claimTG")?.addEventListener("click", () => claimOnce(TG_KEY, 10));
+  }
+
+  // ===== TABS =====
+  function setTab(which) {
+    const daily = which === "daily";
+
+    $("tabDaily")?.classList.toggle("active", daily);
+    $("tabSocial")?.classList.toggle("active", !daily);
+    $("paneDaily")?.classList.toggle("hidden", !daily);
+    $("paneSocial")?.classList.toggle("hidden", daily);
+
+    beep(520, 45, 0.02);
+  }
+
+  function initTabs() {
+    $("tabDaily")?.addEventListener("click", () => setTab("daily"));
+    $("tabSocial")?.addEventListener("click", () => setTab("social"));
+  }
+
+  function initSupportButtons() {
+    $$('[data-beep="1"]').forEach((btn) => {
+      btn.addEventListener("click", () => {
+        beep(520, 55, 0.02);
+      });
+    });
+  }
+
+  function initFocusSync() {
+    window.addEventListener("focus", async () => {
+      try {
+        await syncBalanceUI();
+        renderTimer();
+        renderSocial();
+        renderOnline();
+      } catch {}
+    });
   }
 
   // ===== INIT =====
-  function init() {
-    loadWallet();
-    buildZones();
+  async function init() {
+    if (!localStorage.getItem(DAILY_NEXT_KEY)) {
+      localStorage.setItem(DAILY_NEXT_KEY, "0");
+    }
 
-    state.bet = 100;
-    betEl.value = "100";
+    initPressFeedback();
+    initSidebar();
+    initPaymentButtons();
+    initModals();
+    initJumpButtons();
+    initPromo();
+    initWheel();
+    initSocial();
+    initTabs();
+    initSupportButtons();
+    initFocusSync();
+    initOnlineCounter();
 
-    setZonesEnabled(false);
-    setDiff("easy");
-    state.currentX = 1.0;
-    renderLadder();
-    updateTexts();
+    renderPrizes();
+    drawWheel();
+    renderTimer();
+    renderSocial();
+    renderOnline();
 
-    const sndRaw = localStorage.getItem("penalty_sound");
-    if (sndRaw === "0") soundOn = false;
-    updateSoundUI();
+    const wheelCanvas = $("dailyWheel");
+    if (wheelCanvas) {
+      wheelCanvas.style.transform = "rotate(0rad)";
+      wheelCanvas.style.transformOrigin = "50% 50%";
+    }
 
-    soundBtn.addEventListener("click", async () => {
-      soundOn = !soundOn;
-      localStorage.setItem("penalty_sound", soundOn ? "1" : "0");
-      updateSoundUI();
-      beep("click");
-      if (soundOn && audioCtx && audioCtx.state === "suspended") {
-        try { await audioCtx.resume(); } catch {}
-      }
-    });
+    try {
+      await ensureAuth();
+      await syncBalanceUI();
+    } catch (e) {
+      console.error("Init auth error:", e);
+    }
 
-    bonusBtn.addEventListener("click", () => {
-      state.wallet += 1000;
-      saveWallet();
-      updateTexts();
-      beep("goal");
-    });
-
-    minusBtn.addEventListener("click", () => {
-      state.bet = clamp(state.bet - 10, 1, 1e9);
-      betEl.value = String(state.bet);
-      updateTexts();
-      beep("click");
-    });
-    plusBtn.addEventListener("click", () => {
-      state.bet = clamp(state.bet + 10, 1, 1e9);
-      betEl.value = String(state.bet);
-      updateTexts();
-      beep("click");
-    });
-
-    betEl.addEventListener("input", () => {
-      const n = Math.round(Number(betEl.value || 0));
-      state.bet = clamp(Number.isFinite(n) ? n : 100, 1, 1e9);
-      updateTexts();
-    });
-
-    chips.forEach(btn => {
-      btn.addEventListener("click", () => {
-        const v = btn.dataset.chip;
-        state.bet = (v === "max") ? clamp(state.wallet, 1, 1e9) : clamp(Number(v), 1, 1e9);
-        betEl.value = String(state.bet);
-        updateTexts();
-        beep("click");
-      });
-    });
-
-    easyBtn.addEventListener("click", () => setDiff("easy"));
-    hardBtn.addEventListener("click", () => setDiff("hard"));
-
-    placeBtn.addEventListener("click", beginRound);
-    cashBtn.addEventListener("click", () => doCashout(false));
-    resetBtn.addEventListener("click", resetAll);
-
-    requestAnimationFrame(() => measureRects());
-    window.addEventListener("resize", () => {
-      requestAnimationFrame(() => {
-        measureRects();
-        if (state.inRound) moveGlovesToPair(state.goalieCells);
-      });
-    });
-
-    window.addEventListener("scroll", () => {
-      requestAnimationFrame(() => measureRects());
-    }, { passive: true });
+    setInterval(() => {
+      renderTimer();
+    }, 1000);
   }
 
   init();
